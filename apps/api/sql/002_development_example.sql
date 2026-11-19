@@ -15,7 +15,11 @@ INSERT INTO restaurant_delivery_zones(restaurant_id,zone_id,min_basket_kurus,del
  ('11111111-1111-4111-8111-111111111111','bbbbbbbb-1000-4000-8000-bbbbbbbbbbbb',20000,1500)
  ON CONFLICT DO NOTHING;
 INSERT INTO restaurant_hours(restaurant_id,day_of_week,open_time,close_time)
- SELECT '11111111-1111-4111-8111-111111111111',n,'00:00','23:59' FROM generate_series(0,6) n
+ SELECT '11111111-1111-4111-8111-111111111111',n,'00:00','12:00' FROM generate_series(0,6) n
+ ON CONFLICT DO NOTHING;
+-- Second half-day wraps to midnight; together these shifts cover all 24 hours.
+INSERT INTO restaurant_hours(restaurant_id,day_of_week,open_time,close_time)
+ SELECT '11111111-1111-4111-8111-111111111111',n,'12:00','00:00' FROM generate_series(0,6) n
  ON CONFLICT DO NOTHING;
 INSERT INTO categories(id,restaurant_id,name,sort_order)
  VALUES ('22222222-2222-4222-8222-222222222222','11111111-1111-4111-8111-111111111111','Dürümler',1)
