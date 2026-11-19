@@ -68,3 +68,5 @@ jobs:
         run: node --experimental-strip-types apps/api/integration/seed-test-db.ts
       - name: Check order lifecycle with a real PostgreSQL 17 server
         run: node --experimental-strip-types --test apps/api/integration/postgres.integration.ts
+      - name: Check real HTTP API, signed JWT, isolation and notification recovery
+        run: node --experimental-strip-types --test apps/api/integration/http.integration.ts
