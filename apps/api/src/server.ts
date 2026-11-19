@@ -4,7 +4,7 @@ import {Pool} from 'pg';
 import {DomainError,invalid,uuid,STATUSES,type Status,cleanNote} from './domain.ts';
 import {verifyBearer,provisionVerifiedUser,requireMfa,requireStaff,requireAdmin} from './auth.ts';
 import {placeOrder,quoteOrder,changeStatus,activateRestaurant,transaction} from './order-service.ts';
-import {MERCHANT_SUMMARY_QUERY,hasRequiredMigrations,CURRENTLY_ACCEPTING_SQL} from './operations.ts';
+import {MERCHANT_SUMMARY_QUERY,hasRequiredMigrations,CURRENTLY_ACCEPTING_SQL,REQUIRED_MIGRATIONS} from './operations.ts';
 
 if(!process.env.DATABASE_URL)throw new Error('DATABASE_URL gerekli');
 const origin=process.env.CORS_ORIGIN;
@@ -36,7 +36,7 @@ async function admin(req:{headers:{authorization?:string}}){const u=await user(r
 app.get('/healthz',async()=>({status:'ok',service:'bismil-sofra-api'}));
 app.get('/readyz',async(_req,reply)=>{
  try{
-  const result=await pool.query('SELECT filename FROM schema_migrations WHERE filename = ANY($1::text[])',[['001_initial.sql','003_reliability.sql']]);
+  const result=await pool.query('SELECT filename FROM schema_migrations WHERE filename = ANY($1::text[])',[[...REQUIRED_MIGRATIONS]]);
   if(!hasRequiredMigrations(result.rows))return reply.code(503).send({status:'migrations-pending'});
   return {status:'ready'};
  }catch{return reply.code(503).send({status:'db-unavailable'});}
@@ -210,7 +210,12 @@ app.get('/v1/admin/alerts',async(req)=>{
  const delivery=await pool.query(`SELECT restaurant_id,count(*)::int AS count
   FROM notification_outbox WHERE sent_at IS NULL AND (dead_at IS NOT NULL OR attempts>0)
   GROUP BY restaurant_id ORDER BY count DESC LIMIT 50`);
- return {latePending:pending.rows,notificationIssues:delivery.rows};
+ const escalations=await pool.query(`SELECT restaurant_id,count(*)::int AS count
+  FROM restaurant_escalations
+  WHERE sent_at IS NULL AND cancelled_at IS NULL
+   AND (dead_at IS NOT NULL OR (next_attempt_at<=now() AND due_at<now()-interval '20 seconds'))
+  GROUP BY restaurant_id ORDER BY count DESC LIMIT 50`);
+ return {latePending:pending.rows,notificationIssues:delivery.rows,escalationIssues:escalations.rows};
 });
 // An operator can inspect dead letters without accessing customers' personal details.
 app.get('/v1/admin/notifications/failed',async(req)=>{
