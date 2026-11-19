@@ -217,6 +217,34 @@ app.get('/v1/admin/alerts',async(req)=>{
   GROUP BY restaurant_id ORDER BY count DESC LIMIT 50`);
  return {latePending:pending.rows,notificationIssues:delivery.rows,escalationIssues:escalations.rows};
 });
+// MFA-protected diagnostic list: never returns customer PII.
+app.get('/v1/admin/escalations',async(req)=>{
+ await admin(req);
+ const result=await pool.query(`SELECT e.order_id,e.restaurant_id,e.due_at,e.next_attempt_at,
+   e.attempts,e.sent_at,e.dead_at,o.status
+  FROM restaurant_escalations e JOIN orders o ON o.id=e.order_id
+  WHERE e.dead_at IS NOT NULL OR
+   (e.sent_at IS NULL AND e.cancelled_at IS NULL AND e.next_attempt_at<=now())
+  ORDER BY e.next_attempt_at ASC LIMIT 100`);
+ return {escalations:result.rows};
+});
+app.post('/v1/admin/escalations/:id/retry',async(req)=>{
+ const {userId}=await admin(req);
+ const orderId=idParam(req,'id');
+ return transaction(pool,async db=>{
+  const result=await db.query(`UPDATE restaurant_escalations e
+   SET attempts=0,dead_at=NULL,last_error=NULL,next_attempt_at=now()
+   FROM orders o WHERE e.order_id=$1 AND e.order_id=o.id
+    AND e.sent_at IS NULL AND e.cancelled_at IS NULL
+    AND o.status='beklemede' AND o.expires_at>now()
+   RETURNING e.order_id,e.restaurant_id`,[orderId]);
+  if(!result.rowCount)invalid('NOT_RETRYABLE','Sipariş artık beklemede değil veya uyarı zaten teslim edildi.',409);
+  await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',
+   [userId,'escalation_retry','order',orderId,JSON.stringify({restaurantId:result.rows[0].restaurant_id})]);
+  return {orderId,requeued:true};
+ });
+});
+
 // An operator can inspect dead letters without accessing customers' personal details.
 app.get('/v1/admin/notifications/failed',async(req)=>{
  await admin(req);
