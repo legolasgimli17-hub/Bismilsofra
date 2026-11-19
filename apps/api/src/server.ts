@@ -36,7 +36,7 @@ async function admin(req:{headers:{authorization?:string}}){const u=await user(r
 app.get('/healthz',async()=>({status:'ok',service:'bismil-sofra-api'}));
 app.get('/readyz',async(_req,reply)=>{
  try{
-  const result=await pool.query('SELECT filename FROM schema_migrations WHERE filename = ANY($1::text[])',['001_initial.sql','003_reliability.sql']);
+  const result=await pool.query('SELECT filename FROM schema_migrations WHERE filename = ANY($1::text[])',[['001_initial.sql','003_reliability.sql']]);
   if(!hasRequiredMigrations(result.rows))return reply.code(503).send({status:'migrations-pending'});
   return {status:'ready'};
  }catch{return reply.code(503).send({status:'db-unavailable'});}
