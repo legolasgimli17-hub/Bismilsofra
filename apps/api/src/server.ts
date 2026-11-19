@@ -78,9 +78,10 @@ app.get('/v1/restaurants/:id/menu',async(req)=>{
 app.get('/v1/me/addresses',async(req)=>{const {userId}=await user(req);const r=await pool.query('SELECT id,label,zone_id,full_address,directions,phone FROM addresses WHERE user_id=$1 ORDER BY created_at DESC LIMIT 30',[userId]);return {addresses:r.rows}});
 app.post('/v1/me/addresses',async(req,reply)=>{
  const {userId}=await user(req);const b=(req.body??{}) as Record<string,unknown>;
- if(!uuid(b.zoneId)||typeof b.fullAddress!=='string'||b.fullAddress.trim().length<8||b.fullAddress.length>900||typeof b.phone!=='string'||!/^05\d{9}$/.test(b.phone))invalid('ADDRESS_INVALID','Mahalle, adres ve telefon bilgilerini kontrol edin.');
+ const address=typeof b.fullAddress==='string'?b.fullAddress:'';
+ if(!uuid(b.zoneId)||address.trim().length<8||address.length>900||typeof b.phone!=='string'||!/^05\d{9}$/.test(b.phone))invalid('ADDRESS_INVALID','Mahalle, adres ve telefon bilgilerini kontrol edin.');
  const zone=await pool.query('SELECT 1 FROM delivery_zones WHERE id=$1 AND enabled=true',[b.zoneId]);if(!zone.rowCount)invalid('ZONE_INVALID','Mahalle uygun değil.',400);
- const r=await pool.query('INSERT INTO addresses(user_id,zone_id,label,full_address,directions,phone) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',[userId,b.zoneId,cleanNote(b.label||'Ev',45)||'Ev',b.fullAddress.trim(),cleanNote(b.directions,400),b.phone]);reply.code(201);return {id:r.rows[0].id};
+ const r=await pool.query('INSERT INTO addresses(user_id,zone_id,label,full_address,directions,phone) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',[userId,b.zoneId,cleanNote(b.label||'Ev',45)||'Ev',address.trim(),cleanNote(b.directions,400),b.phone]);reply.code(201);return {id:r.rows[0].id};
 });
 app.post('/v1/orders/quote',async(req)=>{const {userId}=await user(req);return quoteOrder(pool,userId,req.body)});
 app.post('/v1/orders',async(req,reply)=>{
@@ -185,11 +186,12 @@ app.get('/v1/restaurant/:rid/inbox',async(req)=>{
 app.post('/v1/me/support-cases',async(req,reply)=>{
  const {userId}=await user(req);const b=(req.body??{}) as Record<string,unknown>;
  const allowed=['eksik_urun','yanlis_urun','gecikme','teslimat','diger'];
- if(!uuid(b.orderId)||typeof b.issueType!=='string'||!allowed.includes(b.issueType)||typeof b.description!=='string'||b.description.trim().length<10||b.description.length>1200)
+ const description=typeof b.description==='string'?b.description:'';
+ if(!uuid(b.orderId)||typeof b.issueType!=='string'||!allowed.includes(b.issueType)||description.trim().length<10||description.length>1200)
   invalid('SUPPORT_INVALID','Sipariş, konu ve en az 10 karakterli açıklama gerekli.');
  const result=await pool.query(`INSERT INTO support_cases(customer_id,order_id,issue_type,description)
   SELECT $1,o.id,$3,$4 FROM orders o WHERE o.id=$2 AND o.customer_id=$1 RETURNING id,created_at`,
-  [userId,b.orderId,b.issueType,b.description.trim()]);
+  [userId,b.orderId,b.issueType,description.trim()]);
  if(!result.rowCount)invalid('NOT_FOUND','Sipariş bulunamadı.',404);
  reply.code(201);return {caseId:result.rows[0].id,createdAt:result.rows[0].created_at};
 });
@@ -231,8 +233,8 @@ app.post('/v1/admin/notifications/:id/retry',async(req)=>{
 });
 app.post('/v1/admin/restaurants/:id/activation',async(req)=>{
  const id=idParam(req,'id'),{userId}=await admin(req);const body=(req.body??{}) as Record<string,unknown>;
- if(typeof body.active!=='boolean')invalid('INVALID_REQUEST','Aktiflik bilgisi boolean olmalı.');
- return activateRestaurant(pool,userId,id,body.active);
+ const active=typeof body.active==='boolean'?body.active:invalid('INVALID_REQUEST','Aktiflik bilgisi boolean olmalı.');
+ return activateRestaurant(pool,userId,id,active);
 });
 
 async function start(){
