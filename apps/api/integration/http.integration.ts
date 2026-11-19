@@ -221,6 +221,75 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.deepEqual(savedManagement.body.hours,baseManagement.body.hours);
  assert.equal(savedManagement.body.zones.find((z:{zone_id:string})=>z.zone_id===zid).enabled,originalZone!.enabled);
  assert.equal((await request('/v1/restaurants/'+rid+'/menu')).body.restaurant.is_orderable,true);
+ // Real restaurant menu editing: category ownership, draft products,
+ // approved images, stale-write prevention and immutable past order prices.
+ const ownCategory=(baseManagement.body.products as Array<{id:string;category_id:string;name:string;description:string;price_kurus:number;image_url:string|null;revision:number}>)
+  .find(p=>p.id===pid);
+ assert.ok(ownCategory,'seed product must be available in merchant management');
+ const newCategory=await request('/v1/restaurant/'+rid+'/categories',{
+  method:'POST',token:owner,body:{name:'CI Yeni Lezzetler'}});
+ assert.equal(newCategory.status,201,JSON.stringify(newCategory.body));
+ const categoryId=newCategory.body.category.id as string;
+ assert.equal((await request('/v1/restaurant/'+rid+'/categories',{
+  method:'POST',token:owner,body:{name:'ci yeni lezzetler'}})).status,409);
+ assert.equal((await request('/v1/restaurant/'+rid+'/categories',{
+  method:'POST',token:customer,body:{name:'Yetkisiz Kategori'}})).status,403);
+ assert.equal((await request('/v1/restaurant/'+rid+'/categories/'+categoryId,{
+  method:'PATCH',token:owner,body:{name:'CI Yeni Menüler'}})).status,200);
+ const productDraft={categoryId,name:'CI Test Pidesi',description:'Yalnızca test ortamında kayıtlı ürün',
+  priceKurus:24000,imageUrl:'/photos/ci-onayli.webp'};
+ assert.equal((await request('/v1/restaurant/'+rid+'/products',{method:'POST',token:customer,body:productDraft})).status,403);
+ assert.equal((await request('/v1/restaurant/'+rid+'/products',{
+  method:'POST',token:owner,body:{...productDraft,categoryId:randomUUID()}})).status,409);
+ const badPicture=await request('/v1/restaurant/'+rid+'/products',{
+  method:'POST',token:owner,body:{...productDraft,imageUrl:'https://images.unsplash.com/random'}}); 
+ assert.equal(badPicture.status,400);
+ const createdProduct=await request('/v1/restaurant/'+rid+'/products',{
+  method:'POST',token:owner,body:productDraft});
+ assert.equal(createdProduct.status,201,JSON.stringify(createdProduct.body));
+ const newProductId=createdProduct.body.product.id as string;
+ assert.equal(createdProduct.body.product.available,false,'new products are drafts');
+ assert.equal(createdProduct.body.product.revision,1);
+ assert.equal((await request('/v1/restaurants/'+rid+'/menu')).body.products.find((p:{id:string})=>p.id===newProductId)?.available,false);
+ const newPrice=26000;
+ const edited=await request('/v1/restaurant/'+rid+'/products/'+newProductId+'/details',{
+  method:'PATCH',token:owner,body:{...productDraft,name:'CI Özel Pide',priceKurus:newPrice,revision:1}});
+ assert.equal(edited.status,200,JSON.stringify(edited.body));
+ assert.equal(edited.body.product.price_kurus,newPrice);
+ assert.equal(edited.body.product.revision,2);
+ const staleEditor=await request('/v1/restaurant/'+rid+'/products/'+newProductId+'/details',{
+  method:'PATCH',token:owner,body:{...productDraft,priceKurus:15000,revision:1}});
+ assert.equal(staleEditor.status,409);
+ assert.equal(staleEditor.body.code,'PRODUCT_CONFLICT');
+ assert.equal((await request('/v1/restaurant/'+rid+'/products/'+newProductId+'/details',{
+  method:'PATCH',token:owner,body:{...productDraft,revision:2,categoryId:randomUUID()}})).status,409);
+ assert.equal((await request('/v1/restaurant/'+randomUUID()+'/products/'+newProductId+'/details',{
+  method:'PATCH',token:owner,body:{...productDraft,revision:2}})).status,403);
+ const activated=await request('/v1/restaurant/'+rid+'/products/'+newProductId,{
+  method:'PATCH',token:owner,body:{available:true}});
+ assert.equal(activated.status,200);
+ const publicCreated=(await request('/v1/restaurants/'+rid+'/menu')).body.products.find((p:{id:string})=>p.id===newProductId);
+ assert.equal(publicCreated.name,'CI Özel Pide');
+ assert.equal(publicCreated.price_kurus,newPrice);
+ assert.equal(publicCreated.available,true);
+ 
+ const snapshotBefore=await pool.query('SELECT unit_kurus,line_total_kurus FROM order_items WHERE order_id=$1',[orderId]);
+ const changedOriginal=await request('/v1/restaurant/'+rid+'/products/'+pid+'/details',{
+  method:'PATCH',token:owner,
+  body:{categoryId:ownCategory.category_id,name:ownCategory.name,description:ownCategory.description,
+   priceKurus:ownCategory.price_kurus+100,imageUrl:ownCategory.image_url,revision:ownCategory.revision}});
+ assert.equal(changedOriginal.status,200,JSON.stringify(changedOriginal.body));
+ const freshQuote=await request('/v1/orders/quote',{method:'POST',token:customer,body:payload});
+ assert.equal(freshQuote.status,200,JSON.stringify(freshQuote.body));
+ assert.equal(freshQuote.body.totals.totalKurus,quote.body.totals.totalKurus+100);
+ const snapshotAfter=await pool.query('SELECT unit_kurus,line_total_kurus FROM order_items WHERE order_id=$1',[orderId]);
+ assert.deepEqual(snapshotAfter.rows,snapshotBefore.rows,'historical order prices must not change');
+ const restoredOriginal=await request('/v1/restaurant/'+rid+'/products/'+pid+'/details',{
+  method:'PATCH',token:owner,
+  body:{categoryId:ownCategory.category_id,name:ownCategory.name,description:ownCategory.description,
+   priceKurus:ownCategory.price_kurus,imageUrl:ownCategory.image_url,revision:changedOriginal.body.product.revision}});
+ assert.equal(restoredOriginal.status,200,JSON.stringify(restoredOriginal.body));
+
 
  // Recovery tools require administrator MFA with recent authentication, and
  // must refuse to reactivate notifications for an already accepted order.
