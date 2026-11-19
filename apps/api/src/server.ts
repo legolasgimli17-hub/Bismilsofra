@@ -271,7 +271,12 @@ app.post('/v1/admin/restaurants/:id/activation',async(req)=>{
 });
 
 async function start(){
- try{await pool.query('SELECT 1');await app.listen({port:Number.isInteger(port)?port:4000,host:'127.0.0.1'});console.log('API http://127.0.0.1:'+port+' üzerinde. Canlı kullanım için yapılandırma ve testler gerekli.');}
+ try{
+  const applied=await pool.query('SELECT filename FROM schema_migrations WHERE filename=ANY($1::text[])',[[...REQUIRED_MIGRATIONS]]);
+  if(!hasRequiredMigrations(applied.rows))throw new Error('Required database migrations missing. Refusing to start API.');
+  await app.listen({port:Number.isInteger(port)?port:4000,host:'127.0.0.1'});
+  console.log('API http://127.0.0.1:'+port+' üzerinde. Canlı kullanım için yapılandırma ve testler gerekli.');
+ }
  catch(err){console.error(err);process.exitCode=1;await app.close();await pool.end()}
 }
 await start();
