@@ -44,7 +44,7 @@ function ManagementScreen({token}:{token:()=>Promise<string>}){
   return()=>{active=false};
  },[token]);
 
- const load=useCallback(async()=>{
+ const load=useCallback(async(throwOnError=false)=>{
   if(!rid)return;
   const seq=++requests.current;
   setLoading(true);
@@ -58,7 +58,7 @@ function ManagementScreen({token}:{token:()=>Promise<string>}){
     enabled:z.enabled,minimum:kurusToInput(z.min_basket_kurus),delivery:kurusToInput(z.delivery_fee_kurus)
    }])));
    setError('');
-  }catch(e){if(seq===requests.current){setModel(null);setError(e instanceof Error?e.message:'İşletme ayarları yüklenemedi.')}}
+  }catch(e){if(seq===requests.current){setModel(null);setError(e instanceof Error?e.message:'İşletme ayarları yüklenemedi.')}if(throwOnError)throw e}
   finally{if(seq===requests.current)setLoading(false)}
  },[rid,token]);
 
@@ -73,7 +73,7 @@ function ManagementScreen({token}:{token:()=>Promise<string>}){
   setBusy(label);setNotice('');setError('');
   try{
    await task();
-   await load();
+   await load(true);
    setNotice(label+' başarıyla kaydedildi.');
   }catch(e){setError(e instanceof Error?e.message:'Değişiklik kaydedilemedi.')}
   finally{setBusy('')}
