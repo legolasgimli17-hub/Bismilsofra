@@ -117,7 +117,7 @@ app.post('/v1/me/orders/:id/cancel',async(req)=>{
 });
 app.get('/v1/me/staff-restaurants',async(req)=>{
  const {userId,identity}=await user(req);requireMfa(identity);
- const r=await pool.query(`SELECT r.id,r.name,s.role,s.can_view_orders,s.can_manage_orders FROM restaurant_staff s JOIN restaurants r ON r.id=s.restaurant_id WHERE s.user_id=$1 ORDER BY r.name LIMIT 50`,[userId]);
+ const r=await pool.query(`SELECT r.id,r.name,s.role,s.can_view_orders,s.can_manage_orders,s.can_manage_menu FROM restaurant_staff s JOIN restaurants r ON r.id=s.restaurant_id WHERE s.user_id=$1 ORDER BY r.name LIMIT 50`,[userId]);
  return {restaurants:r.rows};
 });
 app.get('/v1/restaurant/:rid/orders',async(req)=>{
