@@ -172,6 +172,6 @@ function Inner({token}:{token:()=>Promise<string>}){
     {active.length===0?<div className="empty"><h3>{connected?'Devam eden sipariş yok':'Veriler eşitlenemedi'}</h3></div>:active.map(orderCard)}</section>
   </div>}
   <div className="notice">Bu operasyon paneli bir geliştirme sürümüdür. Üretim için güvenilir push/ikincil alarm, gerçek PostgreSQL ve kimlik sağlayıcısı entegrasyonu test edilmelidir.</div>
-  <Link href="/">Müşteri görünümüne dön</Link>
+  <div className="merchant-settings-links"><Link href="/restaurant/manage" className="btn primary">Restoranı ve menüyü yönet</Link><Link href="/">Müşteri görünümüne dön</Link></div>
  </section>;
 }
