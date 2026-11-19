@@ -102,7 +102,7 @@ test('webhook configuration rejects insecure URL or weak signature secret',()=>{
 });
 test('migration manifest includes 001, 003, 004, 005 but never runs fictional seed 002',()=>{
  const source=readFileSync(new URL('../src/migrate.ts',import.meta.url),'utf8');
- assert.match(source,/001_initial\.sql/);assert.match(source,/003_reliability\.sql/);assert.match(source,/004_escalation\.sql/);
+ assert.match(source,/001_initial\.sql/);assert.match(source,/003_reliability\.sql/);assert.match(source,/004_escalation\.sql/);assert.match(source,/005_product_revisions\.sql/);
  assert.doesNotMatch(source,/['"]002_development_example\.sql['"]/);
  assert.match(source,/schema_migrations/);assert.match(source,/sha256/);
 });
