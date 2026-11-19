@@ -231,7 +231,7 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal(newCategory.status,201,JSON.stringify(newCategory.body));
  const categoryId=newCategory.body.category.id as string;
  assert.equal((await request('/v1/restaurant/'+rid+'/categories',{
-  method:'POST',token:owner,body:{name:'ci yeni lezzetler'}})).status,409);
+  method:'POST',token:owner,body:{name:'cı yeni lezzetler'}})).status,409);
  assert.equal((await request('/v1/restaurant/'+rid+'/categories',{
   method:'POST',token:customer,body:{name:'Yetkisiz Kategori'}})).status,403);
  assert.equal((await request('/v1/restaurant/'+rid+'/categories/'+categoryId,{
