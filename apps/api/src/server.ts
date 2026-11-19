@@ -4,7 +4,7 @@ import {Pool} from 'pg';
 import {DomainError,invalid,uuid,STATUSES,type Status,cleanNote} from './domain.ts';
 import {verifyBearer,provisionVerifiedUser,requireMfa,requireStaff,requireAdmin} from './auth.ts';
 import {placeOrder,quoteOrder,changeStatus,activateRestaurant,transaction} from './order-service.ts';
-import {MERCHANT_SUMMARY_QUERY,hasRequiredMigrations} from './operations.ts';
+import {MERCHANT_SUMMARY_QUERY,hasRequiredMigrations,CURRENTLY_ACCEPTING_SQL} from './operations.ts';
 
 if(!process.env.DATABASE_URL)throw new Error('DATABASE_URL gerekli');
 const origin=process.env.CORS_ORIGIN;
@@ -53,9 +53,11 @@ app.get('/v1/restaurants',async(req)=>{
  const search=typeof q.search==='string'?q.search.trim()||null:null;
  const category=typeof q.category==='string'?q.category.trim()||null:null;
  const r=await pool.query(`SELECT r.id,r.name,r.slug,r.cover_url,r.is_open,r.is_busy,r.accepts_orders,
- CASE WHEN $1::uuid IS NOT NULL THEN dz.min_basket_kurus ELSE NULL END AS min_basket_kurus,
- CASE WHEN $1::uuid IS NOT NULL THEN dz.delivery_fee_kurus ELSE NULL END AS delivery_fee_kurus FROM restaurants r
- LEFT JOIN LATERAL (SELECT zone_id,min_basket_kurus,delivery_fee_kurus FROM restaurant_delivery_zones z WHERE z.restaurant_id=r.id AND z.enabled=true AND EXISTS(SELECT 1 FROM delivery_zones v WHERE v.id=z.zone_id AND v.enabled=true) AND ($1::uuid IS NULL OR z.zone_id=$1) ORDER BY min_basket_kurus ASC LIMIT 1) dz ON TRUE
+ (${CURRENTLY_ACCEPTING_SQL}) AS is_orderable,
+ dz.min_basket_kurus AS min_basket_kurus,
+ dz.delivery_fee_kurus AS delivery_fee_kurus FROM restaurants r
+ -- Without a selected neighborhood, DO NOT show an arbitrary neighborhood's price.
+ LEFT JOIN LATERAL (SELECT z.zone_id,z.min_basket_kurus,z.delivery_fee_kurus FROM restaurant_delivery_zones z WHERE z.restaurant_id=r.id AND z.enabled=true AND $1::uuid IS NOT NULL AND z.zone_id=$1::uuid AND EXISTS(SELECT 1 FROM delivery_zones v WHERE v.id=z.zone_id AND v.enabled=true) LIMIT 1) dz ON TRUE
  WHERE r.active=true AND ($1::uuid IS NULL OR dz.zone_id IS NOT NULL)
  AND ($2::text IS NULL OR r.name ILIKE '%'||$2||'%' OR EXISTS(SELECT 1 FROM products p WHERE p.restaurant_id=r.id AND p.available=true AND p.name ILIKE '%'||$2||'%'))
  AND ($3::text IS NULL OR EXISTS(SELECT 1 FROM categories c WHERE c.restaurant_id=r.id AND c.name ILIKE '%'||$3||'%'))
@@ -64,7 +66,7 @@ app.get('/v1/restaurants',async(req)=>{
 });
 app.get('/v1/restaurants/:id/menu',async(req)=>{
  const id=idParam(req,'id');
- const rest=await pool.query('SELECT id,name,cover_url,is_open,is_busy,accepts_orders FROM restaurants WHERE id=$1 AND active=true',[id]);
+ const rest=await pool.query(`SELECT r.id,r.name,r.cover_url,r.is_open,r.is_busy,r.accepts_orders, (${CURRENTLY_ACCEPTING_SQL}) AS is_orderable FROM restaurants r WHERE r.id=$1 AND r.active=true`,[id]);
  if(!rest.rowCount)invalid('NOT_FOUND','Restoran bulunamadı.',404);
  const ps=await pool.query('SELECT id,category_id,name,description,price_kurus,image_url,available FROM products WHERE restaurant_id=$1 ORDER BY sort_order,name LIMIT 500',[id]);
  const ids=ps.rows.map(p=>p.id);
