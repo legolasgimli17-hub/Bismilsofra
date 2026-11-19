@@ -5,6 +5,7 @@ import {DomainError,invalid,uuid,STATUSES,type Status,cleanNote} from './domain.
 import {verifyBearer,provisionVerifiedUser,requireMfa,requireStaff,requireAdmin} from './auth.ts';
 import {placeOrder,quoteOrder,changeStatus,activateRestaurant,transaction} from './order-service.ts';
 import {MERCHANT_SUMMARY_QUERY,hasRequiredMigrations,CURRENTLY_ACCEPTING_SQL,REQUIRED_MIGRATIONS} from './operations.ts';
+import {parseWeeklyHours,parseZonePolicy} from './merchant-management.ts';
 
 if(!process.env.DATABASE_URL)throw new Error('DATABASE_URL gerekli');
 const origin=process.env.CORS_ORIGIN;
@@ -169,6 +170,64 @@ app.patch('/v1/restaurant/:rid/products/:pid',async(req)=>{
   return r.rows[0];
  });
 });
+// Business-operable restaurant management: only assigned personnel with menu
+// permission, no customer order PII. Availability and pricing changes are
+// server-scoped and audited; client code never chooses a restaurant to impersonate.
+app.get('/v1/restaurant/:rid/management',async(req)=>{
+ const rid=idParam(req,'rid');const {role}=await staff(req,rid,'menu');
+ const [restaurant,products,hours,zones]=await Promise.all([
+  pool.query('SELECT id,name,active,is_open,is_busy,accepts_orders FROM restaurants WHERE id=$1',[rid]),
+  pool.query(`SELECT p.id,p.name,p.price_kurus,p.available,p.image_url,p.category_id,
+   c.name AS category_name
+   FROM products p JOIN categories c ON c.restaurant_id=p.restaurant_id AND c.id=p.category_id
+   WHERE p.restaurant_id=$1 ORDER BY c.sort_order,c.name,p.sort_order,p.name LIMIT 500`,[rid]),
+  pool.query(`SELECT day_of_week AS "dayOfWeek",
+    to_char(open_time,'HH24:MI') AS "openTime",
+    to_char(close_time,'HH24:MI') AS "closeTime"
+    FROM restaurant_hours WHERE restaurant_id=$1 ORDER BY day_of_week,open_time`,[rid]),
+  pool.query(`SELECT dz.zone_id,z.name,dz.enabled,dz.min_basket_kurus,dz.delivery_fee_kurus
+    FROM restaurant_delivery_zones dz JOIN delivery_zones z ON z.id=dz.zone_id
+    WHERE dz.restaurant_id=$1 ORDER BY z.name LIMIT 100`,[rid])
+ ]);
+ if(!restaurant.rowCount)invalid('NOT_FOUND','Restoran bulunamadı.',404);
+ return {restaurant:restaurant.rows[0],products:products.rows,hours:hours.rows,zones:zones.rows,
+  permissions:{canManageMenu:true,canManageSettings:role==='owner'||role==='manager'}};
+});
+app.put('/v1/restaurant/:rid/hours',async(req)=>{
+ const rid=idParam(req,'rid'),{userId,role}=await staff(req,rid,null);
+ if(role==='staff')invalid('ROLE_FORBIDDEN','Çalışma saatlerini yalnızca restoran sahibi veya yöneticisi değiştirebilir.',403);
+ const body=(req.body??{}) as Record<string,unknown>;
+ const slots=parseWeeklyHours(body.slots);
+ return transaction(pool,async db=>{
+  const rest=await db.query('SELECT id FROM restaurants WHERE id=$1 FOR UPDATE',[rid]);
+  if(!rest.rowCount)invalid('NOT_FOUND','Restoran bulunamadı.',404);
+  await db.query('DELETE FROM restaurant_hours WHERE restaurant_id=$1',[rid]);
+  for(const slot of slots){
+   await db.query('INSERT INTO restaurant_hours(restaurant_id,day_of_week,open_time,close_time) VALUES($1,$2,$3,$4)',
+    [rid,slot.dayOfWeek,slot.openTime,slot.closeTime]);
+  }
+  await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',
+   [userId,'restaurant_hours_update','restaurant',rid,JSON.stringify({slots})]);
+  return {restaurantId:rid,hours:slots};
+ });
+});
+app.patch('/v1/restaurant/:rid/zones/:zid',async(req)=>{
+ const rid=idParam(req,'rid'),zid=idParam(req,'zid'),{userId,role}=await staff(req,rid,null);
+ if(role==='staff')invalid('ROLE_FORBIDDEN','Teslimat bölgelerini yalnızca restoran sahibi veya yöneticisi değiştirebilir.',403);
+ const input=parseZonePolicy(req.body);
+ return transaction(pool,async db=>{
+  const zone=await db.query(`UPDATE restaurant_delivery_zones
+    SET enabled=$1,min_basket_kurus=$2,delivery_fee_kurus=$3
+    WHERE restaurant_id=$4 AND zone_id=$5
+    RETURNING zone_id,enabled,min_basket_kurus,delivery_fee_kurus`,
+   [input.enabled,input.minBasketKurus,input.deliveryFeeKurus,rid,zid]);
+  if(!zone.rowCount)invalid('NOT_FOUND','Bu mahalle restorana tanımlı değil.',404);
+  await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',
+   [userId,'restaurant_zone_update','restaurant',rid,JSON.stringify({zoneId:zid,...input})]);
+  return {zone:zone.rows[0]};
+ });
+});
+
 // Full pending snapshot supports reconnect/reconciliation when transient notifications fail.
 app.get('/v1/restaurant/:rid/inbox',async(req)=>{
  const rid=idParam(req,'rid');await staff(req,rid,'view');
