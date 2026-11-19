@@ -3,7 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {Pool} from 'pg';
-import {placeOrder,changeStatus,expirePending} from '../src/order-service.ts';
+import {placeOrder,quoteOrder,changeStatus,expirePending} from '../src/order-service.ts';
+import {CURRENTLY_ACCEPTING_SQL} from '../src/operations.ts';
 import {DomainError} from '../src/domain.ts';
 const dsn=process.env.INTEGRATION_DATABASE_URL;
 if(!dsn)throw Error('INTEGRATION_DATABASE_URL is required; use a disposable local DB ending with _test.');
@@ -29,12 +30,16 @@ test('PostgreSQL order / tenant / idempotency / expiry / history vertical slice'
  await pool.query('INSERT INTO restaurant_staff(user_id,restaurant_id,role) VALUES($1,$2,$3)',[owner,r,'owner']);
  const a=(await pool.query('INSERT INTO addresses(user_id,zone_id,full_address,phone) VALUES($1,$2,$3,$4) RETURNING id',[first,z,'Integration Test Sokak 10','05000000000'])).rows[0].id;
  const payload={restaurantId:r,addressId:a,paymentMethod:'cash',items:[{productId:p,quantity:1,optionIds:[extra]}],note:'Az acılı'};
+ const quote=await quoteOrder(pool,first,payload);
+ assert.equal(quote.totals.totalKurus,21500);
+ await assert.rejects(()=>placeOrder(pool,first,{...payload,confirmedTotalKurus:21499},'integration-stale-'+randomUUID()),e=>e instanceof DomainError&&e.code==='PRICE_CHANGED');
+ const confirmed={...payload,confirmedTotalKurus:quote.totals.totalKurus};
  const key='integration-'+randomUUID();
- const [one,again]=await Promise.all([placeOrder(pool,first,payload,key),placeOrder(pool,first,payload,key)]);
+ const [one,again]=await Promise.all([placeOrder(pool,first,confirmed,key),placeOrder(pool,first,confirmed,key)]);
  assert.equal(one.id,again.id);assert.equal([one.replayed,again.replayed].filter(x=>x===false).length,1);
  const existing=await pool.query('SELECT count(*)::int AS n FROM orders WHERE customer_id=$1 AND idempotency_key=$2',[first,key]);
  assert.equal(existing.rows[0].n,1);
- await assert.rejects(()=>placeOrder(pool,first,{...payload,note:'Farklı not'},key),e=>e instanceof DomainError&&e.code==='IDEMPOTENCY_CONFLICT');
+ await assert.rejects(()=>placeOrder(pool,first,{...confirmed,note:'Farklı not'},key),e=>e instanceof DomainError&&e.code==='IDEMPOTENCY_CONFLICT');
  const detail=await pool.query('SELECT total_kurus,subtotal_kurus,delivery_fee_kurus,payment_method FROM orders WHERE id=$1',[one.id]);
  assert.equal(detail.rows[0].total_kurus,21500);
  assert.equal(detail.rows[0].subtotal_kurus,20000);
@@ -50,9 +55,21 @@ test('PostgreSQL order / tenant / idempotency / expiry / history vertical slice'
  const outbox=await pool.query('SELECT count(*)::int AS n FROM notification_outbox WHERE order_id=$1',[one.id]);
  assert.equal(outbox.rows[0].n,6);
  // An expiring second order must be terminal and have an immutable history entry.
- const exp=await placeOrder(pool,first,payload,'integration-'+randomUUID());
+ const exp=await placeOrder(pool,first,confirmed,'integration-'+randomUUID());
  await pool.query("UPDATE orders SET expires_at=now()-interval '1 second' WHERE id=$1",[exp.id]);
  assert.ok(await expirePending(pool)>0);
  const final=await pool.query('SELECT status FROM orders WHERE id=$1',[exp.id]);
  assert.equal(final.rows[0].status,'suresi_doldu');
+ // Discovery and checkout must agree on whether the restaurant is accepting orders.
+ const discovery=async()=>{
+  const q=await pool.query(`SELECT (${CURRENTLY_ACCEPTING_SQL}) AS is_orderable FROM restaurants r WHERE r.id=$1`,[r]);
+  return q.rows[0]?.is_orderable===true;
+ };
+ assert.equal(await discovery(),true);
+ await pool.query('UPDATE restaurants SET is_busy=true WHERE id=$1',[r]);
+ try {assert.equal(await discovery(),false)}finally{await pool.query('UPDATE restaurants SET is_busy=false WHERE id=$1',[r])}
+ const closure=(await pool.query(`INSERT INTO restaurant_closures(restaurant_id,starts_at,ends_at,reason)
+   VALUES($1,now()-interval '1 minute',now()+interval '1 hour','CI test') RETURNING id`,[r])).rows[0].id;
+ try {assert.equal(await discovery(),false)}finally{await pool.query('DELETE FROM restaurant_closures WHERE id=$1',[closure])}
+ assert.equal(await discovery(),true);
 });
