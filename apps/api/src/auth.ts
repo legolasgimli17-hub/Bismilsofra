@@ -8,6 +8,8 @@ const jwksUrl=process.env.OIDC_JWKS_URL;
 // A trusted Post-Login Action can issue explicit namespaced claims.
 const verifiedClaim=process.env.OIDC_VERIFIED_CLAIM||'https://bismilsofra.example/claims/email_verified';
 const emailClaim=process.env.OIDC_EMAIL_CLAIM||'https://bismilsofra.example/claims/email';
+const signedMfaClaim=process.env.OIDC_MFA_CLAIM||'https://bismilsofra.example/claims/mfa';
+const signedMfaAtClaim=process.env.OIDC_MFA_AT_CLAIM||'https://bismilsofra.example/claims/mfa_at';
 if(!issuer||!audience||!jwksUrl||issuer.includes('REPLACE-')||audience.includes('REPLACE-')||jwksUrl.includes('REPLACE-')){
  throw new Error('OIDC_ISSUER / OIDC_AUDIENCE / OIDC_JWKS_URL yapılandırılmamış. Güvenli doğrulama olmadan API başlamaz.');
 }
@@ -28,10 +30,15 @@ export async function verifyBearer(header:unknown):Promise<Identity>{
  }catch{invalid('AUTH_INVALID','Oturum geçersiz veya süresi dolmuş.',401)}
  if(typeof p!.sub!=='string'||p!.sub.length>250)invalid('AUTH_INVALID','Kimlik doğrulanamadı.',401);
  const claimEmail=typeof p![emailClaim]==='string'?p![emailClaim] as string:undefined;
+ const amr=Array.isArray(p!.amr)?p!.amr.filter(x=>typeof x==='string') as string[]:[];
+ // Never trust client-provided MFA hints: these fields are inside the issuer-signed JWT.
+ if(p![signedMfaClaim]===true)amr.push('mfa');
+ const signedMfaTime=p![signedMfaAtClaim];
  return {sub:p!.sub!,email:typeof p!.email==='string'?p!.email:claimEmail,
   emailVerified:p!.email_verified===true||p![verifiedClaim]===true,
-  amr:Array.isArray(p!.amr)?p!.amr.filter(x=>typeof x==='string') as string[]:[],
-  authTime:typeof p!.auth_time==='number'?p!.auth_time:undefined};
+  amr,
+  authTime:typeof signedMfaTime==='number'&&Number.isFinite(signedMfaTime)?signedMfaTime:
+    typeof p!.auth_time==='number'?p!.auth_time:undefined};
 }
 export function requireVerifiedEmail(identity:Identity){if(!identity.emailVerified||!identity.email)invalid('EMAIL_NOT_VERIFIED','Sipariş için doğrulanmış e-posta gerekli.',403)}
 export function requireMfa(identity:Identity,recent=false){
