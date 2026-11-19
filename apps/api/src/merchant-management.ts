@@ -44,5 +44,5 @@ export function parseZonePolicy(value:unknown):ZonePolicy{
  const body=value as Record<string,unknown>;
  if(typeof body.enabled!=='boolean'||!price(body.minBasketKurus)||!price(body.deliveryFeeKurus))
   invalid('ZONE_POLICY_INVALID','Bölge aktifliği boolean; minimum sepet ve teslimat ücreti kuruş cinsinden tam sayı olmalı.');
- return {enabled:body.enabled,minBasketKurus:body.minBasketKurus as number,deliveryFeeKurus:body.deliveryFeeKurus as number};
+ return {enabled:body.enabled as boolean,minBasketKurus:body.minBasketKurus as number,deliveryFeeKurus:body.deliveryFeeKurus as number};
 }
