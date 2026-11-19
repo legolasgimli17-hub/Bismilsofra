@@ -4,7 +4,7 @@ import Link from 'next/link';
 import AuthGate from '@/components/auth-gate';
 import {api,ApiError} from '@/lib/api';
 import {money,statusText} from '@/lib/types';
-import {canActOnInbox,inboxLabel,type InboxHealth} from '@/lib/inbox-health';
+import {canActOnInbox,inboxLabel,unseenPendingIds,type InboxHealth} from '@/lib/inbox-health';
 import {canSubmitMerchantAction,merchantNextActions} from '@/lib/merchant-workflow';
 import {RefreshCcw,Bell,ShieldCheck,WifiOff,Wifi,AlertTriangle,ChevronDown,Clock3,PackageCheck,MapPin,ClipboardList} from 'lucide-react';
 type Merchant={id:string;name:string;role:string;can_view_orders:boolean;can_manage_orders:boolean};
@@ -25,17 +25,59 @@ function Inner({token}:{token:()=>Promise<string>}){
  const [details,setDetails]=useState<Record<string,OrderDetail>>({}),[openOrder,setOpenOrder]=useState<string|null>(null);
  const [detailLoading,setDetailLoading]=useState(''),[reasons,setReasons]=useState<Record<string,string>>({});
  const ridRef=useRef(rid);
- useEffect(()=>{ridRef.current=rid;setPending([]);setActive([]);setDetails({});setOpenOrder(null);setTruncated(false);setLastSync('');setLastSyncMs(0);setState('connecting');setError('')},[rid]);
+ const requestSequence=useRef(0);
+ const seenIds=useRef<string[]>([]);
+ const sawSnapshot=useRef(false);
+ const alertAudio=useRef<AudioContext|null>(null);
+ const soundOnRef=useRef(false);
+ const [soundOn,setSoundOn]=useState(false);
+ const [incomingCount,setIncomingCount]=useState(0);
+ function playChime(){
+  const audio=alertAudio.current;
+  if(!audio||audio.state!=='running')return;
+  try{
+   const oscillator=audio.createOscillator(),volume=audio.createGain();
+   oscillator.type='sine';
+   oscillator.frequency.setValueAtTime(740,audio.currentTime);
+   oscillator.frequency.setValueAtTime(960,audio.currentTime+0.14);
+   volume.gain.setValueAtTime(0.0001,audio.currentTime);
+   volume.gain.exponentialRampToValueAtTime(0.08,audio.currentTime+0.03);
+   volume.gain.exponentialRampToValueAtTime(0.0001,audio.currentTime+0.38);
+   oscillator.connect(volume);volume.connect(audio.destination);
+   oscillator.start();oscillator.stop(audio.currentTime+0.39);
+  }catch{setError('Sesli uyarı çalınamadı; ekrandaki yeni siparişleri kontrol edin.')}
+ }
+ async function toggleSound(){
+  if(soundOnRef.current){soundOnRef.current=false;setSoundOn(false);return}
+  try{
+   const audio=alertAudio.current||new AudioContext();
+   alertAudio.current=audio;await audio.resume();
+   if(audio.state!=='running')throw Error('Tarayıcı sesi başlatamadı.');
+   soundOnRef.current=true;setSoundOn(true);playChime();
+  }catch{setError('Sesli uyarı etkinleştirilemedi. Tarayıcı izinlerini kontrol edin.')}
+ }
+ useEffect(()=>()=>{soundOnRef.current=false;void alertAudio.current?.close()},[]);
+ useEffect(()=>{ridRef.current=rid;requestSequence.current++;seenIds.current=[];sawSnapshot.current=false;setIncomingCount(0);setPending([]);setActive([]);setDetails({});setOpenOrder(null);setTruncated(false);setLastSync('');setLastSyncMs(0);setState('connecting');setError('')},[rid]);
  const load=useCallback(async()=>{
   if(!rid)return;
+  const sequence=++requestSequence.current;
   try{
    const t=await token();const r=await api<{pending:Summary[];active:Summary[];serverTime:string;pendingTruncated:boolean;activeTruncated:boolean}>(`/v1/restaurant/${rid}/inbox`,t);
-   if(ridRef.current!==rid)return;
+   if(ridRef.current!==rid||sequence!==requestSequence.current)return;
+   const currentIds=r.pending.map(o=>o.id);
+   const newIds=unseenPendingIds(seenIds.current,currentIds);
+   if(sawSnapshot.current&&newIds.length>0){
+    setIncomingCount(n=>n+newIds.length);
+    if(soundOnRef.current&&document.visibilityState==='visible')playChime();
+   }
+   seenIds.current=currentIds;sawSnapshot.current=true;
    setPending(r.pending);setActive(r.active);setTruncated(Boolean(r.pendingTruncated||r.activeTruncated));
    setLastSync(new Date(r.serverTime).toLocaleTimeString('tr-TR'));
    const stamp=Date.now();setLastSyncMs(stamp);setNow(stamp);setState('connected');setError('');
-  }catch(e){if(ridRef.current!==rid)return;setState('offline');
-   if(e instanceof ApiError&&[401,403].includes(e.status)){setPending([]);setActive([]);setDetails({})}
+  }catch(e){
+   if(ridRef.current!==rid||sequence!==requestSequence.current)return;
+   setState('offline');
+   if(e instanceof ApiError&&[401,403].includes(e.status)){setPending([]);setActive([]);setDetails({});seenIds.current=[];sawSnapshot.current=false}
    setError(e instanceof Error?e.message:'Bağlantı hatası');
   }
  },[rid,token]);
@@ -110,7 +152,14 @@ function Inner({token}:{token:()=>Promise<string>}){
    <button className="btn outline" disabled={Boolean(busyOrder)} onClick={()=>void load()}><RefreshCcw size={17}/> Güncelle</button></div>
   <div className={`merchant-connection ${connected?'healthy':'lost'}`} role="status" aria-live="polite">{connected?<Wifi size={19}/>:<WifiOff size={19}/>}
    <div><strong>{inboxLabel(state,connected)}</strong><span>{connected?`Son eşitleme: ${lastSync}`:'İnternet veya sunucu bağlantısını doğrulayın. Durum değişikliği şu anda engellendi.'}</span></div></div>
-  <div className="merchant-banner"><ShieldCheck size={20}/><span>Restoran erişimi MFA ile korunur. Siparişler 7 saniyede bir yenilenir. Bu henüz canlı push ve yedek bildirim yerine geçmez.</span></div>
+  <div className="merchant-banner"><ShieldCheck size={20}/><span>Restoran erişimi MFA ile korunur. Siparişler 7 saniyede bir yenilenir. Sekme kapalıyken veya telefon uyurken ses garantisi yoktur; yedek uyarı şarttır.</span></div>
+  <div className="merchant-sound-row">
+   <button type="button" className="btn outline" onClick={()=>void toggleSound()} aria-pressed={soundOn}>
+    <Bell size={17}/> {soundOn?'Sesli uyarıyı kapat':'Sesli uyarıyı aç ve dene'}
+   </button>
+   {incomingCount>0&&<span role="status" className="merchant-new-count">{incomingCount} yeni sipariş algılandı (bu oturum)</span>}
+   <small>Ses yalnızca bu sekmede, açıkça etkinleştirildiğinde çalar.</small>
+  </div>
   {error&&<div role="alert" className="notice error">{error}</div>}
   {truncated&&<div role="alert" className="notice error"><AlertTriangle size={18}/> Sipariş limiti aşıldı. Operasyon müdahalesi gerekli; listede tüm kayıtlar görünmeyebilir.</div>}
   <div className="panel merchant-control-bar"><label htmlFor="merchant-restaurant-select">Restoran
