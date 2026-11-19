@@ -1,5 +1,5 @@
 export type Zone={id:string;name:string};
-export type Restaurant={id:string;name:string;slug:string;cover_url:string|null;is_open:boolean;is_busy:boolean;accepts_orders:boolean;min_basket_kurus:number|null;delivery_fee_kurus:number|null};
+export type Restaurant={id:string;name:string;slug:string;cover_url:string|null;is_open:boolean;is_busy:boolean;accepts_orders:boolean;is_orderable?:boolean;min_basket_kurus:number|null;delivery_fee_kurus:number|null};
 export type MenuOption={id:string;group_id:string;name:string;price_kurus:number;available:boolean};
 export type OptionGroup={id:string;name:string;product_id:string;min_select:number;max_select:number;options:MenuOption[]};
 export type MenuProduct={id:string;category_id:string|null;name:string;description:string|null;price_kurus:number;image_url:string|null;available:boolean;optionGroups:OptionGroup[]};
