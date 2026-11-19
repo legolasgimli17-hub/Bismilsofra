@@ -166,6 +166,62 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
   method:'POST',token:owner,body:{to:'kabul_edildi'}});
  assert.equal(accepted.status,200,JSON.stringify(accepted.body));
  assert.equal((await request('/v1/me/orders/'+orderId,{token:customer})).body.order.status,'kabul_edildi');
+ // Real merchant management endpoints: staff authorization, menu, hours and
+ // configured neighborhood fees. All read/write requests use signed tokens.
+ const baseManagement=await request('/v1/restaurant/'+rid+'/management',{token:owner});
+ assert.equal(baseManagement.status,200,JSON.stringify(baseManagement.body));
+ assert.equal(baseManagement.body.restaurant.id,rid);
+ assert.ok(baseManagement.body.products.some((item:{id:string})=>item.id===pid));
+ assert.ok(baseManagement.body.zones.some((item:{zone_id:string})=>item.zone_id===zid));
+ assert.equal(baseManagement.body.permissions.canManageSettings,true);
+ assert.equal((await request('/v1/restaurant/'+rid+'/management',{token:customer})).status,403);
+ assert.equal((await request('/v1/restaurant/'+rid+'/management',{token:noMfa})).status,403);
+ const toggleOff=await request('/v1/restaurant/'+rid+'/products/'+pid,{method:'PATCH',token:owner,body:{available:false}});
+ assert.equal(toggleOff.status,200,JSON.stringify(toggleOff.body));
+ const blockedMenu=await request('/v1/restaurants/'+rid+'/menu');
+ assert.equal(blockedMenu.body.products.find((p:{id:string})=>p.id===pid)?.available,false);
+ assert.equal((await request('/v1/restaurant/'+rid+'/products/'+pid,{method:'PATCH',token:customer,body:{available:true}})).status,403);
+ assert.equal((await request('/v1/restaurant/'+rid+'/products/'+pid,{method:'PATCH',token:owner,body:{available:true}})).status,200);
+
+ const originallyOpen=baseManagement.body.restaurant;
+ assert.equal((await request('/v1/restaurant/'+rid+'/availability',{method:'PATCH',token:customer,body:{isOpen:false,isBusy:false,acceptsOrders:false}})).status,403);
+ const closed=await request('/v1/restaurant/'+rid+'/availability',{method:'PATCH',token:owner,body:{isOpen:false,isBusy:false,acceptsOrders:false}});
+ assert.equal(closed.status,200,JSON.stringify(closed.body));
+ assert.equal((await request('/v1/restaurants/'+rid+'/menu')).body.restaurant.is_orderable,false);
+ assert.equal((await request('/v1/restaurant/'+rid+'/availability',{method:'PATCH',token:owner,
+  body:{isOpen:originallyOpen.is_open,isBusy:originallyOpen.is_busy,acceptsOrders:originallyOpen.accepts_orders}})).status,200);
+
+ const badHours=await request('/v1/restaurant/'+rid+'/hours',{method:'PUT',token:owner,body:{slots:[
+  {dayOfWeek:1,openTime:'10:00',closeTime:'16:00'},
+  {dayOfWeek:1,openTime:'15:00',closeTime:'18:00'}]}});
+ assert.equal(badHours.status,400);
+ assert.equal(badHours.body.code,'HOURS_OVERLAP');
+ assert.equal((await request('/v1/restaurant/'+rid+'/hours',{method:'PUT',token:customer,body:{slots:[]}})).status,403);
+ const shutWeek=await request('/v1/restaurant/'+rid+'/hours',{method:'PUT',token:owner,body:{slots:[]}});
+ assert.equal(shutWeek.status,200,JSON.stringify(shutWeek.body));
+ assert.equal((await request('/v1/restaurants/'+rid+'/menu')).body.restaurant.is_orderable,false);
+ const restoreHours=await request('/v1/restaurant/'+rid+'/hours',{method:'PUT',token:owner,body:{slots:baseManagement.body.hours}});
+ assert.equal(restoreHours.status,200,JSON.stringify(restoreHours.body));
+
+ const originalZone=(baseManagement.body.zones as Array<{zone_id:string;enabled:boolean;min_basket_kurus:number;delivery_fee_kurus:number}>)
+  .find(z=>z.zone_id===zid);
+ assert.ok(originalZone);
+ const policy=(enabled:boolean)=>({enabled,minBasketKurus:originalZone!.min_basket_kurus,deliveryFeeKurus:originalZone!.delivery_fee_kurus});
+ assert.equal((await request('/v1/restaurant/'+rid+'/zones/'+zid,{method:'PATCH',token:customer,body:policy(false)})).status,403);
+ const disabledZone=await request('/v1/restaurant/'+rid+'/zones/'+zid,{method:'PATCH',token:owner,body:policy(false)});
+ assert.equal(disabledZone.status,200,JSON.stringify(disabledZone.body));
+ const discoveryWithoutZone=await request('/v1/restaurants?zoneId='+zid);
+ assert.equal(discoveryWithoutZone.status,200);
+ assert.equal(discoveryWithoutZone.body.restaurants.some((r:{id:string})=>r.id===rid),false);
+ assert.equal((await request('/v1/restaurant/'+rid+'/zones/'+randomUUID(),{
+  method:'PATCH',token:owner,body:policy(true)})).status,404);
+ assert.equal((await request('/v1/restaurant/'+rid+'/zones/'+zid,{method:'PATCH',token:owner,body:policy(originalZone!.enabled)})).status,200);
+ const savedManagement=await request('/v1/restaurant/'+rid+'/management',{token:owner});
+ assert.equal(savedManagement.status,200);
+ assert.deepEqual(savedManagement.body.hours,baseManagement.body.hours);
+ assert.equal(savedManagement.body.zones.find((z:{zone_id:string})=>z.zone_id===zid).enabled,originalZone!.enabled);
+ assert.equal((await request('/v1/restaurants/'+rid+'/menu')).body.restaurant.is_orderable,true);
+
  // Recovery tools require administrator MFA with recent authentication, and
  // must refuse to reactivate notifications for an already accepted order.
  await pool.query("UPDATE restaurant_escalations SET next_attempt_at=now()-interval '1 second' WHERE order_id=$1",[orderId]);
