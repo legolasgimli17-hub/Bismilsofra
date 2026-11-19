@@ -7,7 +7,7 @@ import {money,statusText} from '@/lib/types';
 import {canActOnInbox,inboxLabel,unseenPendingIds,type InboxHealth} from '@/lib/inbox-health';
 import {canSubmitMerchantAction,merchantNextActions} from '@/lib/merchant-workflow';
 import {RefreshCcw,Bell,ShieldCheck,WifiOff,Wifi,AlertTriangle,ChevronDown,Clock3,PackageCheck,MapPin,ClipboardList} from 'lucide-react';
-type Merchant={id:string;name:string;role:string;can_view_orders:boolean;can_manage_orders:boolean};
+type Merchant={id:string;name:string;role:string;can_view_orders:boolean;can_manage_orders:boolean;can_manage_menu:boolean};
 type Summary={id:string;status:string;total_kurus:number;created_at:string;expires_at:string};
 type SnapshotOption={name:string;priceKurus:number};
 type OrderDetail={
@@ -172,6 +172,6 @@ function Inner({token}:{token:()=>Promise<string>}){
     {active.length===0?<div className="empty"><h3>{connected?'Devam eden sipariş yok':'Veriler eşitlenemedi'}</h3></div>:active.map(orderCard)}</section>
   </div>}
   <div className="notice">Bu operasyon paneli bir geliştirme sürümüdür. Üretim için güvenilir push/ikincil alarm, gerçek PostgreSQL ve kimlik sağlayıcısı entegrasyonu test edilmelidir.</div>
-  <div className="merchant-settings-links"><Link href="/restaurant/manage" className="btn primary">Restoranı ve menüyü yönet</Link><Link href="/">Müşteri görünümüne dön</Link></div>
+  <div className="merchant-settings-links">{(selectedMerchant?.role==='owner'||selectedMerchant?.role==='manager'||selectedMerchant?.can_manage_menu===true)&&<Link href="/restaurant/manage" className="btn primary">Restoranı ve menüyü yönet</Link>}<Link href="/">Müşteri görünümüne dön</Link></div>
  </section>;
 }
