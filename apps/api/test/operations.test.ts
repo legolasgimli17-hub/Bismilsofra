@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {MERCHANT_SUMMARY_QUERY,hasRequiredMigrations,REQUIRED_MIGRATIONS} from '../src/operations.ts';
+import {MERCHANT_SUMMARY_QUERY,hasRequiredMigrations,REQUIRED_MIGRATIONS,CURRENTLY_ACCEPTING_SQL} from '../src/operations.ts';
 
 test('merchant summary query scoped to one restaurant',()=>{
  assert.match(MERCHANT_SUMMARY_QUERY,/WHERE restaurant_id=\$1/);
@@ -17,4 +17,13 @@ test('readiness requires both applied migrations',()=>{
 });
 test('migration readiness tolerates additional future migrations',()=>{
  assert.equal(hasRequiredMigrations([...REQUIRED_MIGRATIONS.map(filename=>({filename})),{filename:'004_future.sql'}]),true);
+});
+
+test('public availability combines manual state, hours, closures, delivery area',()=>{
+ assert.match(CURRENTLY_ACCEPTING_SQL,/r\.active\s*=\s*true/);
+ assert.match(CURRENTLY_ACCEPTING_SQL,/r\.is_busy\s*=\s*false/);
+ assert.match(CURRENTLY_ACCEPTING_SQL,/restaurant_delivery_zones/);
+ assert.match(CURRENTLY_ACCEPTING_SQL,/restaurant_hours/);
+ assert.match(CURRENTLY_ACCEPTING_SQL,/restaurant_closures/);
+ assert.match(CURRENTLY_ACCEPTING_SQL,/Europe\/Istanbul/);
 });
