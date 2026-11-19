@@ -222,3 +222,45 @@ body{background:#fbfaf7;color:#263129}
 @media(max-width:680px){.merchant-product-grid,.merchant-zone-grid{grid-template-columns:1fr}.merchant-settings-card,.merchant-settings-section{padding:15px}.merchant-settings-selector{align-items:stretch}.merchant-settings-selector select{width:100%}.merchant-settings-heading h1{font-size:clamp(30px,8vw,42px)}}
 @media(max-width:365px){.merchant-hour-row input{width:102px}.merchant-settings-title h2{font-size:19px}.merchant-zone-inputs{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.merchant-settings *{scroll-behavior:auto}}
+
+/* v1.6: menu editor — compact, mobile-first, visually distinct draft/editor states */
+.merchant-menu-editor{background:#fff;overflow:hidden}
+.merchant-menu-columns{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(295px,.9fr);gap:20px;align-items:start}
+.merchant-menu-left,.merchant-menu-right{min-width:0}
+.merchant-menu-right{border:1px solid #e4ece5;border-radius:17px;padding:20px;background:#f8fbf8}
+.merchant-menu-row-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:4px 0 15px}
+.merchant-menu-row-title h3{font-size:18px;letter-spacing:-.025em;margin:0}
+.merchant-menu-row-title>span{color:#63816d;font-size:12px;font-weight:750}
+.merchant-category-chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:15px}
+.merchant-category-pill{display:inline-flex;gap:6px;align-items:center;border:1px solid #dce9db;border-radius:999px;background:#f5faf4;color:#285b40;font-size:12px;font-weight:750;padding:9px 12px;min-height:39px}
+.merchant-category-pill:hover:not(:disabled){background:#e5f4e8}
+.merchant-menu-miniform{margin:12px 0 22px;display:flex;flex-direction:column;gap:8px}
+.merchant-menu-miniform>label{font-size:12px;font-weight:750}
+.merchant-menu-inline{display:flex;flex-wrap:wrap;gap:7px}
+.merchant-menu-inline input{flex:1;min-width:140px;border:1px solid #d5e1d5;border-radius:10px;min-height:44px;padding:9px 12px}
+.merchant-menu-inline .btn{min-height:44px}
+.merchant-editor-product-list{display:grid;gap:10px;max-height:680px;overflow-y:auto;scrollbar-width:thin;overscroll-behavior:contain;padding:2px 4px 8px 0}
+.merchant-editor-item{display:grid;grid-template-columns:83px minmax(0,1fr);gap:10px;align-items:center;border:1px solid #e9eae6;border-radius:14px;padding:9px;background:#fff}
+.merchant-editor-item.editing{border-color:#45a776;box-shadow:0 0 0 2px rgba(69,167,118,.12)}
+.merchant-editor-thumb{height:82px;width:83px;border-radius:9px;overflow:hidden;background:#f6f1ed}
+.merchant-editor-thumb .food-photo,.merchant-editor-thumb img{width:100%;height:100%}
+.merchant-editor-thumb .image-placeholder{min-height:82px;font-size:9px;padding:4px}
+.merchant-editor-item-info{min-width:0;display:flex;flex-direction:column;gap:3px}
+.merchant-editor-item-info small{font-size:10px;color:#597968;font-weight:750}
+.merchant-editor-item-info strong{font-size:13px;line-height:1.35;overflow-wrap:anywhere}
+.merchant-editor-item-info span{font-size:12px;color:#58655e}
+.merchant-editor-item-actions{grid-column:1/-1;display:flex;gap:8px}
+.merchant-editor-item-actions button{flex:1;min-height:39px}
+.merchant-product-form{display:flex;flex-direction:column;gap:13px}
+.merchant-product-form>label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:#355b43;font-weight:750}
+.merchant-product-form input,.merchant-product-form select,.merchant-product-form textarea{width:100%;min-width:0;border:1px solid #d8e3d7;border-radius:11px;background:#fff;min-height:46px;padding:11px 12px;color:#273f31;font-size:14px}
+.merchant-product-form textarea{resize:vertical}
+.merchant-product-form .btn{min-height:48px;justify-content:center}
+.merchant-menu-image-hint{display:flex;gap:9px;background:#eef5ef;border-radius:12px;padding:11px;color:#4a6b54;align-items:start}
+.merchant-menu-image-hint svg{flex:none}
+.merchant-menu-image-hint p{font-size:12px;line-height:1.5;margin:0}
+.merchant-menu-image-hint code{overflow-wrap:anywhere}
+.merchant-editor-preview{height:140px;max-width:240px;overflow:hidden;border-radius:12px}
+.merchant-editor-preview .food-photo{height:100%;width:100%}
+@media(max-width:980px){.merchant-menu-columns{grid-template-columns:1fr}.merchant-menu-right{padding:18px}.merchant-editor-product-list{max-height:470px}}
+@media(max-width:530px){.merchant-menu-right{padding:14px}.merchant-editor-item{grid-template-columns:70px minmax(0,1fr)}.merchant-editor-thumb{width:70px;height:78px}.merchant-menu-inline .btn{flex:1}}

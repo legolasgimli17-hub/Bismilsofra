@@ -67,3 +67,11 @@ Restoran siparişleri toplu listeleme API'si artık müşteri adreslerini ve öz
 - **Bağımsız denetim:** [QA_REVIEW_v1_4.md](QA_REVIEW_v1_4.md); [bildirim olay prosedürü](docs/ALERTS_AND_INCIDENTS.md); [gerçek fotoğraf/mobil kalite kapıları](docs/PHOTOS_AND_MOBILE.md).
 
 **Önemli:** Bunlar güvenilir bir uygulamanın temel bileşenleridir; gerçek Auth0 tenant, üretim PostgreSQL, gerçek SMS/push veya fiziksel cihaz pilotu bağlanmış değildir. Canlıya açma kriterleri tamamlanmadan gerçek sipariş kabul edilmemelidir.
+
+## v1.6 — Gerçek restoran menü düzenleyicisi
+
+`/restaurant/manage` üzerinden restoranın kendi kategorilerini oluşturup adlandırması, ürünleri satışa kapalı taslak olarak eklemesi, ürün fiyat/açıklama/kategori/görsel yolunu düzenlemesi ve ürün satışını açıp kapatması desteklenir. Aynı ürün üzerinde eşzamanlı fiyat düzenlemeleri `revision` sürümü ile korunur. Geçmiş siparişlerin fiyatı sabittir.
+
+- [Menü düzenleme API ve kullanım rehberi](docs/MENU_EDITOR_v1_6.md)
+- [Bağımsız ürün ve risk değerlendirmesi](QA_REVIEW_v1_6.md)
+- Gerçek fotoğraf yükleme servisi ve Auth0 canlı hesap bağlantısı henüz yoktur; test sunucusunda imzalı JWT ve PostgreSQL ile kontrol edilmiştir.

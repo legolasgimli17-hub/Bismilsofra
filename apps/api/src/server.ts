@@ -6,6 +6,7 @@ import {verifyBearer,provisionVerifiedUser,requireMfa,requireStaff,requireAdmin}
 import {placeOrder,quoteOrder,changeStatus,activateRestaurant,transaction} from './order-service.ts';
 import {MERCHANT_SUMMARY_QUERY,hasRequiredMigrations,CURRENTLY_ACCEPTING_SQL,REQUIRED_MIGRATIONS} from './operations.ts';
 import {parseWeeklyHours,parseZonePolicy} from './merchant-management.ts';
+import {parseProductDraft,parseCategoryDraft} from './merchant-menu.ts';
 
 if(!process.env.DATABASE_URL)throw new Error('DATABASE_URL gerekli');
 const origin=process.env.CORS_ORIGIN;
@@ -175,9 +176,9 @@ app.patch('/v1/restaurant/:rid/products/:pid',async(req)=>{
 // server-scoped and audited; client code never chooses a restaurant to impersonate.
 app.get('/v1/restaurant/:rid/management',async(req)=>{
  const rid=idParam(req,'rid');const {role}=await staff(req,rid,'menu');
- const [restaurant,products,hours,zones]=await Promise.all([
+ const [restaurant,products,hours,zones,categories]=await Promise.all([
   pool.query('SELECT id,name,active,is_open,is_busy,accepts_orders FROM restaurants WHERE id=$1',[rid]),
-  pool.query(`SELECT p.id,p.name,p.price_kurus,p.available,p.image_url,p.category_id,
+  pool.query(`SELECT p.id,p.name,p.description,p.price_kurus,p.available,p.image_url,p.category_id,p.revision,
    c.name AS category_name
    FROM products p JOIN categories c ON c.restaurant_id=p.restaurant_id AND c.id=p.category_id
    WHERE p.restaurant_id=$1 ORDER BY c.sort_order,c.name,p.sort_order,p.name LIMIT 500`,[rid]),
@@ -187,11 +188,93 @@ app.get('/v1/restaurant/:rid/management',async(req)=>{
     FROM restaurant_hours WHERE restaurant_id=$1 ORDER BY day_of_week,open_time`,[rid]),
   pool.query(`SELECT dz.zone_id,z.name,dz.enabled,dz.min_basket_kurus,dz.delivery_fee_kurus
     FROM restaurant_delivery_zones dz JOIN delivery_zones z ON z.id=dz.zone_id
-    WHERE dz.restaurant_id=$1 ORDER BY z.name LIMIT 100`,[rid])
+    WHERE dz.restaurant_id=$1 ORDER BY z.name LIMIT 100`,[rid]),
+  pool.query('SELECT id,name,sort_order FROM categories WHERE restaurant_id=$1 ORDER BY sort_order,name LIMIT 50',[rid])
  ]);
  if(!restaurant.rowCount)invalid('NOT_FOUND','Restoran bulunamadı.',404);
- return {restaurant:restaurant.rows[0],products:products.rows,hours:hours.rows,zones:zones.rows,
+ return {restaurant:restaurant.rows[0],products:products.rows,hours:hours.rows,zones:zones.rows,categories:categories.rows,
   permissions:{canManageMenu:true,canManageSettings:role==='owner'||role==='manager'}};
+});
+// New menu entries start unavailable so an unfinished draft can never be
+// ordered. All writes are audited and bound to the authenticated restaurant.
+app.post('/v1/restaurant/:rid/categories',async(req,reply)=>{
+ const rid=idParam(req,'rid'),{userId}=await staff(req,rid,'menu');
+ const name=parseCategoryDraft(req.body);
+ const category=await transaction(pool,async db=>{
+  const rest=await db.query('SELECT id FROM restaurants WHERE id=$1 FOR UPDATE',[rid]);
+  if(!rest.rowCount)invalid('NOT_FOUND','Restoran bulunamadı.',404);
+  const current=await db.query('SELECT id,name FROM categories WHERE restaurant_id=$1',[rid]);
+  if(current.rows.length>=40)invalid('CATEGORY_LIMIT','Restoranda en çok 40 kategori bulunabilir.',409);
+  if(current.rows.some(c=>(c.name as string).toLocaleLowerCase('tr-TR')===name.toLocaleLowerCase('tr-TR')))
+   invalid('CATEGORY_EXISTS','Bu kategori zaten mevcut.',409);
+  const result=await db.query('INSERT INTO categories(restaurant_id,name) VALUES($1,$2) RETURNING id,name,sort_order',[rid,name]);
+  await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',
+   [userId,'menu_category_create','category',result.rows[0].id,JSON.stringify({restaurantId:rid,name})]);
+  return result.rows[0];
+ });
+ reply.code(201);return {category};
+});
+app.patch('/v1/restaurant/:rid/categories/:cid',async(req)=>{
+ const rid=idParam(req,'rid'),cid=idParam(req,'cid'),{userId}=await staff(req,rid,'menu');
+ const name=parseCategoryDraft(req.body);
+ return transaction(pool,async db=>{
+  const rest=await db.query('SELECT id FROM restaurants WHERE id=$1 FOR UPDATE',[rid]);
+  if(!rest.rowCount)invalid('NOT_FOUND','Restoran bulunamadı.',404);
+  const current=await db.query('SELECT id,name FROM categories WHERE restaurant_id=$1',[rid]);
+  const existing=current.rows.find(c=>c.id===cid);
+  if(!existing)invalid('NOT_FOUND','Kategori bu restoranda bulunamadı.',404);
+  if(current.rows.some(c=>c.id!==cid&&(c.name as string).toLocaleLowerCase('tr-TR')===name.toLocaleLowerCase('tr-TR')))
+   invalid('CATEGORY_EXISTS','Bu kategori zaten mevcut.',409);
+  const changed=await db.query('UPDATE categories SET name=$1 WHERE id=$2 AND restaurant_id=$3 RETURNING id,name,sort_order',[name,cid,rid]);
+  await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',
+   [userId,'menu_category_rename','category',cid,JSON.stringify({restaurantId:rid,oldName:existing.name,newName:name})]);
+  return {category:changed.rows[0]};
+ });
+});
+app.post('/v1/restaurant/:rid/products',async(req,reply)=>{
+ const rid=idParam(req,'rid'),{userId}=await staff(req,rid,'menu');
+ const input=parseProductDraft(req.body);
+ const product=await transaction(pool,async db=>{
+  // Restaurant lock serializes two employees attempting to fill the last slot.
+  const rest=await db.query('SELECT id FROM restaurants WHERE id=$1 FOR UPDATE',[rid]);
+  if(!rest.rowCount)invalid('NOT_FOUND','Restoran bulunamadı.',404);
+  const count=await db.query('SELECT count(*)::int AS count FROM products WHERE restaurant_id=$1',[rid]);
+  if(count.rows[0].count>=500)invalid('PRODUCT_LIMIT','Bu restoran için 500 ürün sınırına ulaşıldı.',409);
+  const cat=await db.query('SELECT id FROM categories WHERE restaurant_id=$1 AND id=$2',[rid,input.categoryId]);
+  if(!cat.rowCount)invalid('CATEGORY_INVALID','Kategori bu restorana ait değil.',409);
+  const p=await db.query(`INSERT INTO products(restaurant_id,category_id,name,description,price_kurus,image_url,available)
+   VALUES($1,$2,$3,$4,$5,$6,false)
+   RETURNING id,category_id,name,description,price_kurus,image_url,available,revision`,
+   [rid,input.categoryId,input.name,input.description,input.priceKurus,input.imageUrl]);
+  await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',
+   [userId,'menu_product_create','product',p.rows[0].id,JSON.stringify({restaurantId:rid,categoryId:input.categoryId,priceKurus:input.priceKurus})]);
+  return p.rows[0];
+ });
+ reply.code(201);return {product};
+});
+app.patch('/v1/restaurant/:rid/products/:pid/details',async(req)=>{
+ const rid=idParam(req,'rid'),pid=idParam(req,'pid'),{userId}=await staff(req,rid,'menu');
+ const input=parseProductDraft(req.body);
+ const body=req.body as Record<string,unknown>;
+ if(!Number.isInteger(body.revision)||Number(body.revision)<1||Number(body.revision)>2147483647)
+  invalid('REVISION_REQUIRED','Ürün güncellemesi için geçerli sürüm numarası gerekli.');
+ const revision=body.revision as number;
+ return transaction(pool,async db=>{
+  const cat=await db.query('SELECT id FROM categories WHERE restaurant_id=$1 AND id=$2',[rid,input.categoryId]);
+  if(!cat.rowCount)invalid('CATEGORY_INVALID','Kategori bu restorana ait değil.',409);
+  const p=await db.query(`UPDATE products SET category_id=$1,name=$2,description=$3,price_kurus=$4,image_url=$5,
+   revision=revision+1 WHERE restaurant_id=$6 AND id=$7 AND revision=$8
+   RETURNING id,category_id,name,description,price_kurus,image_url,available,revision`,
+   [input.categoryId,input.name,input.description,input.priceKurus,input.imageUrl,rid,pid,revision]);
+  if(!p.rowCount){
+   const exists=await db.query('SELECT 1 FROM products WHERE restaurant_id=$1 AND id=$2',[rid,pid]);
+   if(!exists.rowCount)invalid('NOT_FOUND','Ürün bu restoranda bulunamadı.',404);
+   invalid('PRODUCT_CONFLICT','Ürün başka bir işlemde değişti. Önce menüyü yenileyin.',409);
+  }
+  await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',
+   [userId,'menu_product_update','product',pid,JSON.stringify({restaurantId:rid,categoryId:input.categoryId,priceKurus:input.priceKurus,revisionBefore:revision})]);
+  return {product:p.rows[0]};
+ });
 });
 app.put('/v1/restaurant/:rid/hours',async(req)=>{
  const rid=idParam(req,'rid'),{userId,role}=await staff(req,rid,null);

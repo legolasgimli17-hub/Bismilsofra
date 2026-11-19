@@ -1,21 +1,21 @@
 'use client';
 
-import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import {useCallback,useEffect,useRef,useState} from 'react';
 import Link from 'next/link';
 import AuthGate from '@/components/auth-gate';
-import FoodImage from '@/components/food-image';
+import MenuEditor,{type EditorCategory,type EditorProduct} from '@/components/menu-editor';
 import {api} from '@/lib/api';
 import {money} from '@/lib/types';
 import {inputToKurus,kurusToInput,newTimeSlot,WEEKDAY_NAMES,type MerchantScheduleSlot} from '@/lib/merchant-settings';
-import {Settings2,Clock3,MapPin,Package,RefreshCcw,ShieldCheck,CheckCircle2,AlertTriangle,ArrowLeft,Save} from 'lucide-react';
+import {Settings2,Clock3,MapPin,RefreshCcw,ShieldCheck,CheckCircle2,AlertTriangle,ArrowLeft,Save} from 'lucide-react';
 
 type Merchant={id:string;name:string;role:string;can_manage_menu?:boolean};
-type Product={id:string;name:string;price_kurus:number;available:boolean;image_url:string|null;category_name:string};
+type Product=EditorProduct;
 type Zone={zone_id:string;name:string;enabled:boolean;min_basket_kurus:number;delivery_fee_kurus:number};
 type Availability={is_open:boolean;is_busy:boolean;accepts_orders:boolean};
 type Model={
  restaurant:Availability&{id:string;name:string;active:boolean};
- products:Product[];hours:MerchantScheduleSlot[];zones:Zone[];
+ products:Product[];categories:EditorCategory[];hours:MerchantScheduleSlot[];zones:Zone[];
  permissions:{canManageMenu:boolean;canManageSettings:boolean};
 };
 type ZoneDraft={enabled:boolean;minimum:string;delivery:string};
@@ -29,7 +29,6 @@ function ManagementScreen({token}:{token:()=>Promise<string>}){
  const [availability,setAvailability]=useState<Availability>({is_open:false,is_busy:false,accepts_orders:false});
  const [hours,setHours]=useState<MerchantScheduleSlot[]>([]);
  const [zoneDrafts,setZoneDrafts]=useState<Record<string,ZoneDraft>>({});
- const [search,setSearch]=useState('');
  const [busy,setBusy]=useState('');
  const [loading,setLoading]=useState(true);
  const [error,setError]=useState('');
@@ -63,7 +62,7 @@ function ManagementScreen({token}:{token:()=>Promise<string>}){
  },[rid,token]);
 
  useEffect(()=>{
-  setModel(null);setError('');setNotice('');setSearch('');
+  setModel(null);setError('');setNotice('');
   if(rid)void load();
   return()=>{requests.current++};
  },[rid,load]);
@@ -80,10 +79,6 @@ function ManagementScreen({token}:{token:()=>Promise<string>}){
  }
  const disabled=loading||Boolean(busy);
  const editable=model?.permissions.canManageSettings===true;
- const products=useMemo(()=>{
-  const q=search.trim().toLocaleLowerCase('tr-TR');
-  return model?.products.filter(p=>(p.name+' '+p.category_name).toLocaleLowerCase('tr-TR').includes(q))||[];
- },[model,search]);
 
  function updateZone(id:string,next:Partial<ZoneDraft>){
   setZoneDrafts(all=>({...all,[id]:{...all[id],...next}}));
@@ -176,26 +171,8 @@ function ManagementScreen({token}:{token:()=>Promise<string>}){
     </section>
    </div>
 
-   <section className="panel merchant-settings-section">
-    <div className="merchant-settings-title"><Package size={21}/><div><h2>Ürün satış yönetimi</h2><p>Ürünlerinizin fiyatını görüntüleyin; satışta olmayanları kapatın.</p></div></div>
-    <label className="merchant-search-label" htmlFor="merchant-product-search">Ürün ara
-     <input id="merchant-product-search" type="search" value={search} onChange={e=>setSearch(e.target.value)}
-      placeholder="Ürün veya kategori adı" maxLength={70}/></label>
-    <div className="merchant-product-grid">
-     {products.map(p=><article key={p.id} className="merchant-product-entry">
-      <div className="merchant-product-img"><FoodImage src={p.image_url} alt={p.name}/></div>
-      <div className="merchant-product-details"><span className="overline">{p.category_name}</span><h3>{p.name}</h3><p>{money(p.price_kurus)}</p>
-       <strong className={p.available?'merchant-on-sale':'merchant-off-sale'}>{p.available?'Satışta':'Satışa kapalı'}</strong>
-      </div>
-      <button type="button" className={p.available?'btn outline':'btn primary'} disabled={disabled||!model.permissions.canManageMenu}
-       onClick={()=>void save(p.name+' ürün durumu',async()=>api(`/v1/restaurant/${rid}/products/${p.id}`,await token(),{
-        method:'PATCH',body:JSON.stringify({available:!p.available})
-       }))}>{p.available?'Satışı durdur':'Satışa aç'}</button>
-     </article>)}
-     {products.length===0&&<div className="empty">Aramanıza uygun ürün bulunamadı.</div>}
-    </div>
-    <p className="muted">Menüye yeni ürün ekleme ve fiyat düzenleme ekranı sonraki aşamada geliştirilecek. Müşteriye gösterilen fiyatlar sunucudan alınır.</p>
-   </section>
+   <MenuEditor key={rid} restaurantId={rid} products={model.products} categories={model.categories}
+    token={token} onRefresh={()=>load(true)} disabled={disabled} canEdit={model.permissions.canManageMenu}/>
 
    <section className="panel merchant-settings-section">
     <div className="merchant-settings-title"><MapPin size={21}/><div><h2>Teslimat mahalleleri</h2><p>Yalnızca restorana daha önce tanımlanmış bölgeler yönetilebilir.</p></div></div>
