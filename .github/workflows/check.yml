@@ -34,3 +34,37 @@ jobs:
           NEXT_PUBLIC_AUTH0_DOMAIN: ''
           NEXT_PUBLIC_AUTH0_CLIENT_ID: ''
           NEXT_PUBLIC_AUTH0_AUDIENCE: ''
+
+  integration-postgres:
+    name: PostgreSQL integration — real order, tenant isolation, availability
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        env:
+          POSTGRES_DB: bismil_sofra_test
+          POSTGRES_USER: sofra
+          POSTGRES_PASSWORD: ci-test-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sofra -d bismil_sofra_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      DATABASE_URL: postgresql://sofra:ci-test-only-password@127.0.0.1:5432/bismil_sofra_test
+      INTEGRATION_DATABASE_URL: postgresql://sofra:ci-test-only-password@127.0.0.1:5432/bismil_sofra_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run checksum-verified migrations
+        run: node --experimental-strip-types apps/api/src/migrate.ts
+      - name: Seed fictional test records only
+        run: node --experimental-strip-types apps/api/integration/seed-test-db.ts
+      - name: Check order lifecycle with a real PostgreSQL 17 server
+        run: node --experimental-strip-types --test apps/api/integration/postgres.integration.ts
