@@ -26,9 +26,10 @@ export function parseOrder(body:unknown,key:unknown):OrderInput {
  if(!uuid(b.restaurantId)||!uuid(b.addressId))invalid('INVALID_ID','Restoran veya adres geçersiz.');
  if(b.paymentMethod!=='cash'&&b.paymentMethod!=='pos')invalid('PAYMENT_INVALID','Yalnızca kapıda nakit veya POS geçerlidir.');
  if(typeof key!=='string'||!/^[a-zA-Z0-9_.:-]{16,100}$/.test(key))invalid('IDEMPOTENCY_REQUIRED','16–100 karakterli Idempotency-Key gerekli.');
- if(!Array.isArray(b.items)||b.items.length===0||b.items.length>40)invalid('CART_INVALID','Sepet 1–40 kalem içermelidir.');
+ const rawItems=b.items;
+ if(!Array.isArray(rawItems)||rawItems.length===0||rawItems.length>40)invalid('CART_INVALID','Sepet 1–40 kalem içermelidir.');
  let totalQty=0;
- const items:OrderLineInput[]=b.items.map((item:unknown)=>{
+ const items:OrderLineInput[]=(rawItems as unknown[]).map((item:unknown)=>{
   if(!item||typeof item!=='object'||Array.isArray(item))invalid('CART_INVALID','Sepette geçersiz ürün.');
   const l=item as Record<string,unknown>;
   if(!uuid(l.productId)||!Number.isInteger(l.quantity)||Number(l.quantity)<1||Number(l.quantity)>25)invalid('ITEM_INVALID','Ürün veya adet hatalı.');
@@ -58,7 +59,8 @@ export function calculateOrder(lines:OrderLineInput[],products:CatalogProduct[],
  let subtotalKurus=0;
  for(const l of lines){
   const p=lookup.get(l.productId);
-  if(!p||!p.available)invalid('PRODUCT_UNAVAILABLE','Sepetteki ürün artık satışta değil.',409);
+  if(!p)throw new DomainError('PRODUCT_UNAVAILABLE','Sepetteki ürün artık satışta değil.',409);
+  if(!p.available)invalid('PRODUCT_UNAVAILABLE','Sepetteki ürün artık satışta değil.',409);
   if(!price(p.priceKurus))invalid('PRICE_INVALID','Ürün fiyatı geçersiz.',500);
   const optIds=new Set(l.optionIds);const optionSnapshots:Snapshot['optionSnapshots']=[];
   for(const g of p.optionGroups){
@@ -101,5 +103,6 @@ export function canStaff(row:{role:string;can_view_orders?:boolean;can_manage_or
  if(row.role==='owner'||row.role==='manager')return true;
  if(row.role!=='staff')return false;
  if(capability===null)return true;
- return row[{view:'can_view_orders',order:'can_manage_orders',menu:'can_manage_menu'}[capability]]===true;
+ const allowedKeys:Record<Exclude<StaffCapability,null>,'can_view_orders'|'can_manage_orders'|'can_manage_menu'>={view:'can_view_orders',order:'can_manage_orders',menu:'can_manage_menu'};
+ return row[allowedKeys[capability]]===true;
 }
