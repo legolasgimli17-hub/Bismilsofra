@@ -56,3 +56,14 @@
 - `/readyz` ve API açılış kontrolü 004 migration'ını da şart koşar.
 - [Operasyon/runbook](../../docs/ALERTS_AND_INCIDENTS.md) ve [bağımsız denetim](../../QA_REVIEW_v1_4.md) detayları içerir.
 - Alıcı sağlayıcı/ses/telefon bağımsız saha testleri henüz yapılmadığından pilotu başlatma.
+
+## v1.6 menü düzenleme API'leri
+
+- `POST /v1/restaurant/:rid/categories` ve `PATCH /v1/restaurant/:rid/categories/:cid`
+- `POST /v1/restaurant/:rid/products` (varsayılan satışa kapalı)
+- `PATCH /v1/restaurant/:rid/products/:pid/details` (zorunlu `revision`, eski sürümde 409)
+- `GET /v1/restaurant/:rid/management` kategoriler, ürün sürümleri, mevcut ayarlar
+
+Önce `005_product_revisions.sql` migration'ını çalıştır; `PUBLIC_IMAGE_CDN_HOST` ve web `NEXT_PUBLIC_IMAGE_CDN_HOST` aynı onaylı HTTPS medya sağlayıcısına işaret etmelidir. Fotoğraf URL kaydı gerçek dosya yükleme hizmeti değildir.
+
+[Menü düzenleme ve güvenlik sözleşmesi](../../docs/MENU_EDITOR_v1_6.md).
