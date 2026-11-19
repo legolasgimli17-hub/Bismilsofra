@@ -24,6 +24,8 @@ jobs:
         run: npm run test:inbox
       - name: Merchant workflow tests
         run: npm run test:merchant
+      - name: Merchant operations form and currency tests
+        run: npm run test:merchant-settings
       - name: TypeScript checks
         run: npm run typecheck
       - name: Build Next.js UI

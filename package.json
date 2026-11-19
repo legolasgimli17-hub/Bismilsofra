@@ -2,7 +2,10 @@
   "name": "bismil-sofra",
   "private": true,
   "version": "0.9.0",
-  "workspaces": ["apps/web", "apps/api"],
+  "workspaces": [
+    "apps/web",
+    "apps/api"
+  ],
   "scripts": {
     "web:dev": "npm --workspace apps/web run dev",
     "web:build": "npm --workspace apps/web run build",
@@ -12,7 +15,8 @@
     "test:discovery": "node --experimental-strip-types --test apps/web/lib/discovery.test.ts",
     "test:inbox": "node --experimental-strip-types --test apps/web/lib/inbox-health.test.ts",
     "test:merchant": "node --experimental-strip-types --test apps/web/lib/merchant-workflow.test.ts",
-    "test:all": "npm run test:api && npm run test:cart && npm run test:discovery && npm run test:inbox && npm run test:merchant",
-    "typecheck": "npm --workspace apps/api run typecheck && npm --workspace apps/web run typecheck"
+    "test:all": "npm run test:api && npm run test:cart && npm run test:discovery && npm run test:inbox && npm run test:merchant && npm run test:merchant-settings",
+    "typecheck": "npm --workspace apps/api run typecheck && npm --workspace apps/web run typecheck",
+    "test:merchant-settings": "node --experimental-strip-types --test apps/web/lib/merchant-settings.test.ts"
   }
 }
