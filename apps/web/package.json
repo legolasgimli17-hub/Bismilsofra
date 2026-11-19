@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "next": "16.4.6",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
+    "react": "19.2.9",
+    "react-dom": "19.2.9",
     "@auth0/auth0-react": "^2.15.0",
     "lucide-react": "^0.469.0"
   },
