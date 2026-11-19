@@ -5,6 +5,7 @@ import {randomUUID} from 'node:crypto';
 import {Pool} from 'pg';
 import {placeOrder,quoteOrder,changeStatus,expirePending} from '../src/order-service.ts';
 import {CURRENTLY_ACCEPTING_SQL} from '../src/operations.ts';
+import {dispatchEscalations} from '../src/escalation-service.ts';
 import {DomainError} from '../src/domain.ts';
 const dsn=process.env.INTEGRATION_DATABASE_URL;
 if(!dsn)throw Error('INTEGRATION_DATABASE_URL is required; use a disposable local DB ending with _test.');
@@ -72,4 +73,38 @@ test('PostgreSQL order / tenant / idempotency / expiry / history vertical slice'
    VALUES($1,now()-interval '1 minute',now()+interval '1 hour','CI test') RETURNING id`,[r])).rows[0].id;
  try {assert.equal(await discovery(),false)}finally{await pool.query('DELETE FROM restaurant_closures WHERE id=$1',[closure])}
  assert.equal(await discovery(),true);
+
+ // A durable fallback reminder is scheduled atomically when the order is inserted.
+ const planned=await pool.query('SELECT order_id,due_at,next_attempt_at FROM restaurant_escalations WHERE order_id=$1',[one.id]);
+ assert.equal(planned.rowCount,1);
+ await pool.query("UPDATE restaurant_escalations SET next_attempt_at=now()-interval '1 second' WHERE order_id=$1",[one.id]);
+ let unexpected=0;
+ const acceptedOrder=await dispatchEscalations(pool,async()=>{unexpected++},1);
+ assert.equal(acceptedOrder.cancelled,1);
+ assert.equal(unexpected,0,'accepted orders must never be escalated');
+
+ const waiting=await placeOrder(pool,first,confirmed,'integration-escalation-'+randomUUID());
+ await pool.query("UPDATE restaurant_escalations SET next_attempt_at=now()-interval '1 second' WHERE order_id=$1",[waiting.id]);
+ let attempts=0;
+ const firstReminder=await dispatchEscalations(pool,async event=>{
+  assert.equal(String(event.id),'escalation:'+waiting.id);
+  attempts++;throw Error('CI alternate alert provider offline');
+ },1);
+ assert.equal(firstReminder.failed,1);
+ const retryState=await pool.query('SELECT attempts,sent_at,last_error FROM restaurant_escalations WHERE order_id=$1',[waiting.id]);
+ assert.equal(retryState.rows[0].attempts,1);
+ assert.equal(retryState.rows[0].sent_at,null);
+ assert.equal(retryState.rows[0].last_error,'DELIVERY_FAILED');
+ await pool.query("UPDATE restaurant_escalations SET next_attempt_at=now()-interval '1 second' WHERE order_id=$1",[waiting.id]);
+ const recovered=await dispatchEscalations(pool,async event=>{
+  attempts++;assert.equal(event.type,'pending_order_escalation');
+  assert.equal(String(event.id),'escalation:'+waiting.id);
+ },1);
+ assert.equal(recovered.sent,1);
+ assert.equal(attempts,2);
+ const recoveredState=await pool.query('SELECT attempts,sent_at FROM restaurant_escalations WHERE order_id=$1',[waiting.id]);
+ assert.ok(recoveredState.rows[0].sent_at);
+ assert.equal(recoveredState.rows[0].attempts,2);
+ const noDuplicate=await dispatchEscalations(pool,async()=>{throw Error('duplicate')},1);
+ assert.equal(noDuplicate.sent,0);
 });
