@@ -10,8 +10,9 @@ if(!issuer||!audience||!jwksUrl||issuer.includes('REPLACE-')||audience.includes(
 const jwks=createRemoteJWKSet(new URL(jwksUrl));
 export type Identity={sub:string,email?:string;emailVerified:boolean;amr:string[];authTime?:number};
 export async function verifyBearer(header:unknown):Promise<Identity>{
- if(typeof header!=='string'||!header.startsWith('Bearer '))invalid('AUTH_REQUIRED','Oturum açmak gerekiyor.',401);
- const token=header.slice(7).trim();
+ const authHeader=typeof header==='string'?header:'';
+ if(!authHeader.startsWith('Bearer '))invalid('AUTH_REQUIRED','Oturum açmak gerekiyor.',401);
+ const token=authHeader.slice(7).trim();
  if(!token||token.length>12000)invalid('AUTH_REQUIRED','Geçersiz kimlik bilgisi.',401);
  let p:JWTPayload;
  try{
