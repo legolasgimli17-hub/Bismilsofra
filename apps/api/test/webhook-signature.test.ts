@@ -7,7 +7,7 @@ test('primary and fallback providers receive signed, stable non-PII event IDs',a
  const secret='a'.repeat(64);
  const oldFetch=globalThis.fetch;
  let seen:{url:string;headers:Record<string,string>;body:string}|null=null;
- globalThis.fetch=(async(url:RequestInfo|URL,init?:RequestInit)=>{
+ globalThis.fetch=(async(url:unknown,init?:RequestInit)=>{
   seen={url:String(url),headers:init?.headers as Record<string,string>,body:String(init?.body)};
   return new Response(null,{status:204});
  }) as typeof fetch;
