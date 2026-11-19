@@ -30,7 +30,7 @@ export async function placeOrder(pool:Pool,subjectUserId:string,body:unknown,key
   const hours=await db.query(`SELECT EXISTS(SELECT 1 FROM restaurant_hours h WHERE h.restaurant_id=$1 AND
     ((h.open_time<h.close_time AND h.day_of_week=EXTRACT(DOW FROM (now() AT TIME ZONE 'Europe/Istanbul')) AND (now() AT TIME ZONE 'Europe/Istanbul')::time >= h.open_time AND (now() AT TIME ZONE 'Europe/Istanbul')::time < h.close_time)
     OR (h.open_time>h.close_time AND ((h.day_of_week=EXTRACT(DOW FROM (now() AT TIME ZONE 'Europe/Istanbul')) AND (now() AT TIME ZONE 'Europe/Istanbul')::time >= h.open_time)
-    OR (h.day_of_week=(EXTRACT(DOW FROM (now() AT TIME ZONE 'Europe/Istanbul'))::int+6)%7 AND (now() AT TIME ZONE 'Europe/Istanbul')::time < h.close_time)))) AS allowed`,[request.restaurantId]);
+    OR (h.day_of_week=(EXTRACT(DOW FROM (now() AT TIME ZONE 'Europe/Istanbul'))::int+6)%7 AND (now() AT TIME ZONE 'Europe/Istanbul')::time < h.close_time))))) AS allowed`,[request.restaurantId]);
   if(!hours.rows[0].allowed)invalid('OUTSIDE_HOURS','Restoranın çalışma saatleri dışında sipariş alınmıyor.',409);
   const closure=await db.query('SELECT 1 FROM restaurant_closures WHERE restaurant_id=$1 AND starts_at<=now() AND ends_at>now() LIMIT 1',[request.restaurantId]);
   if(closure.rowCount)invalid('RESTAURANT_CLOSED','Restoran geçici olarak kapalı.',409);
@@ -130,7 +130,7 @@ export async function quoteOrder(pool:Pool,subjectUserId:string,body:unknown){
   const hours=await db.query(`SELECT EXISTS(SELECT 1 FROM restaurant_hours h WHERE h.restaurant_id=$1 AND
     ((h.open_time<h.close_time AND h.day_of_week=EXTRACT(DOW FROM (now() AT TIME ZONE 'Europe/Istanbul')) AND (now() AT TIME ZONE 'Europe/Istanbul')::time >= h.open_time AND (now() AT TIME ZONE 'Europe/Istanbul')::time < h.close_time)
     OR (h.open_time>h.close_time AND ((h.day_of_week=EXTRACT(DOW FROM (now() AT TIME ZONE 'Europe/Istanbul')) AND (now() AT TIME ZONE 'Europe/Istanbul')::time >= h.open_time)
-    OR (h.day_of_week=(EXTRACT(DOW FROM (now() AT TIME ZONE 'Europe/Istanbul'))::int+6)%7 AND (now() AT TIME ZONE 'Europe/Istanbul')::time < h.close_time)))) AS allowed`,[request.restaurantId]);
+    OR (h.day_of_week=(EXTRACT(DOW FROM (now() AT TIME ZONE 'Europe/Istanbul'))::int+6)%7 AND (now() AT TIME ZONE 'Europe/Istanbul')::time < h.close_time))))) AS allowed`,[request.restaurantId]);
   if(!hours.rows[0].allowed)invalid('OUTSIDE_HOURS','Restoran çalışma saatleri dışında.',409);
   const closure=await db.query('SELECT 1 FROM restaurant_closures WHERE restaurant_id=$1 AND starts_at<=now() AND ends_at>now() LIMIT 1',[request.restaurantId]);
   if(closure.rowCount)invalid('RESTAURANT_CLOSED','Restoran geçici olarak kapalı.',409);
