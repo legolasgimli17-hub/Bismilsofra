@@ -1,4 +1,4 @@
-# Bismil Sofra — v1.0 hazırlık aşaması
+# Bismil Sofra — v1.1 hazırlık aşaması
 
 **Bismil'e özel, en fazla 50 aktif restoran için tasarlanan yemek sipariş PWA projesi.** Kaynak proje hâlâ geliştirme aşamasındadır; gerçek müşterilerden sipariş almaya hazır değildir.
 
@@ -47,3 +47,11 @@ Gerçek PostgreSQL + OIDC, üretim build, güvenilir bildirim/ikincil uyarı, KV
 ## v1.0 güvenilirlik kontrolleri
 
 Restoran siparişleri toplu listeleme API'si artık müşteri adreslerini ve özel notlarını döndürmez; bu bilgiler sadece MFA gerektiren ve restoran kimliğine göre yetkilendirilen ayrıntı çağrısında alınır. `/readyz`, yalnızca DB bağlantısı değil gerekli migration kayıtlarının uygulanmasını da kontrol eder. Bu değişiklikler otomatik testlerle doğrulanır; gerçek PostgreSQL entegrasyonu hâlâ ayrıca çalıştırılmalıdır.
+
+## v1.1 bağımsız ürün denetimi
+
+- Restoranın manuel açık durumuna ek olarak çalışma saatleri, geçici kapanışları ve aktif teslimat bölgesi kontrol edilerek API'de `is_orderable` üretilir.
+- Müşteri listesi ve menüsü sipariş uygunluğu için bu alanı kullanır. Sipariş işlemi koşulları ayrıca sunucuda yeniden denetlenir.
+- Mahalle seçilmediğinde teslimat ücreti ve minimum sepet rastgele bir mahalleden tahmin edilmez.
+- Her büyük sürüm için rakiplerin kamuya açık kullanıcı akışlarını karşılaştıran, şartnameye bağlı tarafsız bir kalite denetimi yapılacaktır. Değerlendirme: [INDEPENDENT_AUDIT_v1_1.md](INDEPENDENT_AUDIT_v1_1.md).
+- **Gerçek PostgreSQL üzerinde testler, OIDC giriş ve Next.js üretim derlemesi henüz doğrulanmadı.** Uygulama canlı siparişe hazır değildir.
