@@ -1,4 +1,4 @@
-# Bismil Sofra v0.9
+# Bismil Sofra — v1.0 hazırlık aşaması
 
 **Bismil'e özel, en fazla 50 aktif restoran için tasarlanan yemek sipariş PWA projesi.** Kaynak proje hâlâ geliştirme aşamasındadır; gerçek müşterilerden sipariş almaya hazır değildir.
 
@@ -43,3 +43,7 @@ Bu projenin ana kod deposu özel GitHub deposudur: `legolasgimli17-hub/Bismilsof
 [TEST_RAPORU_v0_9.md](TEST_RAPORU_v0_9.md) · [MIMARI_KARARLAR_v0_8.md](MIMARI_KARARLAR_v0_8.md) · [FOTOGRAF_POLITIKASI_v0_8.md](FOTOGRAF_POLITIKASI_v0_8.md)
 
 Gerçek PostgreSQL + OIDC, üretim build, güvenilir bildirim/ikincil uyarı, KVKK ve fotoğraf depolama doğrulanmadan gerçek sipariş kabul edilmemelidir.
+
+## v1.0 güvenilirlik kontrolleri
+
+Restoran siparişleri toplu listeleme API'si artık müşteri adreslerini ve özel notlarını döndürmez; bu bilgiler sadece MFA gerektiren ve restoran kimliğine göre yetkilendirilen ayrıntı çağrısında alınır. `/readyz`, yalnızca DB bağlantısı değil gerekli migration kayıtlarının uygulanmasını da kontrol eder. Bu değişiklikler otomatik testlerle doğrulanır; gerçek PostgreSQL entegrasyonu hâlâ ayrıca çalıştırılmalıdır.

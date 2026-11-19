@@ -4,6 +4,7 @@ import {Pool} from 'pg';
 import {DomainError,invalid,uuid,STATUSES,type Status,cleanNote} from './domain.ts';
 import {verifyBearer,provisionVerifiedUser,requireMfa,requireStaff,requireAdmin} from './auth.ts';
 import {placeOrder,quoteOrder,changeStatus,activateRestaurant,transaction} from './order-service.ts';
+import {MERCHANT_SUMMARY_QUERY,hasRequiredMigrations} from './operations.ts';
 
 if(!process.env.DATABASE_URL)throw new Error('DATABASE_URL gerekli');
 const origin=process.env.CORS_ORIGIN;
@@ -33,7 +34,13 @@ async function staff(req:{headers:{authorization?:string}},restaurantId:string,c
 async function admin(req:{headers:{authorization?:string}}){const u=await user(req);requireMfa(u.identity,true);await requireAdmin(pool,u.userId);return u}
 
 app.get('/healthz',async()=>({status:'ok',service:'bismil-sofra-api'}));
-app.get('/readyz',async()=>{await pool.query('SELECT 1');return {status:'db-ready'}});
+app.get('/readyz',async(_req,reply)=>{
+ try{
+  const result=await pool.query('SELECT filename FROM schema_migrations WHERE filename = ANY($1::text[])',['001_initial.sql','003_reliability.sql']);
+  if(!hasRequiredMigrations(result.rows))return reply.code(503).send({status:'migrations-pending'});
+  return {status:'ready'};
+ }catch{return reply.code(503).send({status:'db-unavailable'});}
+});
 app.get('/v1/zones',async()=>{
  const r=await pool.query('SELECT id,name FROM delivery_zones WHERE enabled=true ORDER BY name ASC');return {zones:r.rows};
 });
@@ -111,8 +118,9 @@ app.get('/v1/me/staff-restaurants',async(req)=>{
 });
 app.get('/v1/restaurant/:rid/orders',async(req)=>{
  const rid=idParam(req,'rid');await staff(req,rid);
- const r=await pool.query(`SELECT id,status,subtotal_kurus,delivery_fee_kurus,total_kurus,payment_method,created_at,expires_at,address_snapshot,note
-  FROM orders WHERE restaurant_id=$1 ORDER BY created_at DESC LIMIT 80`,[rid]);return {orders:r.rows};
+ // This list is summary-only; addresses and customer notes are only loaded
+ // after a separate authenticated, restaurant-scoped details request.
+ const r=await pool.query(MERCHANT_SUMMARY_QUERY,[rid]);return {orders:r.rows};
 });
 // Order details are fetched only on demand and only for authenticated staff
 // assigned to the same restaurant. Polling inboxes never include customer PII.
