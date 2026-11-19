@@ -146,3 +146,9 @@ body{background:#fbfaf7;color:#263129}
 .merchant-danger:hover:not(:disabled){background:#ffede6}
 @media(max-width:1000px){.merchant-columns{grid-template-columns:1fr}}
 @media(max-width:520px){.merchant-column{padding:12px}.merchant-order-v09{padding:13px}.merchant-details-toggle{width:100%;justify-content:center}.merchant-order-head>div{width:100%}.merchant-order-actions .btn{flex:1 1 150px}}
+
+/* Merchant shift alert: opt-in sound, never implies guaranteed background delivery. */
+.merchant-sound-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0 20px}
+.merchant-sound-row .btn{min-height:44px}
+.merchant-sound-row small{color:#576d60;font-size:12px}
+.merchant-new-count{font-size:13px;font-weight:750;border-radius:20px;padding:7px 11px;background:#fff1da;color:#815014}
