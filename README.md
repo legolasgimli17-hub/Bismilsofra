@@ -17,7 +17,7 @@ Restoran gelen sipariş listesinin yanı sıra hazırlanmakta ve teslimatta olan
 Gereksinimler: Node.js >=22.16, npm, PostgreSQL, gerçek OIDC sağlayıcısı. Bağımlılıkları kurmak için internet gerekir.
 
 ```bash
-npm install
+npm ci
 npm run test:all
 npm run typecheck
 npm run web:build
@@ -55,3 +55,15 @@ Restoran siparişleri toplu listeleme API'si artık müşteri adreslerini ve öz
 - Mahalle seçilmediğinde teslimat ücreti ve minimum sepet rastgele bir mahalleden tahmin edilmez.
 - Her büyük sürüm için rakiplerin kamuya açık kullanıcı akışlarını karşılaştıran, şartnameye bağlı tarafsız bir kalite denetimi yapılacaktır. Değerlendirme: [INDEPENDENT_AUDIT_v1_1.md](INDEPENDENT_AUDIT_v1_1.md).
 - **Gerçek PostgreSQL üzerinde testler, OIDC giriş ve Next.js üretim derlemesi henüz doğrulanmadı.** Uygulama canlı siparişe hazır değildir.
+
+## v1.4 — kilitli kurulum, bağımsız ikinci uyarı ve fotoğraf hazırlığı
+
+- `package-lock.json` sürüm kontrolüne alındı; GitHub Actions `npm ci` ile aynı bağımlılıkları kurar.
+- `004_escalation.sql` siparişin kabul edilmemesi durumunda ikinci kanal alarmını kalıcı olarak planlar. `npm --workspace apps/api run worker:escalation` bağımsız HTTPS/HMAC webhook'a hatırlatma gönderir.
+- Admin + MFA panelinde geç kalan siparişler, normal bildirim hataları ve ikinci kanal durumları ayrı izlenir; yetkili yönetici gerekli durumda tekrar deneyebilir.
+- API eksik migration'larla başlatılmaz.
+- Ürün/kapak fotoğrafları yerel WebP veya yapılandırılmış birinci taraf HTTPS CDN'den gösterilebilir. Gerçek restoran fotoğraflarının depolaması/izinli aktarımı henüz tamamlanmadı.
+- **Test kanıtı:** [90 birim testi, 2 PostgreSQL entegrasyonu ve Next.js build](https://github.com/legolasgimli17-hub/Bismilsofra/actions/runs/44552494385).
+- **Bağımsız denetim:** [QA_REVIEW_v1_4.md](QA_REVIEW_v1_4.md); [bildirim olay prosedürü](docs/ALERTS_AND_INCIDENTS.md); [gerçek fotoğraf/mobil kalite kapıları](docs/PHOTOS_AND_MOBILE.md).
+
+**Önemli:** Bunlar güvenilir bir uygulamanın temel bileşenleridir; gerçek Auth0 tenant, üretim PostgreSQL, gerçek SMS/push veya fiziksel cihaz pilotu bağlanmış değildir. Canlıya açma kriterleri tamamlanmadan gerçek sipariş kabul edilmemelidir.
