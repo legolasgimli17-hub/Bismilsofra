@@ -100,7 +100,7 @@ test('webhook configuration rejects insecure URL or weak signature secret',()=>{
  assert.throws(()=>createSignedWebhook('https://example.com','weak'),/32/);
  assert.doesNotThrow(()=>createSignedWebhook('https://example.com/ingest','x'.repeat(32)));
 });
-test('migration manifest includes 001, 003, 004 but never runs fictional seed 002',()=>{
+test('migration manifest includes 001, 003, 004, 005 but never runs fictional seed 002',()=>{
  const source=readFileSync(new URL('../src/migrate.ts',import.meta.url),'utf8');
  assert.match(source,/001_initial\.sql/);assert.match(source,/003_reliability\.sql/);assert.match(source,/004_escalation\.sql/);
  assert.doesNotMatch(source,/['"]002_development_example\.sql['"]/);
