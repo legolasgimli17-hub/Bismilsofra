@@ -1,0 +1,28 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {parseOrder,payloadHash,calculateOrder,assertTransition,DomainError} from '../src/domain.ts';
+const ids={r:'a0a0a0a0-a0a0-4a0a-8a0a-a0a0a0a0a0a0',a:'b0b0b0b0-b0b0-4b0b-8b0b-b0b0b0b0b0b0',p:'c0c0c0c0-c0c0-4c0c-8c0c-c0c0c0c0c0c0',o:'d0d0d0d0-d0d0-4d0d-8d0d-d0d0d0d0d0d0'};
+const key='fixed-order-123456789';
+const base=()=>({restaurantId:ids.r,addressId:ids.a,paymentMethod:'cash',items:[{productId:ids.p,quantity:2,optionIds:[ids.o]}],note:''});
+const catalog=()=>[{id:ids.p,name:'Adana dürüm',priceKurus:18000,available:true,optionGroups:[{id:'g',name:'Ek',minSelect:0,maxSelect:1,options:[{id:ids.o,name:'Lavaş',priceKurus:2000,available:true}]}]}];
+function fails(code:string,fn:()=>unknown){assert.throws(fn,(e:unknown)=>e instanceof DomainError&&e.code===code)}
+test('reject missing idempotency key',()=>fails('IDEMPOTENCY_REQUIRED',()=>parseOrder(base(),'')));
+test('reject outside payment methods',()=>fails('PAYMENT_INVALID',()=>parseOrder({...base(),paymentMethod:'online'},key)));
+test('reject bad quantity',()=>fails('ITEM_INVALID',()=>parseOrder({...base(),items:[{productId:ids.p,quantity:0,optionIds:[]}]},key)));
+test('reject duplicate option',()=>fails('OPTION_DUPLICATE',()=>parseOrder({...base(),items:[{productId:ids.p,quantity:1,optionIds:[ids.o,ids.o]}]},key)));
+test('reject duplicate cart lines',()=>fails('ITEM_DUPLICATE',()=>parseOrder({...base(),items:[base().items[0],base().items[0]]},key)));
+test('ignore forged client amounts when parsing',()=>{const o=parseOrder({...base(),totalKurus:1,deliveryFeeKurus:0},key);assert.equal('totalKurus' in o,false)});
+test('equal semantic requests hash equally',()=>{const a=parseOrder(base(),key);const b=parseOrder({...base(),totalKurus:1},key);assert.equal(payloadHash(a),payloadHash(b))});
+test('different payloads hash differently',()=>{const a=parseOrder(base(),key);const b=parseOrder({...base(),note:'soğansız'},key);assert.notEqual(payloadHash(a),payloadHash(b))});
+test('server pricing with extras, no floating errors',()=>{const c=calculateOrder(parseOrder(base(),key).items,catalog(),20000,1500);assert.equal(c.subtotalKurus,40000);assert.equal(c.totalKurus,41500);assert.equal(c.items[0].unitKurus,20000)});
+test('minimum basket enforced',()=>fails('MINIMUM_NOT_MET',()=>calculateOrder(parseOrder(base(),key).items,catalog(),50000,1500)));
+test('unknown product rejected',()=>fails('PRODUCT_UNAVAILABLE',()=>calculateOrder(parseOrder(base(),key).items,[],0,0)));
+test('unavailable option rejected',()=>{const c=catalog();c[0].optionGroups[0].options[0].available=false;fails('OPTION_UNAVAILABLE',()=>calculateOrder(parseOrder(base(),key).items,c,0,0))});
+test('foreign product option rejected',()=>fails('OPTION_FOREIGN',()=>calculateOrder(parseOrder(base(),key).items,[{...catalog()[0],optionGroups:[]}],0,0)));
+test('group min selection enforced',()=>{const c=catalog();c[0].optionGroups[0].minSelect=1;fails('OPTION_SELECTION',()=>calculateOrder([{productId:ids.p,quantity:1,optionIds:[]}],c,0,0))});
+test('customer can cancel only pending',()=>{assert.doesNotThrow(()=>assertTransition('beklemede','musteri_iptal','customer','',new Date(),new Date()));fails('INVALID_TRANSITION',()=>assertTransition('kabul_edildi','musteri_iptal','customer','',new Date()))});
+test('customer cannot accept order',()=>fails('ROLE_FORBIDDEN',()=>assertTransition('beklemede','kabul_edildi','customer','',new Date())));
+test('restaurant requires reason on rejection',()=>fails('REASON_REQUIRED',()=>assertTransition('beklemede','reddedildi','restaurant','',new Date())));
+test('restaurant cannot accept expired pending',()=>fails('EXPIRED',()=>assertTransition('beklemede','kabul_edildi','restaurant','',new Date(0),new Date(500000))));
+test('system cannot time out before deadline',()=>fails('NOT_EXPIRED',()=>assertTransition('beklemede','suresi_doldu','system','',new Date())));
+test('system can expire after four minutes',()=>assert.doesNotThrow(()=>assertTransition('beklemede','suresi_doldu','system','',new Date(0),new Date(240000))));
+test('no reversal after delivered',()=>fails('INVALID_TRANSITION',()=>assertTransition('teslim_edildi','hazir','restaurant','',new Date(0))));

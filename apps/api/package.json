@@ -1,0 +1,30 @@
+{
+  "name": "bismil-sofra-api",
+  "version": "0.7.0",
+  "private": true,
+  "type": "module",
+  "description": "Bismil Sofra v0.7 order API foundation; not production deployed",
+  "engines": {
+    "node": ">=22.16"
+  },
+  "scripts": {
+    "dev": "node --experimental-strip-types --env-file=.env src/server.ts",
+    "start": "node --experimental-strip-types --env-file=.env src/server.ts",
+    "worker": "node --experimental-strip-types --env-file=.env src/expiry-worker.ts",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "migrate": "node --experimental-strip-types --env-file=.env src/migrate.ts",
+    "worker:outbox": "node --experimental-strip-types --env-file=.env src/outbox-worker.ts",
+    "test:db": "node --experimental-strip-types --test integration/*.integration.ts"
+  },
+  "dependencies": {
+    "fastify": "5.12.8",
+    "pg": "8.16.3",
+    "jose": "6.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.30",
+    "@types/pg": "8.15.5",
+    "typescript": "5.8.3"
+  }
+}

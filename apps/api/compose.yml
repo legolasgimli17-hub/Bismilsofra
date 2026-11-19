@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_DB: bismil_sofra
+      POSTGRES_USER: sofra
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD in shell or compose .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sofra -d bismil_sofra"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:

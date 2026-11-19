@@ -1,0 +1,12 @@
+export type Zone={id:string;name:string};
+export type Restaurant={id:string;name:string;slug:string;cover_url:string|null;is_open:boolean;is_busy:boolean;accepts_orders:boolean;min_basket_kurus:number|null;delivery_fee_kurus:number|null};
+export type MenuOption={id:string;group_id:string;name:string;price_kurus:number;available:boolean};
+export type OptionGroup={id:string;name:string;product_id:string;min_select:number;max_select:number;options:MenuOption[]};
+export type MenuProduct={id:string;category_id:string|null;name:string;description:string|null;price_kurus:number;image_url:string|null;available:boolean;optionGroups:OptionGroup[]};
+export type CartLine={productId:string;name:string;imageUrl:string|null;priceKurus:number;quantity:number;optionIds:string[];optionLabels:string[];optionExtraKurus:number};
+export type Cart={restaurantId:string;restaurantName:string;lines:CartLine[]};
+export type Address={id:string;label:string;zone_id:string;full_address:string;directions:string|null;phone:string};
+export type Quote={totals:{items:unknown[];subtotalKurus:number;deliveryFeeKurus:number;totalKurus:number};quotedAt:string;message:string};
+export type Order={id:string;restaurant_id:string;status:string;subtotal_kurus?:number;delivery_fee_kurus?:number;total_kurus:number;payment_method:string;created_at:string;updated_at?:string};
+export const money=(v:number|null|undefined)=>v==null?'Mahalle seçin':new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(v/100);
+export const statusText:Record<string,string>={beklemede:'Restoranın onayı bekleniyor',kabul_edildi:'Sipariş kabul edildi',hazirlaniyor:'Mutfağınızda hazırlanıyor',hazir:'Sipariş hazır',yolda:'Sipariş yolda',teslim_edildi:'Teslim edildi',reddedildi:'Restoran siparişi reddetti',suresi_doldu:'Kabul süresi doldu',musteri_iptal:'Sipariş iptal edildi',restoran_iptal:'Restoran iptal etti',teslim_edilemedi:'Teslim edilemedi'};
