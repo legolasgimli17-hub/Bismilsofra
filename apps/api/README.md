@@ -1,4 +1,4 @@
-# Bismil Sofra v0.6 Backend — kurulum ve kalite sınırları
+# Bismil Sofra v1.4 Backend — kurulum ve kalite sınırları
 
 ## Amaç
 
@@ -8,7 +8,7 @@
 
 1. Node.js 22+ ve Docker/PostgreSQL 17+ kur. `cp .env.example .env`, **gerçek** OIDC bilgilerinin ve `DATABASE_URL`'in geldiğinden emin ol. PostgreSQL şifresi `POSTGRES_PASSWORD` ile aynı olmalıdır. `.env` dosyasını Git'e koyma.
 2. `POSTGRES_PASSWORD='<güçlü yerel şifre>' docker compose up -d`.
-3. `npm install` ve `npm run migrate` — **yalnızca boş geliştirme DB'si** için. Migration takip dosyaları: `001_initial.sql`, `003_reliability.sql`. *Kurgusal 002 test verisi otomatik çalışmaz*.
+3. `npm ci` ve `npm run migrate` — **yalnızca boş geliştirme DB'si** için. Migration takip dosyaları: `001_initial.sql`, `003_reliability.sql`, `004_escalation.sql`. *Kurgusal 002 test verisi otomatik çalışmaz*.
 4. Test amaçlı SQL seed: `psql "$DATABASE_URL" -f sql/002_development_example.sql`; gerçek restoran/fiyat değildir.
 5. `npm test`; `npm run typecheck`; `npm run dev`; ayrı süreç `npm run worker` (süresi dolan siparişleri kapatır).
 6. Bildirim yedek kanalı kurulduğunda ve **güvenilir imzayı doğrulayan alıcı test edildikten sonra**, `ALERT_WEBHOOK_URL`, `ALERT_WEBHOOK_SECRET` ayarlarını girip `npm run worker:outbox` çalıştır.
@@ -47,3 +47,12 @@
 - KVKK/tüketici hukuk değerlendirmesi, restoran anlaşmaları, 5 restoran ve 20 kullanıcı saha görüşmeleri.
 
 **Durum:** Kod ve otomatik kurallar test edildi. Üretim güvenliği/test kapsamı onaylanmış değildir.
+
+## İkinci bildirim kanalı (v1.4)
+- Siparişin oluşturulduğu transaction'da `restaurant_escalations` kaydı planlanır.
+- Kabul edilmeyen sipariş için `ESCALATION_WEBHOOK_URL` ve **farklı** `ESCALATION_WEBHOOK_SECRET` tanımlanıp ayrı süreçte `npm run worker:escalation` çalıştırılır.
+- Aynı webhook URL'sini birincil ve ikinci kanal olarak kullanma; alıcı ham gövdede HMAC doğrulamalı ve sabit `eventId` ile duplicate olayları tekilleştirmelidir.
+- `GET /v1/admin/escalations` ve `POST /v1/admin/escalations/:id/retry` yalnızca admin+yakın MFA gerektirir.
+- `/readyz` ve API açılış kontrolü 004 migration'ını da şart koşar.
+- [Operasyon/runbook](../../docs/ALERTS_AND_INCIDENTS.md) ve [bağımsız denetim](../../QA_REVIEW_v1_4.md) detayları içerir.
+- Alıcı sağlayıcı/ses/telefon bağımsız saha testleri henüz yapılmadığından pilotu başlatma.
