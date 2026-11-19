@@ -27,7 +27,19 @@ export function safeFavorites(value:unknown):string[]{
  if(!Array.isArray(value))return [];
  return [...new Set(value.filter((v):v is string=>typeof v==='string'&&/^[a-zA-Z0-9_-]{1,80}$/.test(v)))].slice(0,50);
 }
-export function photoUrl(value:string|null|undefined):string|null{
- if(!value)return null;
- try{const url=new URL(value, 'https://bismilsofra.example');if(url.protocol==='https:'&&(url.hostname==='images.unsplash.com'||url.hostname==='images.pexels.com'))return url.toString();if(value.startsWith('/photos/')&&/^\/photos\/[a-z0-9_-]+\.(jpg|jpeg|webp)$/i.test(value))return value;return null}catch{return null}
+/**
+ * Permit approved stock-photo references for the labelled demo, packaged local
+ * restaurant images, or one configured owned HTTPS CDN. Never permit arbitrary
+ * user-supplied remote image hosts or insecure URL schemes.
+ */
+export function photoUrl(value:string|null|undefined,cdnHost=process.env.NEXT_PUBLIC_IMAGE_CDN_HOST):string|null{
+ if(!value||typeof value!=='string')return null;
+ if(/^\/photos\/[a-z0-9][a-z0-9_-]{0,80}\.(jpg|jpeg|webp)$/i.test(value))return value;
+ try{
+  const url=new URL(value);
+  if(url.protocol!=='https:'||url.username||url.password)return null;
+  if(url.hostname==='images.unsplash.com'||url.hostname==='images.pexels.com')return url.toString();
+  if(cdnHost&&/^[a-z0-9][a-z0-9.-]{1,249}$/i.test(cdnHost)&&url.hostname===cdnHost.toLowerCase())return url.toString();
+  return null;
+ }catch{return null}
 }

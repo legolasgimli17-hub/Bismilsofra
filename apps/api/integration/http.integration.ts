@@ -85,6 +85,8 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  const stranger=await sign('stranger');
  const owner=await sign('owner',{amr:['pwd','mfa'],auth_time:now});
  const noMfa=await sign('owner',{amr:['pwd'],auth_time:now});
+ const administrator=await sign('administrator',{amr:['pwd','mfa'],auth_time:now});
+ const oldAdministrator=await sign('administrator',{amr:['pwd','mfa'],auth_time:now-720});
  const unverified=await sign('unverified',{email_verified:false});
  const namespaced=await sign('namespaced',{
   email:undefined,email_verified:undefined,amr:undefined,auth_time:undefined,
@@ -123,6 +125,12 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  const ownerRow=await pool.query('SELECT id FROM users WHERE oidc_subject=$1',[subject('owner')]);
  const ownerId=ownerRow.rows[0].id;
  await pool.query('INSERT INTO restaurant_staff(user_id,restaurant_id,role) VALUES($1,$2,$3)',[ownerId,rid,'owner']);
+ assert.equal((await request('/v1/me/addresses',{token:administrator})).status,200);
+ const adminRow=await pool.query('SELECT id FROM users WHERE oidc_subject=$1',[subject('administrator')]);
+ await pool.query('INSERT INTO platform_admins(user_id) VALUES($1)',[adminRow.rows[0].id]);
+ assert.equal((await request('/v1/admin/alerts',{token:customer})).status,403);
+ assert.equal((await request('/v1/admin/alerts',{token:oldAdministrator})).status,403);
+ assert.equal((await request('/v1/admin/alerts',{token:administrator})).status,200);
  const address=await request('/v1/me/addresses',{method:'POST',token:customer,
   body:{zoneId:zid,fullAddress:'CI Test Sokak 12 Daire 3',label:'Ev',phone:'05000000000',directions:'Kapının önünde'}});
  assert.equal(address.status,201,JSON.stringify(address.body));
@@ -158,6 +166,15 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
   method:'POST',token:owner,body:{to:'kabul_edildi'}});
  assert.equal(accepted.status,200,JSON.stringify(accepted.body));
  assert.equal((await request('/v1/me/orders/'+orderId,{token:customer})).body.order.status,'kabul_edildi');
+ // Recovery tools require administrator MFA with recent authentication, and
+ // must refuse to reactivate notifications for an already accepted order.
+ await pool.query("UPDATE restaurant_escalations SET next_attempt_at=now()-interval '1 second' WHERE order_id=$1",[orderId]);
+ const escalations=await request('/v1/admin/escalations',{token:administrator});
+ assert.equal(escalations.status,200);
+ assert.ok(Array.isArray(escalations.body.escalations));
+ assert.ok(escalations.body.escalations.some((item:{order_id:string})=>item.order_id===orderId));
+ assert.equal((await request('/v1/admin/escalations',{token:customer})).status,403);
+ assert.equal((await request('/v1/admin/escalations/'+orderId+'/retry',{token:administrator,method:'POST'})).status,409);
  // Reconnect: a fresh authenticated HTTP request reconstructs the active inbox after network loss.
  const afterReconnect=await request('/v1/restaurant/'+rid+'/inbox',{token:owner});
  assert.equal(afterReconnect.status,200);

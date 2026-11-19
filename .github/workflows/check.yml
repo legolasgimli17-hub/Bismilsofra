@@ -13,7 +13,7 @@ jobs:
         with:
           node-version: '22'
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Core backend tests
         run: npm run test:api
       - name: Frontend cart tests
@@ -61,7 +61,7 @@ jobs:
         with:
           node-version: '22.16.0'
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Run checksum-verified migrations
         run: node --experimental-strip-types apps/api/src/migrate.ts
       - name: Seed fictional test records only

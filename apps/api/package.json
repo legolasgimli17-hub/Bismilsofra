@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "migrate": "node --experimental-strip-types --env-file=.env src/migrate.ts",
     "worker:outbox": "node --experimental-strip-types --env-file=.env src/outbox-worker.ts",
+    "worker:escalation": "node --experimental-strip-types --env-file=.env src/escalation-worker.ts",
     "test:db": "node --experimental-strip-types --test integration/*.integration.ts"
   },
   "dependencies": {

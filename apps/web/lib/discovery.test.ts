@@ -26,3 +26,15 @@ test('unverified demo visibility uses manual toggles only',()=>{
  assert.equal(isRestaurantOrderable(b),false);
  assert.equal(isRestaurantOrderable({...a,is_orderable:true,is_busy:true}),false);
 });
+
+test('owned photo CDN is allowed only with exact HTTPS host and no credentials',()=>{
+ const host='assets.bismilsofra.example';
+ assert.equal(photoUrl('https://assets.bismilsofra.example/food/kebap.webp',host),'https://assets.bismilsofra.example/food/kebap.webp');
+ assert.equal(photoUrl('https://assets.bismilsofra.example.evil.com/photo.webp',host),null);
+ assert.equal(photoUrl('https://user:secret@assets.bismilsofra.example/photo.webp',host),null);
+ assert.equal(photoUrl('http://assets.bismilsofra.example/photo.webp',host),null);
+ assert.equal(photoUrl('https://assets.bismilsofra.example/photo.webp','*.example'),null);
+ assert.equal(photoUrl('//assets.bismilsofra.example/photo.webp',host),null);
+ assert.equal(photoUrl('/photos/restaurant-01.webp'),'/photos/restaurant-01.webp');
+ assert.equal(photoUrl('/photos/../secrets.webp'),null);
+});
