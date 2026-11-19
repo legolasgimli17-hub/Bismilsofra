@@ -86,6 +86,18 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  const owner=await sign('owner',{amr:['pwd','mfa'],auth_time:now});
  const noMfa=await sign('owner',{amr:['pwd'],auth_time:now});
  const unverified=await sign('unverified',{email_verified:false});
+ const namespaced=await sign('namespaced',{
+  email:undefined,email_verified:undefined,amr:undefined,auth_time:undefined,
+  'https://bismilsofra.example/claims/email_verified':true,
+  'https://bismilsofra.example/claims/email':'namespaced@example.invalid',
+  'https://bismilsofra.example/claims/mfa':true,
+  'https://bismilsofra.example/claims/mfa_at':now
+ });
+ const namespacedWithoutMfa=await sign('namespaced-no-mfa',{
+  email:undefined,email_verified:undefined,amr:undefined,
+  'https://bismilsofra.example/claims/email_verified':true,
+  'https://bismilsofra.example/claims/email':'namespaced-no-mfa@example.invalid'
+ });
  const {privateKey:wrongKey}=await generateKeyPair('RS256');
  const forgery=await sign('forgery',{},wrongKey);
  type HttpResult={status:number;body:Record<string,any>};
@@ -101,6 +113,9 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal((await request('/v1/me/addresses')).status,401);
  assert.equal((await request('/v1/me/addresses',{token:forgery})).status,401);
  assert.equal((await request('/v1/me/addresses',{token:unverified})).status,403);
+ assert.equal((await request('/v1/me/addresses',{token:namespaced})).status,200);
+ assert.equal((await request('/v1/me/staff-restaurants',{token:namespaced})).status,200);
+ assert.equal((await request('/v1/me/staff-restaurants',{token:namespacedWithoutMfa})).status,403);
  assert.equal((await request('/v1/zones',{headers:{Origin:'https://evil.example'}})).status,403);
  assert.equal((await request('/v1/me/addresses',{token:customer})).status,200);
  assert.equal((await request('/v1/me/staff-restaurants',{token:noMfa})).status,403);
