@@ -4,10 +4,17 @@ import {invalid,canStaff,type StaffCapability} from './domain.ts';
 const issuer=process.env.OIDC_ISSUER;
 const audience=process.env.OIDC_AUDIENCE;
 const jwksUrl=process.env.OIDC_JWKS_URL;
+// Auth0 API access tokens do not include every standard ID-token claim by default.
+// A trusted Post-Login Action can issue explicit namespaced claims.
+const verifiedClaim=process.env.OIDC_VERIFIED_CLAIM||'https://bismilsofra.example/claims/email_verified';
+const emailClaim=process.env.OIDC_EMAIL_CLAIM||'https://bismilsofra.example/claims/email';
 if(!issuer||!audience||!jwksUrl||issuer.includes('REPLACE-')||audience.includes('REPLACE-')||jwksUrl.includes('REPLACE-')){
  throw new Error('OIDC_ISSUER / OIDC_AUDIENCE / OIDC_JWKS_URL yapılandırılmamış. Güvenli doğrulama olmadan API başlamaz.');
 }
-const jwks=createRemoteJWKSet(new URL(jwksUrl));
+const issuerUrl=new URL(issuer),keyUrl=new URL(jwksUrl);
+if(process.env.NODE_ENV==='production'&&(issuerUrl.protocol!=='https:'||keyUrl.protocol!=='https:'))
+ throw new Error('Production OIDC issuer and JWKS URLs must use HTTPS.');
+const jwks=createRemoteJWKSet(keyUrl);
 export type Identity={sub:string,email?:string;emailVerified:boolean;amr:string[];authTime?:number};
 export async function verifyBearer(header:unknown):Promise<Identity>{
  const authHeader=typeof header==='string'?header:'';
@@ -20,9 +27,13 @@ export async function verifyBearer(header:unknown):Promise<Identity>{
   p=verified.payload;
  }catch{invalid('AUTH_INVALID','Oturum geçersiz veya süresi dolmuş.',401)}
  if(typeof p!.sub!=='string'||p!.sub.length>250)invalid('AUTH_INVALID','Kimlik doğrulanamadı.',401);
- return {sub:p!.sub!,email:typeof p!.email==='string'?p!.email:undefined,emailVerified:p!.email_verified===true,amr:Array.isArray(p!.amr)?p!.amr.filter(x=>typeof x==='string') as string[]:[],authTime:typeof p!.auth_time==='number'?p!.auth_time:undefined};
+ const claimEmail=typeof p![emailClaim]==='string'?p![emailClaim] as string:undefined;
+ return {sub:p!.sub!,email:typeof p!.email==='string'?p!.email:claimEmail,
+  emailVerified:p!.email_verified===true||p![verifiedClaim]===true,
+  amr:Array.isArray(p!.amr)?p!.amr.filter(x=>typeof x==='string') as string[]:[],
+  authTime:typeof p!.auth_time==='number'?p!.auth_time:undefined};
 }
-export function requireVerifiedEmail(identity:Identity){if(!identity.emailVerified)invalid('EMAIL_NOT_VERIFIED','Sipariş için doğrulanmış e-posta gerekli.',403)}
+export function requireVerifiedEmail(identity:Identity){if(!identity.emailVerified||!identity.email)invalid('EMAIL_NOT_VERIFIED','Sipariş için doğrulanmış e-posta gerekli.',403)}
 export function requireMfa(identity:Identity,recent=false){
  // Deliberate fail-closed; map provider-specific trusted AMR values before connecting a real provider.
  if(!identity.amr.some(x=>['mfa','otp','totp','webauthn','hwk'].includes(x)))invalid('MFA_REQUIRED','Restoran/yönetici hesabında iki aşamalı doğrulama gerekli.',403);
