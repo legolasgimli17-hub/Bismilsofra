@@ -152,3 +152,9 @@ body{background:#fbfaf7;color:#263129}
 .merchant-sound-row .btn{min-height:44px}
 .merchant-sound-row small{color:#576d60;font-size:12px}
 .merchant-new-count{font-size:13px;font-weight:750;border-radius:20px;padding:7px 11px;background:#fff1da;color:#815014}
+
+/* v1.4: accessible operations summary */
+.admin-alert-count{font-size:36px;font-weight:850;line-height:1.1;color:#274632;margin:18px 0 7px;font-variant-numeric:tabular-nums}
+.admin-alert-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border-bottom:1px solid #e5ede5;padding:11px 0;margin:0;font-size:13px;overflow-wrap:anywhere}
+.admin-alert-row code{font-size:12px;color:#3a6251}
+@media(max-width:520px){.admin-alert-count{font-size:29px}.admin-alert-row{font-size:12px}}
