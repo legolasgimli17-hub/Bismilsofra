@@ -18,6 +18,8 @@ jobs:
         run: npm run test:api
       - name: Frontend cart tests
         run: npm run test:cart
+      - name: Product customization selection and editor draft tests
+        run: npm run test:product-options
       - name: Discovery and favorites tests
         run: npm run test:discovery
       - name: Merchant connection health tests
