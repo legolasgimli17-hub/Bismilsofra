@@ -3,6 +3,7 @@ import {useCallback,useEffect,useState,type FormEvent} from 'react';
 import Link from 'next/link';
 import {api} from '@/lib/api';
 import {inputToKurus} from '@/lib/merchant-settings';
+import AdminMenuImport from '@/components/admin-menu-import';
 import {Building2,CheckCircle2,MapPinned,Plus,RefreshCw,ShieldCheck} from 'lucide-react';
 
 type PilotRestaurant={
@@ -174,6 +175,8 @@ export default function PilotOnboarding({token}:{token:()=>Promise<string>}){
      </form>
     </div>
    </div>
+   <AdminMenuImport key={selected.id} restaurantId={selected.id} active={selected.active}
+    token={token} onImported={load}/>
    <div className="pilot-activation">
     <div><strong>İşletmenin menüsü ve saatleri</strong>
      <p className="muted">Sahip, kendi MFA korumalı hesabıyla <Link href="/restaurant/manage">restoran yönetimi</Link> ekranından kategori, ürün, fiyat ve çalışma saatlerini tamamlar. Yönetici kontrol listesini yeniler.</p>

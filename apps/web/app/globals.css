@@ -519,3 +519,22 @@ body{background:#fbfaf7;color:#263129}
 .admin-order-history p{font-size:13px;margin:7px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:850px){.admin-order-result{grid-template-columns:1fr 1fr}.admin-order-result .btn{grid-column:1/-1;width:100%}.admin-order-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){.admin-order-search{flex-direction:column;align-items:stretch}.admin-order-search label{max-width:none}.admin-order-result{grid-template-columns:1fr}.admin-order-result .btn{grid-column:auto;min-height:52px}.admin-order-detail{padding:14px}.admin-order-facts{gap:8px}}
+
+/* Safe menu batch import for draft merchants. */
+.pilot-menu-import{padding:17px;border:1px solid #cddfd3;border-radius:13px;margin:16px 0 18px;background:#f9fcfa;display:flex;flex-direction:column;align-items:stretch;gap:14px}
+.pilot-menu-import-heading h3{display:flex;align-items:center;gap:8px;font-size:18px;margin:0 0 10px}
+.pilot-menu-import-heading p{line-height:1.6;margin:5px 0}
+.pilot-menu-import-template{display:grid;gap:7px;font-size:12px;overflow-x:auto}
+.pilot-menu-import-template code{display:block;padding:10px 12px;background:#eff4ee;border:1px solid #dfeae0;border-radius:8px;white-space:pre;font-size:12px}
+.pilot-import-label{display:flex;flex-direction:column;gap:7px;font-size:13px;font-weight:750}
+.pilot-import-label textarea{width:100%;min-height:145px;border:1px solid #c9d8cd;background:white;border-radius:12px;padding:12px;font-size:14px;line-height:1.5;resize:vertical;tab-size:4}
+.pilot-import-preview>strong{font-size:13px;color:#285739}
+.pilot-import-scroll{max-height:260px;overflow:auto;border:1px solid #d9e7dc;border-radius:10px;background:white;margin-top:9px}
+.pilot-import-scroll table{border-collapse:collapse;width:100%;min-width:500px;font-size:12px}
+.pilot-import-scroll th{text-align:left;background:#edf6ef;font-size:11px;position:sticky;top:0}
+.pilot-import-scroll th,.pilot-import-scroll td{padding:10px;border-bottom:1px solid #ecf1eb}
+.pilot-import-scroll td:nth-child(2){font-weight:700}
+.pilot-menu-import .btn{align-self:flex-start;min-height:46px}
+.pilot-import-disclaimer{display:flex;align-items:start;gap:8px;font-size:12px;line-height:1.6}
+.pilot-import-disclaimer svg{flex-shrink:0}
+@media(max-width:650px){.pilot-menu-import{padding:13px}.pilot-menu-import .btn{width:100%;justify-content:center}}
