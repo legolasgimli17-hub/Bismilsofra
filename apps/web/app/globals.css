@@ -310,3 +310,18 @@ body{background:#fbfaf7;color:#263129}
 .merchant-option-new-group .muted{margin:0}
 @media(max-width:560px){.merchant-option-body{padding:10px}.merchant-option-group{padding:11px}.merchant-option-group-fields{grid-template-columns:1fr 1fr}.merchant-option-group-fields>label:first-child{grid-column:1/-1}.merchant-option-choice{grid-template-columns:1fr 1fr}}
 @media(max-width:365px){.merchant-option-choice,.merchant-option-new-choice-fields{grid-template-columns:1fr}.merchant-option-group-fields{grid-template-columns:1fr 1fr}}
+
+
+/* v2.0: safe previous-order replay, visually distinct but within existing brand */
+.reorder-panel{border:1px solid #d7eadd;background:linear-gradient(140deg,#f4fbf5 0%,#fffefa 82%);box-shadow:0 9px 27px rgba(15,88,51,.055)}
+.reorder-panel h2{font-size:clamp(1.25rem,2vw,1.6rem);line-height:1.3;margin:9px 0 10px}
+.reorder-panel>.muted{color:#526857;line-height:1.65;max-width:66ch}
+.reorder-eyebrow{display:flex;align-items:center;gap:7px;color:#14653f;font-weight:800;font-size:11px;letter-spacing:.12em}
+.reorder-prepare{min-height:44px}
+.reorder-feedback{border-radius:12px;padding:16px;margin-top:17px;line-height:1.6}
+.reorder-feedback p{margin:0 0 12px}
+.reorder-feedback ul{padding-left:20px;margin:8px 0 13px}
+.reorder-feedback li{margin:5px 0;overflow-wrap:anywhere}
+.reorder-feedback a{color:#0f6e48;text-decoration:underline;font-weight:750}
+.reorder-confirm{min-height:46px;max-width:100%;justify-content:center}
+@media(max-width:420px){.reorder-panel{padding:18px}.reorder-prepare,.reorder-confirm{width:100%}.reorder-feedback{padding:13px}}

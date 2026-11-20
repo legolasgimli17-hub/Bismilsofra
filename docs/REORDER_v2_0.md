@@ -26,3 +26,6 @@ Gerçek Auth0 tenant, MFA, HTTPS staging, 5 restoranın tablet/telefonlarında k
 
 ## Ek sipariş fiyatlandırma tutarlılığı
 Fiyat teklifi oluşturan `quoteOrder` kodunda arşivlenmiş seçenek grupları `archived=false` ile filtrelenir. Sipariş kaydı yapan `placeOrder` zaten aynı filtreyi kullanıyordu; teklif ve gerçek sipariş kuralları artık tutarlı. Gerçek HTTP+PostgreSQL testi, pasif yapılmış zorunlu grupta seçimsiz yeni teklifin geçerli olduğunu ve eski pasif seçenek ID'sinin `OPTION_FOREIGN` ile reddedildiğini doğrular.
+
+## Mobil tasarım
+Sipariş ayrıntılarında ayrı renk/ikon hiyerarşili tekrar sipariş kartı, 420px altı ekranda tam genişlikli 44px+ tıklama hedefleri, `role=alert` geçersiz ürün açıklamaları ve değişen fiyatların satır satır gösterimi bulunur. Gerçek Android/iOS 360–430px ve ekran okuyucu saha testi hâlâ üretim gerekliliğidir.
