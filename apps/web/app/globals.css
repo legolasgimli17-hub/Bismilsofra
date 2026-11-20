@@ -405,3 +405,36 @@ body{background:#fbfaf7;color:#263129}
 .pilot-activation .btn{flex-shrink:0;min-height:46px}
 @media(max-width:850px){.pilot-fields{grid-template-columns:1fr 1fr}.pilot-fields label:first-child{grid-column:1/-1}.pilot-setup-grid{grid-template-columns:1fr}}
 @media(max-width:560px){.pilot-heading,.pilot-activation{align-items:stretch;flex-direction:column}.pilot-fields,.pilot-money{grid-template-columns:1fr}.pilot-fields label:first-child{grid-column:auto}.pilot-activation .btn{width:100%}}
+
+/* Pilot team and account operations: readable responsive controls */
+.team-management,.admin-user-operations{margin-top:28px}
+.team-head{display:flex;align-items:start;justify-content:space-between;gap:14px;margin-bottom:20px}
+.team-head h2,.admin-user-operations h2{display:flex;gap:9px;align-items:center;margin:0 0 8px;font-size:21px}
+.team-head .muted,.admin-user-operations .muted{max-width:72ch;line-height:1.6}
+.team-add{display:grid;gap:12px;background:#f8fbf8;border:1px solid #dde9e0;border-radius:14px;padding:18px;margin-bottom:18px}
+.team-add h3{display:flex;gap:7px;align-items:center;margin:0}
+.team-add .muted{margin:0}
+.team-form-row{display:flex;gap:14px;align-items:end;flex-wrap:wrap}
+.team-form-row label,.admin-user-form label,.admin-user-result label{display:flex;flex-direction:column;gap:7px;font-size:13px;font-weight:750;min-width:0;flex:1}
+.team-form-row input,.team-form-row select,.admin-user-form input,.admin-user-result select{border:1px solid #ccdcd0;background:white;border-radius:9px;min-height:44px;padding:10px 12px;font-size:14px;color:#263a2c;width:100%}
+.team-flags{display:flex;gap:10px 20px;flex-wrap:wrap;padding:8px 0}
+.team-flags label{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;line-height:1.5}
+.team-flags input{width:18px;height:18px;accent-color:#20744d}
+.team-list{display:grid;gap:12px}
+.team-person{background:#fff;border:1px solid #dce7df;border-radius:13px;padding:16px}
+.team-person-title{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.team-person-title>div{display:grid;gap:5px;overflow-wrap:anywhere}
+.team-person-title strong{font-size:15px}
+.team-person-title small,.admin-user-result small{font-size:12px;color:#65766b}
+.team-person .team-form-row{margin-top:13px}
+.team-person .team-form-row label{max-width:250px}
+.team-owner{display:inline-flex;align-items:center;gap:5px;color:#1d6c4c;font-size:12px;font-weight:800}
+.team-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}
+.team-remove{border-color:#cb7b70!important;color:#9b332e!important}
+.admin-user-form{display:flex;align-items:end;gap:12px;margin:14px 0 20px}
+.admin-user-form label{max-width:390px}
+.admin-user-result{display:grid;grid-template-columns:minmax(150px,1fr) minmax(180px,1fr) auto;align-items:end;gap:14px;border:1px solid #dce7df;border-radius:12px;padding:15px;margin:12px 0}
+.admin-user-result>div{display:flex;flex-direction:column;gap:6px;overflow-wrap:anywhere}
+.admin-user-result strong{font-size:14px}
+.admin-user-result .btn{min-height:44px}
+@media(max-width:720px){.team-head,.admin-user-form{flex-direction:column;align-items:stretch}.team-form-row{flex-direction:column;align-items:stretch}.admin-user-result{grid-template-columns:1fr}.team-add .btn,.admin-user-form .btn{width:100%}}
