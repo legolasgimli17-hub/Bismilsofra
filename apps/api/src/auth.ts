@@ -48,9 +48,20 @@ export function requireMfa(identity:Identity,recent=false){
 }
 export async function provisionVerifiedUser(pool:Pool,ident:Identity):Promise<string>{
  requireVerifiedEmail(ident);
- const r=await pool.query(`INSERT INTO users(oidc_subject,verified_email) VALUES($1,$2) ON CONFLICT (oidc_subject) DO UPDATE SET verified_email=EXCLUDED.verified_email RETURNING id,enabled`,[ident.sub,ident.email??null]);
- if(!r.rows[0].enabled)invalid('ACCOUNT_DISABLED','Bu hesap kısıtlanmış.',403);
- return r.rows[0].id;
+ // High-frequency inbox polling must not UPDATE the same user on every request.
+ // One read for an unchanged identity avoids row churn and VACUUM pressure.
+ const email=ident.email!;
+ const found=await pool.query('SELECT id,enabled,verified_email FROM users WHERE oidc_subject=$1',[ident.sub]);
+ if(found.rowCount&&found.rows[0].enabled===false)
+  invalid('ACCOUNT_DISABLED','Bu hesap kısıtlanmış.',403);
+ if(found.rowCount&&found.rows[0].verified_email===email)return found.rows[0].id as string;
+ // For new users and signed email changes, the unique subject constraint
+ // serializes concurrent requests. This UPSERT also respects disabled accounts.
+ const updated=await pool.query(`INSERT INTO users(oidc_subject,verified_email)
+  VALUES($1,$2) ON CONFLICT (oidc_subject) DO UPDATE SET verified_email=EXCLUDED.verified_email
+  RETURNING id,enabled`,[ident.sub,email]);
+ if(!updated.rows[0].enabled)invalid('ACCOUNT_DISABLED','Bu hesap kısıtlanmış.',403);
+ return updated.rows[0].id as string;
 }
 export async function requireStaff(pool:Pool,userId:string,restaurantId:string,capability:StaffCapability='view'){
  const r=await pool.query('SELECT role,can_view_orders,can_manage_orders,can_manage_menu FROM restaurant_staff WHERE user_id=$1 AND restaurant_id=$2',[userId,restaurantId]);

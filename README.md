@@ -1,4 +1,4 @@
-# Bismil Sofra — v2.0.0-beta.1 geliştirme aşaması
+# Bismil Sofra — v2.1.0-beta.1 geliştirme aşaması
 
 **Bismil'e özel, en fazla 50 aktif restoran için tasarlanan yemek sipariş PWA projesi.** Kaynak proje hâlâ geliştirme aşamasındadır; gerçek müşterilerden sipariş almaya hazır değildir.
 
@@ -105,3 +105,9 @@ Sipariş detayında **Güncel menüyle tekrar hazırla** eylemi: geçmiş ürün
 
 - [v2.0 tekrar sipariş rehberi ve güvenlik kuralları](docs/REORDER_v2_0.md)
 - `npm run test:reorder`; gerçek HTTP+PostgreSQL sahiplik testi dahil.
+
+## v2.1 — Bağımsız denetim kaynaklı ilk iyileştirmeler
+
+Canlı aramanın ürün adına göre eşleşen restoranları kaybetmesi düzeltildi; bozuk sepet verisi reddedilir, Auth0 kullanıcısı her okuma çağrısında gereksiz veritabanı UPDATE üretmez. API için sınıfa ayrılmış, sınırlı bellek kullanan istek kotası; açık güvenilen-proxy yapılandırması; gerçek HTTP ve regresyon testleri eklendi.
+
+[İlk v2.1 güvenlik/kalite adımı](docs/HARDENING_v2_1.md). Gerçek canlı Auth0, bağımsız ikincil bildirim, yedek/geri yükleme ve fiziksel restoran cihazı testi henüz tamamlanmadı.

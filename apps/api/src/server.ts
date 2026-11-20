@@ -1,6 +1,7 @@
 /** API foundation for Bismil Sofra. Not exposed to the internet until provider, DB and integration tests are configured. */
 import Fastify from 'fastify';
 import {Pool} from 'pg';
+import {RequestLimiter,trustedProxyCidrs} from './rate-limit.ts';
 import {DomainError,invalid,uuid,STATUSES,type Status,cleanNote} from './domain.ts';
 import {verifyBearer,provisionVerifiedUser,requireMfa,requireStaff,requireAdmin} from './auth.ts';
 import {placeOrder,quoteOrder,changeStatus,activateRestaurant,transaction} from './order-service.ts';
@@ -16,19 +17,23 @@ const origin=process.env.CORS_ORIGIN;
 if(!origin||origin==='*')throw new Error('CORS_ORIGIN tek bir güvenilir domain olmalı');
 const port=Number(process.env.PORT||4000);
 const pool=new Pool({connectionString:process.env.DATABASE_URL,max:12,connectionTimeoutMillis:5000,statement_timeout:8000});
-const app=Fastify({logger:{level:process.env.NODE_ENV==='production'?'info':'warn',redact:['req.headers.authorization','req.body.phone','req.body.fullAddress','req.body.address','res.headers.set-cookie']},bodyLimit:65536,trustProxy:false,requestTimeout:15000});
+const app=Fastify({logger:{level:process.env.NODE_ENV==='production'?'info':'warn',redact:['req.headers.authorization','req.body.phone','req.body.fullAddress','req.body.address','res.headers.set-cookie']},bodyLimit:65536,trustProxy:trustedProxyCidrs(process.env.TRUSTED_PROXY_CIDRS),requestTimeout:15000});
 app.addContentTypeParser('application/octet-stream',{parseAs:'buffer',bodyLimit:MAX_PHOTO_UPLOAD_BYTES},
  (_request,body,done)=>done(null,body));
-const hits=new Map<string,{count:number,expires:number}>();
+// Per-process safety net. A shared edge limiter is required for scaled deployments.
+const limiter=new RequestLimiter();
 app.addHook('onRequest',async(req,reply)=>{
  reply.header('X-Content-Type-Options','nosniff').header('Referrer-Policy','no-referrer').header('Cache-Control','no-store').header('X-Frame-Options','DENY');
  const sentOrigin=req.headers.origin;
  if(sentOrigin&&sentOrigin!==origin)return reply.code(403).send({code:'ORIGIN_FORBIDDEN',message:'Bu kaynaktan erişim engellendi.'});
  if(sentOrigin){reply.header('Access-Control-Allow-Origin',origin).header('Vary','Origin').header('Access-Control-Allow-Headers','Authorization,Content-Type,Idempotency-Key,X-Photo-Rights-Affirmed').header('Access-Control-Allow-Methods','GET,POST,PATCH,OPTIONS')}
  if(req.method==='OPTIONS')return reply.code(204).send();
- const now=Date.now();if(hits.size>15000){for(const [k,v] of hits)if(v.expires<=now)hits.delete(k)}
- const key=req.ip;let v=hits.get(key);if(!v||v.expires<=now)v={count:0,expires:now+60000};v.count++;hits.set(key,v);
- if(v.count>120)return reply.code(429).send({code:'RATE_LIMIT',message:'Çok fazla istek. Biraz sonra yeniden deneyin.'});
+ // Only peers trusted through the explicitly configured proxy list affect req.ip.
+ const decision=limiter.check(req.ip,req.method,req.url);
+ if(!decision.allowed){
+  reply.header('Retry-After',String(decision.retryAfter));
+  return reply.code(429).send({code:'RATE_LIMIT',message:'Çok fazla istek. Biraz sonra yeniden deneyin.'});
+ }
 });
 app.setErrorHandler((error,req,reply)=>{
  if(error instanceof DomainError)return reply.code(error.statusCode).send({code:error.code,message:error.message});

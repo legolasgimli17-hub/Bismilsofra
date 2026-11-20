@@ -38,3 +38,14 @@ test('owned photo CDN is allowed only with exact HTTPS host and no credentials',
  assert.equal(photoUrl('/photos/restaurant-01.webp'),'/photos/restaurant-01.webp');
  assert.equal(photoUrl('/photos/../secrets.webp'),null);
 });
+
+test('live server product matches are retained even if restaurant name does not match',()=>{
+ const payload=[{...a,name:'Ocakbaşı'}]; // API matched a product called “lahmacun”, not the restaurant name
+ const filter={...basics,search:'lahmacun'};
+ assert.deepEqual(visibleRestaurants(payload,filter,()=> 'Tümü',true).map(r=>r.id),['a']);
+ assert.deepEqual(visibleRestaurants(payload,filter,()=> 'Tümü',false).map(r=>r.id),[]);
+});
+test('server-filtered searches still apply open status and favorites',()=>{
+ const results=visibleRestaurants([a,b],{...basics,search:'lahmacun',onlyOpen:true,favoritesOnly:true,favorites:['a']},()=> 'Tümü',true);
+ assert.deepEqual(results.map(r=>r.id),['a']);
+});
