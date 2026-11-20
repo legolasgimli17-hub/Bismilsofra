@@ -156,3 +156,6 @@ Admin ve restoran sahibi/yöneticisi, 7/30 günlük yerel tarih sipariş trendi,
 ## Pilot — Şartname 10: anlık sipariş ve tekrarlayan alarm
 
 Sipariş statü hareketlerinin append-only veritabanı kaydından sonra transactional `NOTIFY` çıkar. Restoran ve müşteri yalnızca imzalı JWT ile açılmış kısa süreli SSE sinyalini alır; verinin kendisini yine yetkili HTTP servisten sorgular. İşletme kabul bekleyen siparişte, sesi **bilinçli olarak açtıysa**, sekme görünürken uyarıyı tekrarlatır. 7 saniyelik HTTP eşitleme güvenli yedektir. [Mimari, mobil kısıtlar ve üretim sınırları](docs/REALTIME_SSE_PILOT.md).
+
+## Pilot: yönetici sipariş inceleme
+Platform yöneticisi MFA sonrası `/admin` ekranından siparişin **8 karakterlik kısa numarasını veya tam UUID'sini** girip restoran, durum, tutar ve geçmişini inceleyebilir. Arama toplu müşteri listesi değildir; müşteri iletişim/adres bilgileri sunulmaz. Detay açma işlemi audit kayıtlarına eklenir. [Sipariş inceleme rehberi](docs/ADMIN_ORDER_INVESTIGATION.md).
