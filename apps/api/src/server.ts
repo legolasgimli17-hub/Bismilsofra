@@ -6,6 +6,7 @@ import {RequestLimiter,trustedProxyCidrs} from './rate-limit.ts';
 import {listPilotRestaurants,createPilotRestaurant,assignPilotOwner,linkPilotDeliveryZone,createPilotDeliveryZone} from './admin-onboarding.ts';
 import {readWorkerHealth} from './worker-health.ts';
 import {OrderEventBroker} from './order-event-broker.ts';
+import {searchAdminOrders,readAdminOrderDetail} from './admin-order-investigation.ts';
 import {openOrderStream} from './order-stream.ts';
 import {parseReportDays,readPilotAdminReport,readPilotMerchantReport} from './report-service.ts';
 import {getRestaurantTeam,addRestaurantMember,updateRestaurantMember,removeRestaurantMember,
@@ -698,6 +699,15 @@ app.post('/v1/admin/notifications/:id/retry',async(req)=>{
 // available menu are verified. Administration requires a fresh MFA token.
 // Exact-match account lookup: avoid bulk customer exports or substring searches.
 // Platform aggregate and per-merchant pilot KPIs (not settlement/payout evidence).
+// Status-only support lookup, with audited explicit detail access.
+app.get('/v1/admin/orders',async(req)=>{
+ await admin(req);
+ return searchAdminOrders(pool,(req.query as Record<string,unknown>).key);
+});
+app.get('/v1/admin/orders/:id',async(req)=>{
+ const {userId}=await admin(req),id=idParam(req,'id');
+ return readAdminOrderDetail(pool,userId,id);
+});
 app.get('/v1/admin/reports',async(req)=>{
  await admin(req);
  const days=parseReportDays((req.query as Record<string,unknown>).days);
