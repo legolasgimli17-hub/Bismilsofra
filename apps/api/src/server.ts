@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import {Pool} from 'pg';
 import {isSupportStatus,parseSupportUpdate} from './support-service.ts';
 import {RequestLimiter,trustedProxyCidrs} from './rate-limit.ts';
+import {listPilotRestaurants,createPilotRestaurant,assignPilotOwner,linkPilotDeliveryZone,createPilotDeliveryZone} from './admin-onboarding.ts';
 import {readWorkerHealth} from './worker-health.ts';
 import {DomainError,invalid,uuid,STATUSES,type Status,cleanNote} from './domain.ts';
 import {verifyBearer,provisionVerifiedUser,requireMfa,requireStaff,requireAdmin} from './auth.ts';
@@ -646,6 +647,31 @@ app.post('/v1/admin/notifications/:id/retry',async(req)=>{
   await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,details) VALUES($1,$2,$3,$4::jsonb)',[userId,'notification_retry','notification',JSON.stringify({eventId:id,restaurantId:res.rows[0].restaurant_id})]);
   return {id:res.rows[0].id,requeued:true};
  });
+});
+// Pilot onboarding: drafts remain closed/invisible until owner, zone, hours and
+// available menu are verified. Administration requires a fresh MFA token.
+app.get('/v1/admin/restaurants',async(req)=>{
+ await admin(req);
+ return listPilotRestaurants(pool);
+});
+app.post('/v1/admin/restaurants',async(req,reply)=>{
+ const {userId}=await admin(req);
+ const restaurant=await createPilotRestaurant(pool,userId,req.body);
+ reply.code(201);return {restaurant};
+});
+app.post('/v1/admin/restaurants/:id/owner',async(req,reply)=>{
+ const id=idParam(req,'id'),{userId}=await admin(req);
+ const result=await assignPilotOwner(pool,userId,id,req.body);
+ reply.code(201);return result;
+});
+app.post('/v1/admin/zones',async(req,reply)=>{
+ const {userId}=await admin(req);
+ const zone=await createPilotDeliveryZone(pool,userId,req.body);
+ reply.code(201);return {zone};
+});
+app.post('/v1/admin/restaurants/:id/zones',async(req)=>{
+ const id=idParam(req,'id'),{userId}=await admin(req);
+ return {zone:await linkPilotDeliveryZone(pool,userId,id,req.body)};
 });
 app.post('/v1/admin/restaurants/:id/activation',async(req)=>{
  const id=idParam(req,'id'),{userId}=await admin(req);const body=(req.body??{}) as Record<string,unknown>;
