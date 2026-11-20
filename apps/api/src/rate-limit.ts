@@ -1,7 +1,7 @@
 /** Bounded in-process safety net. Production replicas also need edge/shared limits. */
 import {isIP} from 'node:net';
 export const WINDOW_MS=60_000;
-export type RateBucket='read'|'write'|'quote'|'order'|'upload';
+export type RateBucket='read'|'write'|'quote'|'order'|'upload'|'management';
 export type RateDecision={allowed:boolean;retryAfter:number;bucket:RateBucket|null};
 function rateGroup(method:string,url:string):{bucket:RateBucket;limit:number}|null{
  if(method==='OPTIONS')return null;
@@ -10,6 +10,12 @@ function rateGroup(method:string,url:string):{bucket:RateBucket;limit:number}|nu
  if(method==='POST'&&path==='/v1/orders/quote')return {bucket:'quote',limit:48};
  if(method==='POST'&&/^\/v1\/restaurant\/[^/]+\/photos$/.test(path))
   return {bucket:'upload',limit:8};
+ // Separate management writes from ordinary checkout mutations, while still
+ // bounding admin/team operations per IP (never an unlimited exception).
+ if((method==='POST'||method==='PATCH')&&
+   (/^\/v1\/admin\/users\/[^/]+\/access$/.test(path)||
+    /^\/v1\/restaurant\/[^/]+\/team(?:\/[^/]+(?:\/remove)?)?$/.test(path)))
+  return {bucket:'management',limit:40};
  if(method==='GET'||method==='HEAD')return {bucket:'read',limit:300};
  return {bucket:'write',limit:80};
 }

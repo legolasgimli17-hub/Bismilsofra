@@ -262,6 +262,119 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.ok(!JSON.stringify(audit.rows).includes('OWNER@EXAMPLE.INVALID'),
   'operator audit logs must not duplicate owner email');
 
+ // Merchant team and platform-user workflows: all calls go through real
+ // signed JWT HTTP routes and persistent PostgreSQL role/audit constraints.
+ const teamUrl='/v1/restaurant/'+pilotId+'/team';
+ const teamStaffEmail='ci-staff-'+nonce.slice(0,12)+'@example.invalid';
+ const teamManagerEmail='ci-manager-'+nonce.slice(0,12)+'@example.invalid';
+ const teamStaff=await sign('team-staff',{email:teamStaffEmail,amr:['pwd','mfa'],auth_time:now});
+ const teamManager=await sign('team-manager',{email:teamManagerEmail,amr:['pwd','mfa'],auth_time:now});
+ assert.equal((await request('/v1/me/staff-restaurants',{token:teamStaff})).status,200);
+ assert.equal((await request('/v1/me/staff-restaurants',{token:teamManager})).status,200);
+ assert.equal((await request(teamUrl,{token:customer})).status,403);
+ assert.equal((await request(teamUrl,{token:owner})).status,403,'other restaurant owner cannot read team');
+ assert.equal((await request(teamUrl,{token:pilotOwner})).status,200);
+ assert.equal((await request(teamUrl,{token:noMfa})).status,403);
+ const fullAccess={role:'manager',canViewOrders:true,canManageOrders:true,canManageMenu:true};
+ const readOnly={role:'staff',canViewOrders:true,canManageOrders:false,canManageMenu:false};
+ assert.equal((await request(teamUrl,{token:pilotOwner,method:'POST',
+  body:{email:'missing-person@example.invalid',...readOnly}})).status,404);
+ assert.equal((await request(teamUrl,{token:owner,method:'POST',
+  body:{email:teamStaffEmail,...readOnly}})).status,403,'cross-tenant user cannot assign staff');
+ const teamManagerAdd=await request(teamUrl,{token:pilotOwner,method:'POST',
+  body:{email:teamManagerEmail,...fullAccess}});
+ assert.equal(teamManagerAdd.status,201,JSON.stringify(teamManagerAdd.body));
+ const managerUid=teamManagerAdd.body.member.userId as string;
+ assert.equal((await request(teamUrl,{token:teamManager,method:'POST',
+  body:{email:teamStaffEmail,...fullAccess}})).status,403,'manager cannot create other managers');
+ const staffAdd=await request(teamUrl,{token:teamManager,method:'POST',
+  body:{email:teamStaffEmail,...readOnly}});
+ assert.equal(staffAdd.status,201,JSON.stringify(staffAdd.body));
+ const staffUid=staffAdd.body.member.userId as string;
+ assert.equal((await request(teamUrl,{token:teamManager,method:'POST',
+  body:{email:teamStaffEmail,...readOnly}})).status,409,'cannot duplicate membership');
+ assert.equal((await request(teamUrl,{token:teamStaff})).status,403,
+  'ordinary staff cannot see personnel emails even with valid MFA');
+ assert.equal((await request('/v1/restaurant/'+pilotId+'/inbox',{token:teamStaff})).status,200,
+  'order-view capability is scoped to assigned restaurant');
+ assert.equal((await request('/v1/restaurant/'+pilotId+'/management',{token:teamStaff})).status,403,
+  'read-only staff cannot edit menu');
+ assert.equal((await request('/v1/restaurant/'+rid+'/team',{token:teamManager})).status,403,
+  'manager cannot read another restaurant roster');
+
+ const staffPath=teamUrl+'/'+staffUid;
+ const canUpdate={role:'staff',canViewOrders:true,canManageOrders:true,canManageMenu:false};
+ const accessUpdated=await request(staffPath,{method:'PATCH',token:teamManager,
+  body:{expected:readOnly,next:canUpdate}});
+ assert.equal(accessUpdated.status,200,JSON.stringify(accessUpdated.body));
+ assert.equal((await request(staffPath,{method:'PATCH',token:teamManager,
+  body:{expected:readOnly,next:{...canUpdate,canManageMenu:true}}})).status,409,
+  'stale operator writes cannot silently overwrite another role edit');
+ assert.equal((await request(teamUrl+'/'+managerUid,{method:'PATCH',token:teamManager,
+  body:{expected:fullAccess,next:readOnly}})).status,403,
+  'a manager cannot demote themselves or a peer');
+ const promoted=await request(staffPath,{method:'PATCH',token:pilotOwner,
+  body:{expected:canUpdate,next:fullAccess}});
+ assert.equal(promoted.status,200);
+ assert.equal((await request(staffPath+'/remove',{method:'POST',token:teamManager,
+  body:{expected:fullAccess}})).status,403,'manager cannot remove another manager');
+ assert.equal((await request(staffPath,{method:'PATCH',token:pilotOwner,
+  body:{expected:fullAccess,next:readOnly}})).status,200,'owner can demote manager to staff');
+ const pilotOwnerRow=await pool.query('SELECT id FROM users WHERE oidc_subject=$1',[subject('pilot-owner')]);
+ const pilotOwnerUid=pilotOwnerRow.rows[0].id as string;
+ assert.equal((await request(teamUrl+'/'+pilotOwnerUid+'/remove',{method:'POST',token:pilotOwner,
+  body:{expected:readOnly}})).status,403,'original owner can never be removed by staff UI');
+
+ const adminUsers='/v1/admin/users?email='+encodeURIComponent(teamStaffEmail);
+ assert.equal((await request(adminUsers,{token:customer})).status,403);
+ assert.equal((await request(adminUsers,{token:oldAdministrator})).status,403);
+ assert.equal((await request('/v1/admin/users?email=invalid',{token:administrator})).status,400);
+ const userSearch=await request(adminUsers,{token:administrator});
+ assert.equal(userSearch.status,200);
+ assert.equal(userSearch.body.users.length,1);
+ assert.equal(userSearch.body.users[0].id,staffUid);
+ assert.equal(userSearch.body.users[0].enabled,true);
+ const accessUrl='/v1/admin/users/'+staffUid+'/access';
+ const disable={enabled:false,expectedEnabled:true,reasonCode:'suspicious_activity'};
+ assert.equal((await request(accessUrl,{method:'POST',token:oldAdministrator,body:disable})).status,403);
+ assert.equal((await request(accessUrl,{method:'POST',token:administrator,
+  body:{...disable,reasonCode:'unsafe arbitrary freeform PII'}})).status,400);
+ const accountDisabled=await request(accessUrl,{method:'POST',token:administrator,body:disable});
+ assert.equal(accountDisabled.status,200,JSON.stringify(accountDisabled.body));
+ assert.equal(accountDisabled.body.user.enabled,false);
+ assert.equal((await request('/v1/me/staff-restaurants',{token:teamStaff})).status,403,
+  'disabled user must lose server access despite a valid signed bearer token');
+ assert.equal((await request(accessUrl,{method:'POST',token:administrator,body:disable})).status,409,
+  'stale state cannot disable the user twice');
+ const restored=await request(accessUrl,{method:'POST',token:administrator,
+  body:{enabled:true,expectedEnabled:false,reasonCode:'appeal'}});
+ assert.equal(restored.status,200);
+ assert.equal((await request('/v1/me/staff-restaurants',{token:teamStaff})).status,200);
+ assert.equal((await request('/v1/admin/users/'+adminRow.rows[0].id+'/access',{
+  method:'POST',token:administrator,body:disable})).status,403,'admin may not disable their own account');
+ assert.equal((await request(pilotActivate,{method:'POST',token:administrator,
+  body:{active:true}})).status,200);
+ assert.equal((await request('/v1/admin/users/'+pilotOwnerUid+'/access',{
+  method:'POST',token:administrator,body:disable})).status,409,
+  'active restaurant cannot lose its sole enabled owner');
+ assert.equal((await request(pilotActivate,{method:'POST',token:administrator,
+  body:{active:false}})).status,200);
+ assert.equal((await request(staffPath+'/remove',{method:'POST',token:pilotOwner,
+  body:{expected:readOnly}})).status,200);
+ assert.equal((await request(teamUrl,{token:teamStaff})).status,403);
+ const teamAfterRemoval=await request(teamUrl,{token:pilotOwner});
+ assert.equal(teamAfterRemoval.status,200);
+ assert.equal(teamAfterRemoval.body.members.some((x:{user_id:string})=>x.user_id===staffUid),false);
+ const teamAudit=await pool.query("SELECT action,details FROM audit_logs WHERE target_id=$1 AND action LIKE 'restaurant_staff_%' ORDER BY id",[pilotId]);
+ assert.ok(teamAudit.rows.some((x:{action:string})=>x.action==='restaurant_staff_add'));
+ assert.ok(teamAudit.rows.some((x:{action:string})=>x.action==='restaurant_staff_update'));
+ assert.ok(teamAudit.rows.some((x:{action:string})=>x.action==='restaurant_staff_remove'));
+ assert.ok(!JSON.stringify(teamAudit.rows).includes(teamStaffEmail),'team audit should store user IDs, not emails');
+ const userAudit=await pool.query("SELECT action,details FROM audit_logs WHERE target_id=$1 AND action='admin_user_access'",[staffUid]);
+ assert.equal(userAudit.rows.length,2,'disable and restore each have durable audit event');
+ assert.ok(!JSON.stringify(userAudit.rows).includes(teamStaffEmail));
+
+
  assert.equal((await request('/v1/admin/alerts',{token:customer})).status,403);
  assert.equal((await request('/v1/admin/alerts',{token:oldAdministrator})).status,403);
  const initialHealth=await request('/v1/admin/alerts',{token:administrator});

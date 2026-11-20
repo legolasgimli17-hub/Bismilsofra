@@ -38,3 +38,13 @@ test('memory bound blocks new keys until previous entries expire',()=>{
  assert.equal(limiter.check('three','GET','/x',61000).allowed,true);
  assert.equal(limiter.size,1);
 });
+
+test('account and personnel mutations have independent bounded budget',()=>{
+ const guard=new RequestLimiter();
+ const path='/v1/restaurant/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/team';
+ for(let i=0;i<40;i++)assert.equal(guard.check('127.0.0.1','POST',path,100).allowed,true);
+ const blocked=guard.check('127.0.0.1','PATCH',path+'/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',100);
+ assert.equal(blocked.allowed,false);assert.equal(blocked.bucket,'management');
+ assert.equal(guard.check('127.0.0.1','POST','/v1/admin/users/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/access',100).allowed,false);
+ assert.equal(guard.check('127.0.0.1','POST','/v1/me/addresses',100).allowed,true);
+});

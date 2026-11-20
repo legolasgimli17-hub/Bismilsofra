@@ -3,6 +3,7 @@ import {useCallback,useEffect,useState} from 'react';
 import AuthGate from '@/components/auth-gate';
 import SupportOperations from '@/components/support-operations';
 import PilotOnboarding from '@/components/pilot-onboarding';
+import UserAccessOperations from '@/components/user-access-operations';
 import {api} from '@/lib/api';
 import {AlertTriangle,ShieldCheck,RefreshCcw,WifiOff,BellRing,Clock3} from 'lucide-react';
 
@@ -76,6 +77,7 @@ function Inner({token}:{token:()=>Promise<string>}){
    </article>)}
   </div>
   <PilotOnboarding token={token}/>
+  <UserAccessOperations token={token}/>
   <section className="panel admin-worker-watchdog" aria-label="Sipariş işçileri sağlık kontrolü">
    <h2><Clock3 size={20}/> Sipariş işçileri</h2>
    <p className="muted">Bu kontrol arka plan süreçlerinin durumunu gösterir. Bir işçinin çalışması, bildirim sağlayıcısının veya restoran telefonunun alarmı aldığını kanıtlamaz.</p>

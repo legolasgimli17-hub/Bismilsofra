@@ -146,3 +146,6 @@ Tarayıcı **offline** olayında butonlar anında kilitlenir; internet geri geld
 **Kodda bulunması, gerçek sahada çalıştığının kanıtı değildir.** v0.1/v0.2 şartnamelerinden ve sonradan kabul edilen üst sınırdan türetilen güncel kabul listesi: [Pilot kapsamı ve eksiklerin dürüst takibi](docs/PILOT_SPEC_PROGRESS.md).
 
 Şu an geliştirilen pilot kurulum ekranı yöneticinin **kapalı restoran taslağı** oluşturmasına, doğrulanmış işletme sahibini bağlamasına, mahalle ücretini belirlemesine ve işletme menü/saatleri hazırladıktan sonra aktifleştirmesine olanak sağlar. Aktif restoran sayısı en çok **50** olarak kalır. Gerçek restoran izni ve hesapları olmadan işletme canlıya açılmaz.
+
+## Pilot: kullanıcı ve restoran personeli kontrolü
+Restoran sahibinin **Ekip ve yetkiler** ekranında çalışan ve yöneticiler, kişi bazlı ayrı izinlerle yönetilir. Platform admini **Kullanıcı erişim yönetimi** ekranında doğrulanmış hesapları sadece tam e-posta ile bulup kısıtlayabilir veya yeniden açabilir. İşlemler MFA ve sunucuda tenant bazlı rol kontrolüyle korunur; kritik değişiklikler audit'tedir. [Erişim yönetimi güvenlik sınırları](docs/ACCESS_MANAGEMENT_PILOT.md).
