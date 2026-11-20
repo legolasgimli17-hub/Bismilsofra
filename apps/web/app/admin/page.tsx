@@ -1,6 +1,7 @@
 'use client';
 import {useCallback,useEffect,useState} from 'react';
 import AuthGate from '@/components/auth-gate';
+import SupportOperations from '@/components/support-operations';
 import {api} from '@/lib/api';
 import {AlertTriangle,ShieldCheck,RefreshCcw,WifiOff,BellRing,Clock3} from 'lucide-react';
 
@@ -57,6 +58,7 @@ function Inner({token}:{token:()=>Promise<string>}){
       </p>)}
    </article>)}
   </div>
-  <p className="muted">Uyarı sıfır görünse bile pilot öncesi gerçek SMS/push ve bağımsız yedek kanal testleri gereklidir. Tam yönetici işlemleri ayrıca geliştirilecektir.</p>
+  <SupportOperations token={token}/>
+  <p className="muted">Uyarı sıfır görünse bile pilot öncesi gerçek SMS/push ve bağımsız yedek kanal testleri gereklidir. Destek talebi durumları müşterinin Siparişlerim ekranında görülebilir; otomatik müşteri mesajı veya para iadesi yapılmaz.</p>
  </section>;
 }

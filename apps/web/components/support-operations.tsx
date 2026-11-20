@@ -1,0 +1,97 @@
+'use client';
+import {useState} from 'react';
+import {api} from '@/lib/api';
+import {AlertCircle,CheckCircle2,ClipboardList,RefreshCw} from 'lucide-react';
+
+type Status='acik'|'incelemede'|'cozuldu'|'kapandi';
+type CaseSummary={
+ id:string;order_id:string;issue_type:string;status:Status;
+ restaurant_name:string;created_at:string;updated_at:string
+};
+type CaseDetail=CaseSummary&{description:string};
+const statusText:Record<Status,string>={
+ acik:'Açık',incelemede:'İnceleniyor',cozuldu:'Çözüldü',kapandi:'Kapandı'
+};
+const issueText:Record<string,string>={
+ eksik_urun:'Eksik ürün',yanlis_urun:'Yanlış ürün',gecikme:'Gecikme',teslimat:'Teslimat',diger:'Diğer'
+};
+const actions:Record<Status,readonly Status[]>={
+ acik:['incelemede','cozuldu'],incelemede:['cozuldu'],
+ cozuldu:['incelemede','kapandi'],kapandi:[]
+};
+export default function SupportOperations({token}:{token:()=>Promise<string>}){
+ const [filter,setFilter]=useState<Status|'all'>('acik');
+ const [cases,setCases]=useState<CaseSummary[]>([]);
+ const [loaded,setLoaded]=useState(false);
+ const [loading,setLoading]=useState(false);
+ const [busy,setBusy]=useState(false);
+ const [expanded,setExpanded]=useState<string|null>(null);
+ const [detail,setDetail]=useState<CaseDetail|null>(null);
+ const [error,setError]=useState('');
+ const [success,setSuccess]=useState('');
+
+ async function reload(status:Status|'all'=filter){
+  setLoading(true);setError('');
+  try{
+   const access=await token();
+   const suffix=status==='all'?'':'?status='+encodeURIComponent(status);
+   const result=await api<{cases:CaseSummary[]}>(`/v1/admin/support-cases${suffix}`,access);
+   setCases(result.cases);setLoaded(true);setExpanded(null);setDetail(null);
+  }catch(e){setError(e instanceof Error?e.message:'Destek talepleri yüklenemedi.')}
+  finally{setLoading(false)}
+ }
+ async function toggle(record:CaseSummary){
+  if(expanded===record.id){setExpanded(null);setDetail(null);return}
+  setBusy(true);setError('');setExpanded(null);setDetail(null);
+  try{
+   const response=await api<{case:CaseDetail}>(`/v1/admin/support-cases/${record.id}`,await token());
+   setDetail(response.case);setExpanded(record.id);
+  }catch(e){setError(e instanceof Error?e.message:'Talep açıklaması alınamadı.')}
+  finally{setBusy(false)}
+ }
+ async function move(record:CaseSummary,to:Status){
+  if(busy)return;
+  if(to==='kapandi'&&!window.confirm('Bu destek talebi kapatılsın mı?'))return;
+  setBusy(true);setError('');setSuccess('');
+  try{
+   await api(`/v1/admin/support-cases/${record.id}/status`,await token(),{
+    method:'POST',body:JSON.stringify({expectedStatus:record.status,to})
+   });
+   setSuccess('Talep durumu güncellendi. Değişiklik denetim kayıtlarına işlendi.');
+   await reload();
+  }catch(e){setError(e instanceof Error?e.message:'Durum güncellenemedi. Listeyi yenileyin.')}
+  finally{setBusy(false)}
+ }
+ return <section className="panel support-console" aria-label="Müşteri destek talebi yönetimi">
+  <div className="support-console-head"><div>
+   <h2><ClipboardList size={22}/> Müşteri destek talepleri</h2>
+   <p className="muted">Açıklamalar yalnızca yetkili yönetici talebi açınca getirilir. Adres veya telefon burada gösterilmez.</p>
+  </div><div className="support-console-filters">
+   <label>Durum <select value={filter} onChange={event=>{setFilter(event.target.value as Status|'all');setLoaded(false);setCases([]);setExpanded(null);setDetail(null)}}>
+    <option value="acik">Açık</option><option value="incelemede">İnceleniyor</option>
+    <option value="cozuldu">Çözüldü</option><option value="kapandi">Kapandı</option>
+    <option value="all">Tümü</option></select></label>
+   <button className="btn outline" disabled={loading||busy} onClick={()=>void reload()}>
+    <RefreshCw size={17}/>{loading?'Yükleniyor…':'Talepleri getir'}</button>
+  </div></div>
+  {error&&<p className="notice error" role="alert"><AlertCircle size={17}/> {error}</p>}
+  {success&&<p className="notice" role="status"><CheckCircle2 size={17}/> {success}</p>}
+  {!loaded&&!loading&&<p className="muted">Güncel destek taleplerini görmek için “Talepleri getir” düğmesini kullanın.</p>}
+  {loaded&&cases.length===0&&<p className="muted">Bu durumda destek talebi bulunmuyor.</p>}
+  {loaded&&<div className="support-case-list">{cases.map(record=><article className="support-case" key={record.id}>
+   <div className="support-case-top"><div>
+    <h3>{issueText[record.issue_type]||'Destek talebi'} · {record.restaurant_name}</h3>
+    <p className="muted">Sipariş #{record.order_id.slice(0,8)} · {new Date(record.created_at).toLocaleString('tr-TR')}</p>
+   </div><strong className="support-status">{statusText[record.status]}</strong></div>
+   <div className="support-case-controls"><button className="btn outline" disabled={busy||loading}
+    aria-expanded={expanded===record.id} onClick={()=>void toggle(record)}>
+    {expanded===record.id?'Açıklamayı gizle':'Açıklamayı görüntüle'}</button>
+    {actions[record.status].map(next=><button className="btn outline" disabled={busy||loading}
+     onClick={()=>void move(record,next)} key={next}>{next==='kapandi'?'Talebi kapat':statusText[next]+' yap'}</button>)}
+   </div>
+   {expanded===record.id&&detail&&<div className="support-case-detail"><strong>Müşterinin açıklaması</strong>
+    <p>{detail.description}</p><small className="muted">Son güncelleme: {new Date(detail.updated_at).toLocaleString('tr-TR')}</small>
+   </div>}
+  </article>)}</div>}
+ </section>;
+}

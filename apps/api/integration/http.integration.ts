@@ -202,6 +202,53 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal(ownOrder.body.items[0].product_id,pid);
  assert.ok(ownOrder.body.items[0].options_snapshot.some((o:{id:string})=>o.id===extra));
  assert.equal((await request('/v1/me/orders/'+orderId,{token:stranger})).status,404);
+ // Support access is owner-scoped and operators cannot change terminal cases
+ // or overwrite another operator's state without matching expectedStatus.
+ const supportCreate=await request('/v1/me/support-cases',{method:'POST',token:customer,
+  body:{orderId,issueType:'gecikme',description:'Siparişimle ilgili yardım gerekiyor.'}});
+ assert.equal(supportCreate.status,201,JSON.stringify(supportCreate.body));
+ const caseId=supportCreate.body.caseId as string;
+ assert.equal((await request('/v1/me/support-cases',{token:stranger})).body.cases.some((c:{id:string})=>c.id===caseId),false);
+ assert.equal((await request('/v1/me/support-cases',{token:customer})).body.cases.some((c:{id:string})=>c.id===caseId),true);
+ assert.equal((await request('/v1/me/support-cases',{method:'POST',token:stranger,
+  body:{orderId,issueType:'diger',description:'Başkasının siparişi'}})).status,404);
+ assert.equal((await request('/v1/admin/support-cases',{token:customer})).status,403);
+ assert.equal((await request('/v1/admin/support-cases',{token:oldAdministrator})).status,403);
+ const caseList=await request('/v1/admin/support-cases?status=acik',{token:administrator});
+ assert.equal(caseList.status,200);
+ assert.ok(caseList.body.cases.some((c:{id:string})=>c.id===caseId));
+ assert.equal(caseList.body.cases.find((c:{id:string})=>c.id===caseId).description,undefined,
+  'admin list must never return free-text customer details');
+ const caseDetail=await request('/v1/admin/support-cases/'+caseId,{token:administrator});
+ assert.equal(caseDetail.status,200);
+ assert.match(caseDetail.body.case.description,/Siparişimle/);
+ assert.equal((await request('/v1/admin/support-cases?status=not-a-status',{token:administrator})).status,400);
+ const supportPath='/v1/admin/support-cases/'+caseId+'/status';
+ const invalidMove=await request(supportPath,{method:'POST',token:administrator,
+  body:{expectedStatus:'acik',to:'kapandi'}});
+ assert.equal(invalidMove.status,409);
+ assert.equal((await request(supportPath,{method:'POST',token:customer,
+  body:{expectedStatus:'acik',to:'incelemede'}})).status,403);
+ const acceptedCase=await request(supportPath,{method:'POST',token:administrator,
+  body:{expectedStatus:'acik',to:'incelemede'}});
+ assert.equal(acceptedCase.status,200,JSON.stringify(acceptedCase.body));
+ assert.equal((await request(supportPath,{method:'POST',token:administrator,
+  body:{expectedStatus:'acik',to:'cozuldu'}})).status,409,
+  'stale concurrent support edits must be rejected');
+ const resolvedCase=await request(supportPath,{method:'POST',token:administrator,
+  body:{expectedStatus:'incelemede',to:'cozuldu'}});
+ assert.equal(resolvedCase.status,200);
+ assert.equal((await request(supportPath,{method:'POST',token:administrator,
+  body:{expectedStatus:'cozuldu',to:'kapandi'}})).status,200);
+ assert.equal((await request(supportPath,{method:'POST',token:administrator,
+  body:{expectedStatus:'kapandi',to:'incelemede'}})).status,409);
+ const customerCases=await request('/v1/me/support-cases',{token:customer});
+ assert.equal(customerCases.body.cases.find((c:{id:string})=>c.id===caseId).status,'kapandi');
+ const history=await pool.query("SELECT details FROM audit_logs WHERE action='support_case_status' AND target_id=$1 ORDER BY id",[caseId]);
+ assert.equal(history.rowCount,3);
+ assert.deepEqual(history.rows.map(r=>r.details),[
+  {from:'acik',to:'incelemede'},{from:'incelemede',to:'cozuldu'},{from:'cozuldu',to:'kapandi'}]);
+
  assert.equal((await request('/v1/restaurant/'+rid+'/inbox',{token:noMfa})).status,403);
  assert.equal((await request('/v1/restaurant/'+rid+'/inbox',{token:customer})).status,403);
  const inbox=await request('/v1/restaurant/'+rid+'/inbox',{token:owner});

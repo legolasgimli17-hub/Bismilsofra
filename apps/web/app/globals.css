@@ -333,3 +333,29 @@ body{background:#fbfaf7;color:#263129}
 .live-category-icon{display:flex;align-items:center;justify-content:center;height:100px;width:100%;border-radius:12px;background:linear-gradient(135deg,#e1f0e7,#f3f8ee);color:#19754f}
 .live-category-gallery .category-photo-card>span:last-child{overflow-wrap:anywhere}
 @media(max-width:720px){.live-category-gallery .category-photo-card{flex-basis:110px;min-height:120px}.live-category-icon{height:74px}}
+
+/* v2.3: MFA-only support triage and customer status overview */
+.support-console{margin-top:32px}
+.support-console-head{display:flex;justify-content:space-between;align-items:start;gap:18px;margin-bottom:18px}
+.support-console-head h2{display:flex;align-items:center;gap:8px;margin:0 0 7px;font-size:21px}
+.support-console-head p{margin:0;max-width:65ch;line-height:1.6}
+.support-console-filters{display:flex;gap:10px;align-items:end;flex-shrink:0}
+.support-console-filters label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700}
+.support-console-filters select{min-height:43px;border:1px solid #dce5df;border-radius:10px;padding:8px 12px;background:white}
+.support-case-list{display:grid;gap:12px}
+.support-case{border:1px solid #dce7dc;border-radius:13px;padding:16px;background:#fdfefd}
+.support-case-top,.support-case-controls{display:flex;align-items:start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.support-case h3{font-size:15px;margin:0 0 5px;overflow-wrap:anywhere}
+.support-case p{margin:3px 0;line-height:1.6}
+.support-status{color:#1a5e42;background:#e7f4ea;padding:7px 10px;border-radius:10px;font-size:12px;white-space:nowrap}
+.support-case-controls{justify-content:flex-start;margin-top:12px}
+.support-case-controls .btn{min-height:42px}
+.support-case-detail{background:#f5faf5;border-radius:10px;padding:13px;margin-top:13px;overflow-wrap:anywhere}
+.support-case-detail p{white-space:pre-wrap}
+.customer-support{margin-top:34px}
+.customer-support-list{display:grid;gap:9px}
+.customer-support-row{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid #e4ece4;border-radius:10px;padding:12px}
+.customer-support-row div{display:grid;gap:4px}
+.customer-support-row a{font-weight:750;text-decoration:underline}
+.customer-support-row small{color:#64746b}
+@media(max-width:690px){.support-console-head{flex-direction:column;align-items:stretch}.support-console-filters{flex-wrap:wrap}.support-console-filters>*{flex:1}.support-case-controls .btn{font-size:12px}}

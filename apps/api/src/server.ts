@@ -1,6 +1,7 @@
 /** API foundation for Bismil Sofra. Not exposed to the internet until provider, DB and integration tests are configured. */
 import Fastify from 'fastify';
 import {Pool} from 'pg';
+import {isSupportStatus,parseSupportUpdate} from './support-service.ts';
 import {RequestLimiter,trustedProxyCidrs} from './rate-limit.ts';
 import {DomainError,invalid,uuid,STATUSES,type Status,cleanNote} from './domain.ts';
 import {verifyBearer,provisionVerifiedUser,requireMfa,requireStaff,requireAdmin} from './auth.ts';
@@ -537,6 +538,49 @@ app.get('/v1/me/support-cases',async(req)=>{
  const result=await pool.query(`SELECT id,order_id,issue_type,status,created_at,updated_at
   FROM support_cases WHERE customer_id=$1 ORDER BY created_at DESC LIMIT 100`,[userId]);
  return {cases:result.rows};
+});
+// Case list exposes only metadata. Details are fetched separately by an admin
+// who has passed the recent-MFA check; no address/phone is returned.
+app.get('/v1/admin/support-cases',async(req)=>{
+ await admin(req);
+ const q=req.query as Record<string,unknown>;
+ if(q.status!==undefined&&!isSupportStatus(q.status))
+  invalid('SUPPORT_STATUS_INVALID','Destek durum filtresi geçersiz.');
+ const status=typeof q.status==='string'?q.status:null;
+ const result=await pool.query(`SELECT s.id,s.order_id,s.issue_type,s.status,
+  s.created_at,s.updated_at,r.name AS restaurant_name
+  FROM support_cases s
+  JOIN orders o ON o.id=s.order_id
+  JOIN restaurants r ON r.id=o.restaurant_id
+  WHERE ($1::text IS NULL OR s.status=$1)
+  ORDER BY s.updated_at DESC,s.id DESC LIMIT 100`,[status]);
+ return {cases:result.rows};
+});
+app.get('/v1/admin/support-cases/:id',async(req)=>{
+ await admin(req);const id=idParam(req,'id');
+ const result=await pool.query(`SELECT s.id,s.order_id,s.issue_type,s.description,
+  s.status,s.created_at,s.updated_at,r.name AS restaurant_name
+  FROM support_cases s
+  JOIN orders o ON o.id=s.order_id
+  JOIN restaurants r ON r.id=o.restaurant_id WHERE s.id=$1`,[id]);
+ if(!result.rowCount)invalid('NOT_FOUND','Destek talebi bulunamadı.',404);
+ return {case:result.rows[0]};
+});
+app.post('/v1/admin/support-cases/:id/status',async(req)=>{
+ const {userId}=await admin(req),id=idParam(req,'id');
+ const change=parseSupportUpdate(req.body);
+ return transaction(pool,async db=>{
+  const result=await db.query(`UPDATE support_cases
+   SET status=$3,updated_at=now() WHERE id=$1 AND status=$2
+   RETURNING id,order_id,issue_type,status,created_at,updated_at`,
+   [id,change.from,change.to]);
+  if(!result.rowCount)
+   invalid('SUPPORT_STALE','Talep değiştirildi veya bulunamadı. Listeyi yenileyin.',409);
+  // Append-only audit without customer description, contact or address.
+  await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',
+   [userId,'support_case_status','support_case',id,JSON.stringify({from:change.from,to:change.to})]);
+  return {case:result.rows[0]};
+ });
 });
 // Read-only operational warnings. Does not expose address/phone details.
 app.get('/v1/admin/alerts',async(req)=>{
