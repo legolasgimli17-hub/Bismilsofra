@@ -48,3 +48,13 @@ test('account and personnel mutations have independent bounded budget',()=>{
  assert.equal(guard.check('127.0.0.1','POST','/v1/admin/users/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/access',100).allowed,false);
  assert.equal(guard.check('127.0.0.1','POST','/v1/me/addresses',100).allowed,true);
 });
+
+test('draft menu imports have independent strict write rate limit',()=>{
+ const limiter=new RequestLimiter();
+ const route='/v1/admin/restaurants/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/menu-import';
+ for(let i=0;i<12;i++)assert.equal(limiter.check('127.0.0.1','POST',route,100).allowed,true);
+ const denied=limiter.check('127.0.0.1','POST',route,100);
+ assert.equal(denied.allowed,false);
+ assert.equal(denied.bucket,'import');
+ assert.equal(limiter.check('127.0.0.1','POST','/v1/me/addresses',100).allowed,true);
+});

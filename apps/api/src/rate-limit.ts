@@ -1,7 +1,7 @@
 /** Bounded in-process safety net. Production replicas also need edge/shared limits. */
 import {isIP} from 'node:net';
 export const WINDOW_MS=60_000;
-export type RateBucket='read'|'write'|'quote'|'order'|'upload'|'management';
+export type RateBucket='read'|'write'|'quote'|'order'|'upload'|'management'|'import';
 export type RateDecision={allowed:boolean;retryAfter:number;bucket:RateBucket|null};
 function rateGroup(method:string,url:string):{bucket:RateBucket;limit:number}|null{
  if(method==='OPTIONS')return null;
@@ -16,6 +16,8 @@ function rateGroup(method:string,url:string):{bucket:RateBucket;limit:number}|nu
    (/^\/v1\/admin\/users\/[^/]+\/access$/.test(path)||
     /^\/v1\/restaurant\/[^/]+\/team(?:\/[^/]+(?:\/remove)?)?$/.test(path)))
   return {bucket:'management',limit:40};
+ if(method==='POST'&&/^\/v1\/admin\/restaurants\/[^/]+\/menu-import$/.test(path))
+  return {bucket:'import',limit:12};
  if(method==='GET'||method==='HEAD')return {bucket:'read',limit:300};
  return {bucket:'write',limit:80};
 }

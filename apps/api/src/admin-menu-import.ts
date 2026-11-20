@@ -19,7 +19,7 @@ export function parseMenuImport(body:unknown):MenuImportInput{
  if(!Array.isArray(b.rows)||b.rows.length===0||b.rows.length>50)
   invalid('MENU_IMPORT_LIMIT','Tek işlemde 1–50 ürün bulunmalı.');
  const seen=new Set<string>();
- const rows:ImportRow[]=b.rows.map((value:unknown)=>{
+ const rows:ImportRow[]=(b.rows as unknown[]).map((value:unknown)=>{
   if(!value||typeof value!=='object'||Array.isArray(value))
    invalid('MENU_IMPORT_INVALID','Ürün satırı geçersiz.');
   const row=value as Record<string,unknown>;
