@@ -186,3 +186,4 @@ export default function PilotOnboarding({token}:{token:()=>Promise<string>}){
    </div>
   </>}
  </section>;
+}
