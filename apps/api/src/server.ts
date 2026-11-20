@@ -25,7 +25,7 @@ const origin=process.env.CORS_ORIGIN;
 if(!origin||origin==='*')throw new Error('CORS_ORIGIN tek bir güvenilir domain olmalı');
 const port=Number(process.env.PORT||4000);
 const pool=new Pool({connectionString:process.env.DATABASE_URL,max:12,connectionTimeoutMillis:5000,statement_timeout:8000});
-const events=new OrderEventBroker(process.env.DATABASE_URL);
+const events=new OrderEventBroker(process.env.ORDER_EVENTS_LISTEN_DATABASE_URL||process.env.DATABASE_URL);
 const app=Fastify({logger:{level:process.env.NODE_ENV==='production'?'info':'warn',redact:['req.headers.authorization','req.body.phone','req.body.fullAddress','req.body.address','res.headers.set-cookie']},bodyLimit:65536,trustProxy:trustedProxyCidrs(process.env.TRUSTED_PROXY_CIDRS),requestTimeout:15000});
 app.addContentTypeParser('application/octet-stream',{parseAs:'buffer',bodyLimit:MAX_PHOTO_UPLOAD_BYTES},
  (_request,body,done)=>done(null,body));

@@ -152,3 +152,7 @@ Restoran sahibinin **Ekip ve yetkiler** ekranında çalışan ve yöneticiler, k
 
 ## Pilot: sipariş ve restoran performans raporları
 Admin ve restoran sahibi/yöneticisi, 7/30 günlük yerel tarih sipariş trendi, kabul süresi, red/iptal, süre aşımı, teslim ve dönem içi tekrar sipariş veren müşteri sayılarını görebilir. Raporlar sunucuda agregadır, müşteri PII'si içermiyor; kapıda ödeme **restoranın tahsil ettiği para kanıtı değildir**. [Rapor metrik tanımları](docs/PILOT_REPORTS.md).
+
+## Pilot — Şartname 10: anlık sipariş ve tekrarlayan alarm
+
+Sipariş statü hareketlerinin append-only veritabanı kaydından sonra transactional `NOTIFY` çıkar. Restoran ve müşteri yalnızca imzalı JWT ile açılmış kısa süreli SSE sinyalini alır; verinin kendisini yine yetkili HTTP servisten sorgular. İşletme kabul bekleyen siparişte, sesi **bilinçli olarak açtıysa**, sekme görünürken uyarıyı tekrarlatır. 7 saniyelik HTTP eşitleme güvenli yedektir. [Mimari, mobil kısıtlar ve üretim sınırları](docs/REALTIME_SSE_PILOT.md).
