@@ -60,3 +60,9 @@ Auth0 MFA Action referansı: https://support.auth0.com/center/s/article/using-ac
 Auth0 özel claim referansı: https://support.auth0.com/center/s/article/adding-custom-claims-to-tokens
 
 Bu belge bir sağlayıcı kurulum rehberidir; tenant kurulumu veya üretimde kimlik doğrulama tamamlandığı anlamına gelmez.
+
+## v2.2 çok faktör doğrulama ayrımı
+
+OIDC `amr` içinde yalnızca `otp`, `totp`, `webauthn` veya `hwk` olması, ikinci bir faktörün gerçekten tamamlandığını **kanıtlamaz**. API, bu tekil yöntemleri restoran veya yönetici MFA'sı olarak kabul etmez.
+
+API'nin tanıdığı `amr: ["mfa"]` işareti veya aynı güven seviyesindeki adlandırılmış imzalı `OIDC_MFA_CLAIM`, gerçek Post-Login Action tarafından **tamamlanmış MFA olayından sonra** üretilmelidir. Gerçek Auth0 tenant bağlantısı yapılmadan ve güçlü/kırık oturum testleri geçmeden yetkilendirme canlı kabul edilmemelidir.
