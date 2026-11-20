@@ -62,7 +62,8 @@ export default function AdminOrderInvestigation({token}:{token:()=>Promise<strin
   <form onSubmit={e=>void search(e)} className="admin-order-search">
    <label>Sipariş numarası<input type="text" required value={key} autoComplete="off" spellCheck={false}
     maxLength={36} placeholder="Örn. 1A2B3C4D" onChange={e=>{
-     setKey(e.target.value);setRecords([]);setDetail(null);setSearched(false);sequence.current++;
+     setKey(e.target.value);setRecords([]);setDetail(null);setSearched(false);
+     setBusy(false);setLoadingId('');sequence.current++;
     }}/></label>
    <button type="submit" className="btn primary" disabled={busy||Boolean(loadingId)||!key.trim()}>
     <Search size={17}/>{busy?'Aranıyor…':'Siparişi ara'}</button>
