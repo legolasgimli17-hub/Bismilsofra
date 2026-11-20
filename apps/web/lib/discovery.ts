@@ -8,13 +8,18 @@ export function normalizeSearch(value:string){return tr(value.trim()).replace(/\
 export function isRestaurantOrderable(r:Restaurant):boolean{
  return r.is_open && !r.is_busy && r.accepts_orders && r.is_orderable !== false;
 }
-export function visibleRestaurants<T extends Restaurant>(restaurants:readonly T[],filter:DiscoveryFilter,categoryOf:(r:T)=>string):T[]{
+/**
+ * When an API already filtered by its own product-name/search index, do not
+ * apply an incomplete client-side restaurant-name filter again.
+ * The demo, which has no server, still uses client-side search.
+ */
+export function visibleRestaurants<T extends Restaurant>(restaurants:readonly T[],filter:DiscoveryFilter,categoryOf:(r:T)=>string,serverFiltered=false):T[]{
  const q=normalizeSearch(filter.search);const favoriteSet=new Set(filter.favorites);
  return restaurants.filter(r=>{
   if(filter.onlyOpen&&!(isRestaurantOrderable(r)))return false;
   if(filter.favoritesOnly&&!favoriteSet.has(r.id))return false;
   if(filter.category!=='Tümü'&&categoryOf(r)!==filter.category)return false;
-  return !q||normalizeSearch(r.name).includes(q)||normalizeSearch(categoryOf(r)).includes(q);
+  return serverFiltered||!q||normalizeSearch(r.name).includes(q)||normalizeSearch(categoryOf(r)).includes(q);
  }).sort((a,b)=>{
   const openA=Number(isRestaurantOrderable(a)),openB=Number(isRestaurantOrderable(b));
   if(filter.sort==='recommended'){if(openB!==openA)return openB-openA;return a.name.localeCompare(b.name,'tr-TR')}

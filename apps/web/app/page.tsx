@@ -25,7 +25,7 @@ export default function Home(){
   },query?250:0);return()=>{alive=false;clearTimeout(handle)};
  },[zone,demo,query,category]);
  const records:Restaurant[]=demo?(zone?DEMO_RESTAURANTS.filter(r=>r.zones.includes(zone)):DEMO_RESTAURANTS):restaurants;
- const filtered=useMemo(()=>visibleRestaurants(records,{search:query,category:demo?category:'Tümü',onlyOpen,favoritesOnly,favorites,sort},catOf),[records,query,category,onlyOpen,favoritesOnly,favorites,sort,demo]);
+ const filtered=useMemo(()=>visibleRestaurants(records,{search:query,category:demo?category:'Tümü',onlyOpen,favoritesOnly,favorites,sort},catOf,!demo),[records,query,category,onlyOpen,favoritesOnly,favorites,sort,demo]);
  const clear=()=>{setQuery('');setCategory('Tümü');setOnlyOpen(false);setFavoritesOnly(false);setSort('recommended')};
  const toggleFavorite=(id:string)=>setFavorites(current=>{const next=current.includes(id)?current.filter(x=>x!==id):safeFavorites([...current,id]);try{localStorage.setItem(FAV_KEY,JSON.stringify(next))}catch{}return next});
  return <>
