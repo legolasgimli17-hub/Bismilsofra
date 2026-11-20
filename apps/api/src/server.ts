@@ -75,7 +75,7 @@ app.get('/v1/restaurants/:id/menu',async(req)=>{
  if(!rest.rowCount)invalid('NOT_FOUND','Restoran bulunamadı.',404);
  const ps=await pool.query('SELECT id,category_id,name,description,price_kurus,image_url,available FROM products WHERE restaurant_id=$1 ORDER BY sort_order,name LIMIT 500',[id]);
  const ids=ps.rows.map(p=>p.id);
- const gs=ids.length?await pool.query('SELECT id,product_id,name,min_select,max_select FROM option_groups WHERE product_id=ANY($1::uuid[])',[ids]):{rows:[]};
+ const gs=ids.length?await pool.query('SELECT id,product_id,name,min_select,max_select FROM option_groups WHERE product_id=ANY($1::uuid[]) AND archived=false',[ids]):{rows:[]};
  const gids=gs.rows.map(g=>g.id);
  const os=gids.length?await pool.query('SELECT id,group_id,name,price_kurus,available FROM options WHERE group_id=ANY($1::uuid[])',[gids]):{rows:[]};
  return {restaurant:rest.rows[0],products:ps.rows.map(p=>({...p,optionGroups:gs.rows.filter(g=>g.product_id===p.id).map(g=>({...g,options:os.rows.filter(o=>o.group_id===g.id)}))}))};
