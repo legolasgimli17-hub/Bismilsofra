@@ -17,6 +17,8 @@ export async function openOrderStream(
  allowedOrigin:string
 ){
  if(!broker.ready)invalid('REALTIME_UNAVAILABLE','Canlı akışa bağlanılamadı; sayfa yenileme devrede olmalı.',503);
+ if(!broker.canSubscribe(kind,subjectId,memberId))
+  invalid('STREAM_LIMIT','Çok fazla açık canlı bağlantı var. HTTP yenileme kullanılmalı.',503);
  // Nothing (including even an empty SSE stream) can be emitted before the
  // caller has verified the signed JWT and owner-scoped order/staff membership.
  reply.hijack();
@@ -71,7 +73,7 @@ export async function openOrderStream(
    finally{checking=false}
   })();
  };
- dispose=broker.subscribe(kind,subjectId,changed);
+ dispose=broker.subscribe(kind,subjectId,changed,memberId);
  timer=setInterval(()=>{send(': heartbeat\n\n')},STREAM_HEARTBEAT_MS);
  ttl=setTimeout(()=>{close();res.end()},STREAM_TTL_MS);
  timer.unref();ttl.unref();

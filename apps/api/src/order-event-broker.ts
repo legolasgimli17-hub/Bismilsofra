@@ -5,7 +5,9 @@
 import {Client,type Notification} from 'pg';
 import {uuid} from './domain.ts';
 export type OrderSignal={restaurantId:string;customerId:string};
-type Subscriber={kind:'restaurant'|'customer';id:string;changed:()=>void};
+type Subscriber={kind:'restaurant'|'customer';id:string;memberId:string;changed:()=>void};
+export const MAX_OPEN_STREAMS=300;
+export const MAX_STREAMS_PER_MEMBER=3;
 export const SIGNAL_CHANNEL='bismil_order_events';
 
 export function parseOrderSignal(value:string):OrderSignal|null{
@@ -28,9 +30,16 @@ export class OrderEventBroker{
  constructor(connectionString:string){this.connectionString=connectionString}
  get ready(){return this.connected}
  get subscribersCount(){return this.subscribers.size}
- subscribe(kind:Subscriber['kind'],id:string,changed:()=>void):()=>void{
-  if(!uuid(id))throw Error('Invalid realtime subscriber scope');
-  const entry:Subscriber={kind,id,changed};
+ canSubscribe(kind:Subscriber['kind'],id:string,memberId:string):boolean{
+  if(!uuid(id)||!uuid(memberId)||this.subscribers.size>=MAX_OPEN_STREAMS)return false;
+  let sameMember=0;
+  for(const s of this.subscribers)
+   if(s.kind===kind&&s.id===id&&s.memberId===memberId)sameMember++;
+  return sameMember<MAX_STREAMS_PER_MEMBER;
+ }
+ subscribe(kind:Subscriber['kind'],id:string,changed:()=>void,memberId=id):()=>void{
+  if(!this.canSubscribe(kind,id,memberId))throw Error('realtime subscriber capacity exceeded');
+  const entry:Subscriber={kind,id,memberId,changed};
   this.subscribers.add(entry);
   return ()=>{this.subscribers.delete(entry)};
  }

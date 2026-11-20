@@ -36,3 +36,15 @@ test('broken handler does not stop other matching listeners',async()=>{
  assert.equal(seen,1);
  await broker.stop();
 });
+
+test('live stream limits prevent unbounded mobile reconnects',async()=>{
+ const broker=new OrderEventBroker('postgres://invalid-not-connected');
+ const stops:Array<()=>void>=[];
+ for(let i=0;i<3;i++)stops.push(broker.subscribe('restaurant',a,()=>{},b));
+ assert.equal(broker.canSubscribe('restaurant',a,b),false);
+ assert.throws(()=>broker.subscribe('restaurant',a,()=>{},b),/capacity/);
+ assert.equal(broker.canSubscribe('restaurant',a,c),true,'separate staff member is allowed');
+ stops[0]();
+ assert.equal(broker.canSubscribe('restaurant',a,b),true);
+ await broker.stop();
+});
