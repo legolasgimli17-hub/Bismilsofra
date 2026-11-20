@@ -40,7 +40,7 @@ export async function placeOrder(pool:Pool,subjectUserId:string,body:unknown,key
   const productIds=[...new Set(request.items.map(i=>i.productId))];
   const pr=await db.query('SELECT id,name,price_kurus,available FROM products WHERE restaurant_id=$1 AND id=ANY($2::uuid[]) FOR SHARE',[request.restaurantId,productIds]);
   if(pr.rows.length!==productIds.length)invalid('PRODUCT_UNAVAILABLE','Sepetteki ürün restorana ait değil veya bulunamadı.',409);
-  const groups=await db.query('SELECT id,product_id,name,min_select,max_select FROM option_groups WHERE product_id=ANY($1::uuid[]) FOR SHARE',[productIds]);
+  const groups=await db.query('SELECT id,product_id,name,min_select,max_select FROM option_groups WHERE product_id=ANY($1::uuid[]) AND archived=false FOR SHARE',[productIds]);
   const groupIds=groups.rows.map(g=>g.id);
   const options=groupIds.length?(await db.query('SELECT id,group_id,name,price_kurus,available FROM options WHERE group_id=ANY($1::uuid[]) FOR SHARE',[groupIds])).rows:[];
   const products:CatalogProduct[]=pr.rows.map(p=>({id:p.id,name:p.name,priceKurus:p.price_kurus,available:p.available,optionGroups:groups.rows.filter(g=>g.product_id===p.id).map(g=>({id:g.id,name:g.name,minSelect:g.min_select,maxSelect:g.max_select,options:options.filter(o=>o.group_id===g.id).map(o=>({id:o.id,name:o.name,priceKurus:o.price_kurus,available:o.available}))}))}));
