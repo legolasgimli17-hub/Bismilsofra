@@ -2,6 +2,7 @@
 
 import {useEffect,useState} from 'react';
 import FoodImage from './food-image';
+import OptionEditor from './option-editor';
 import {api,uploadMerchantPhoto} from '@/lib/api';
 import {money} from '@/lib/types';
 import {inputToKurus,kurusToInput} from '@/lib/merchant-settings';
@@ -223,6 +224,8 @@ export default function MenuEditor({restaurantId,categories,products,token,onRef
      </button>
      <p className="muted">Yeni ürünler güvenlik için başlangıçta satışa kapalıdır. Düzenlemeler geçmiş siparişin fiyatını değiştirmez. Eşzamanlı düzenleme algılanırsa menüyü yenileyin.</p>
     </form>
+    {selected&&<OptionEditor key={selected.id} restaurantId={restaurantId} productId={selected.id}
+     productName={selected.name} token={token} canEdit={canEdit} disabled={disabled}/>}
    </div>
   </div>
  </section>;
