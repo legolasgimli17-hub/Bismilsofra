@@ -172,7 +172,11 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal(retry.status,200);
  assert.equal(retry.body.id,orderId);
  assert.equal((await request('/v1/me/orders/by-key/'+orderKey,{token:customer})).body.order.id,orderId);
- assert.equal((await request('/v1/me/orders/'+orderId,{token:customer})).status,200);
+ const ownOrder=await request('/v1/me/orders/'+orderId,{token:customer});
+ assert.equal(ownOrder.status,200);
+ // Reorder source is owner-scoped and exposes historical IDs, never another customer's basket.
+ assert.equal(ownOrder.body.items[0].product_id,pid);
+ assert.ok(ownOrder.body.items[0].options_snapshot.some((o:{id:string})=>o.id===extra));
  assert.equal((await request('/v1/me/orders/'+orderId,{token:stranger})).status,404);
  assert.equal((await request('/v1/restaurant/'+rid+'/inbox',{token:noMfa})).status,403);
  assert.equal((await request('/v1/restaurant/'+rid+'/inbox',{token:customer})).status,403);
@@ -397,6 +401,14 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  const afterArchive=await request('/v1/restaurants/'+rid+'/menu');
  assert.equal(afterArchive.body.products.find((p:{id:string})=>p.id===newProductId)
   .optionGroups.some((g:{id:string})=>g.id===gid),false);
+ // A hidden/archived mandatory group must not break checkout quotes.
+ const quoteAfterArchive=await request('/v1/orders/quote',{method:'POST',token:customer,
+  body:{...payload,items:[{productId:newProductId,quantity:1,optionIds:[]}]}});
+ assert.equal(quoteAfterArchive.status,200,JSON.stringify(quoteAfterArchive.body));
+ const archivedSelection=await request('/v1/orders/quote',{method:'POST',token:customer,
+  body:{...payload,items:[{productId:newProductId,quantity:1,optionIds:[sosId]}]}});
+ assert.equal(archivedSelection.status,409);
+ assert.equal(archivedSelection.body.code,'OPTION_FOREIGN');
  const restoredGroup=await request(groupPath,{method:'PATCH',token:owner,
   body:{name:'Ekstra Malzemeler',minSelect:1,maxSelect:1,archived:false,revision:3}});
  assert.equal(restoredGroup.status,200);

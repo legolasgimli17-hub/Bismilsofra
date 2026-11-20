@@ -1,7 +1,7 @@
 {
   "name": "bismil-sofra",
   "private": true,
-  "version": "0.9.0",
+  "version": "2.0.0-beta.1",
   "workspaces": [
     "apps/web",
     "apps/api"
@@ -13,10 +13,11 @@
     "test:api": "npm --workspace apps/api run test",
     "test:cart": "node --experimental-strip-types --test apps/web/lib/cart.test.ts",
     "test:product-options": "node --experimental-strip-types --test apps/web/lib/product-option-ui.test.ts",
+    "test:reorder": "node --experimental-strip-types --test apps/web/lib/reorder-preview.test.ts",
     "test:discovery": "node --experimental-strip-types --test apps/web/lib/discovery.test.ts",
     "test:inbox": "node --experimental-strip-types --test apps/web/lib/inbox-health.test.ts",
     "test:merchant": "node --experimental-strip-types --test apps/web/lib/merchant-workflow.test.ts",
-    "test:all": "npm run test:api && npm run test:cart && npm run test:discovery && npm run test:inbox && npm run test:merchant && npm run test:merchant-settings && npm run test:product-options",
+    "test:all": "npm run test:api && npm run test:cart && npm run test:discovery && npm run test:inbox && npm run test:merchant && npm run test:merchant-settings && npm run test:product-options && npm run test:reorder",
     "typecheck": "npm --workspace apps/api run typecheck && npm --workspace apps/web run typecheck",
     "test:merchant-settings": "node --experimental-strip-types --test apps/web/lib/merchant-settings.test.ts"
   }

@@ -137,7 +137,7 @@ export async function quoteOrder(pool:Pool,subjectUserId:string,body:unknown){
   const ids=[...new Set(request.items.map(x=>x.productId))];
   const pr=await db.query('SELECT id,name,price_kurus,available FROM products WHERE restaurant_id=$1 AND id=ANY($2::uuid[])',[request.restaurantId,ids]);
   if(pr.rows.length!==ids.length)invalid('PRODUCT_UNAVAILABLE','Ürün restorana ait değil.',409);
-  const gr=await db.query('SELECT id,product_id,name,min_select,max_select FROM option_groups WHERE product_id=ANY($1::uuid[])',[ids]);
+  const gr=await db.query('SELECT id,product_id,name,min_select,max_select FROM option_groups WHERE product_id=ANY($1::uuid[]) AND archived=false',[ids]);
   const groupIds=gr.rows.map(g=>g.id);
   const opts=groupIds.length?(await db.query('SELECT id,group_id,name,price_kurus,available FROM options WHERE group_id=ANY($1::uuid[])',[groupIds])).rows:[];
   const catalog:CatalogProduct[]=pr.rows.map(p=>({id:p.id,name:p.name,priceKurus:p.price_kurus,available:p.available,optionGroups:gr.rows.filter(g=>g.product_id===p.id).map(g=>({id:g.id,name:g.name,minSelect:g.min_select,maxSelect:g.max_select,options:opts.filter(o=>o.group_id===g.id).map(o=>({id:o.id,name:o.name,priceKurus:o.price_kurus,available:o.available}))}))}));
