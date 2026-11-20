@@ -22,7 +22,7 @@ Tarih: 20 Kasım 2026. Kaynak: 17.11.2026 tarihli `spec.md v0.1` ve `Bismil_Yeme
 | Gerçek zamanlı restoran uyarısı | **Bu PR:** REST üstüne kimliği doğrulanmış SSE olay sinyali, PostgreSQL transaction-sonrası NOTIFY, restoran/müşteri canlı yenileme, 11 sn tekrarlayan isteğe bağlı ses, 7 sn HTTP kurtarma | **İki gerçek bağımsız bildirim sağlayıcısı**, test edilmiş direkt/sabit PostgreSQL LISTEN oturumu, fiziksel cihaz ve uzun ağ kesintisi testleri |
 | Müşteri destek talepleri | Admin inceleme/kapama, müşteri durum takibi, audit mevcut | Destek çalışanı/iletişim kanalı ve anlaşmazlık süreci |
 | Mobil PWA | `manifest.webmanifest`, service worker, responsive düzen mevcut | Gerçek Android/iPhone kurulum, offline/error akışı ve 360px kullanılabilirlik kanıtı |
-| DevOps ve yasal | Checksum migration, otomatik test, rate limits, audit mevcut | HTTPS staging, otomatik yedek + **restore provası**, bağımsız güvenlik incelemesi, KVKK ve sözleşmeler |
+| DevOps ve yasal | Checksum migration, otomatik test, rate limits, audit; **bu PR:** geçici CI PostgreSQL verisinde mantıksal yedek alıp başka veritabanına restore etme ve sipariş/event/audit doğrulaması | **Canlı ortamda şifreli otomatik yedek, uzak saklama ve gerçek restore tatbikatı**, HTTPS staging, bağımsız güvenlik incelemesi, KVKK ve sözleşmeler |
 
 ## Şartnamedeki faz sıralaması: kalan öncelikler
 **Faz 2–3 — Geliştirme ortamında eksiksiz dikey akış:** Gerçek Auth0 konfigürasyonu ve 1 gerçek restoranın menü/mahalle/owner/checkout/teslimat denemesi; iki taraflı rol ve ağ hataları. Kod ve CI bu deneyimi hazırlıyor ama saha geçmedi.
