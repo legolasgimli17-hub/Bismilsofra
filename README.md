@@ -83,3 +83,11 @@ Yeni `/restaurant/manage` menü düzenleyicisi, işletme yetkisi/MFA doğrulanar
 Ürüne bağlanan harici görsel, aynı restoranın `restaurant_media` kaydında bulunmalıdır; salt URL göndermek yeterli değildir. İşletmenin kendi CDN alan adının yapılandırılması ve gerçek fotoğraf izinlerinin alınması gereklidir.
 
 [Fotoğraf yükleme rehberi](docs/PHOTO_UPLOAD_v1_7.md). Depolama hesabı, gerçek Auth0 ve cihaz testleri yapılmadan canlıya açılamaz.
+
+## v1.8 — Restoranın ürün seçeneklerini yönetmesi
+
+Yeni ürün seçenekleri panelinde restoranın kendi yemekleri için **sos, ekstra malzeme, içecek ve boyut** gibi grupları oluşturması, bunlara ilave fiyat eklemesi, minimum/maksimum seçim kuralı belirlemesi ve grupları pasife alıp tekrar açması mümkündür. Seçenek değişiklikleri `revision` alanlarıyla korunur; geçmiş siparişlere yazılmış fiyat ve ürün snapshots değişmez.
+
+- [Seçenek grupları kullanım/iş kuralları](docs/PRODUCT_OPTIONS_v1_8.md)
+- MFA + restoranın `can_manage_menu` yetkisi zorunlu; son sipariş toplamı yalnızca backend tarafından hesaplanır.
+- Üretime çıkmak için gerçek Auth0, S3/CDN, iki bağımsız bildirim kanalı ve 5 restoranın sahada test edilmesi hâlâ gereklidir.
