@@ -75,3 +75,13 @@
 Üretim için `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `MEDIA_PUBLIC_ORIGIN`, `PUBLIC_IMAGE_CDN_HOST` sunucu ortamında tanımlanmalı; web `NEXT_PUBLIC_IMAGE_CDN_HOST` aynı alan adına bakmalıdır. Yanlış/eksik yapılandırmada yükleme 503 ile güvenli şekilde durur.
 
 `006_restaurant_media.sql` migration'ı gereklidir. CDN fotoğrafı ürüne bağlanırken sahiplik kaydı REST API'de kontrol edilir. [Ayrıntılı güvenlik ve kurulum](../../docs/PHOTO_UPLOAD_v1_7.md).
+
+## v1.8 menü seçenekleri
+
+`GET /v1/restaurant/:rid/products/:pid/option-groups`: restorana bağlı tüm seçenek grupları/ekstralar.
+`POST /v1/restaurant/:rid/products/:pid/option-groups`: grup oluştur.
+`PATCH /v1/restaurant/:rid/products/:pid/option-groups/:gid`: seçim sınırı, ad, pasif/aktif, `revision`.
+`POST /v1/restaurant/:rid/products/:pid/option-groups/:gid/options`: ekstra ekle.
+`PATCH /v1/restaurant/:rid/products/:pid/option-groups/:gid/options/:oid`: ad, fiyat, satış durumu, `revision`.
+
+`007_product_options_editor.sql` migration'ı gereklidir. Zorunlu seçim sayısı satıştaki seçeneklerden büyük olamaz. İki personelin aynı veriyi değiştirmesi 409 ile reddedilir. [Detaylar](../../docs/PRODUCT_OPTIONS_v1_8.md).
