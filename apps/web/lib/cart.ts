@@ -53,3 +53,10 @@ export function readStoredCart(raw:string|null):Cart{
  }
  return {restaurantId:data.restaurantId as string,restaurantName:data.restaurantName as string,lines};
 }
+
+/** Existing localStorage (including an explicit empty basket) takes precedence.
+ * Older sessionStorage carts are migrated only if there is no new snapshot.
+ */
+export function restoreCartSnapshot(local:string|null,legacySession:string|null):Cart{
+ return readStoredCart(local===null?legacySession:local);
+}

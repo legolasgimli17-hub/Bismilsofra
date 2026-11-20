@@ -325,3 +325,11 @@ body{background:#fbfaf7;color:#263129}
 .reorder-feedback a{color:#0f6e48;text-decoration:underline;font-weight:750}
 .reorder-confirm{min-height:46px;max-width:100%;justify-content:center}
 @media(max-width:420px){.reorder-panel{padding:18px}.reorder-prepare,.reorder-confirm{width:100%}.reorder-feedback{padding:13px}}
+
+/* v2.2: live categories come from actual saleable products; never display
+   misleading stock photography as a real restaurant's category. */
+.live-category-gallery{display:flex;overflow-x:auto;scrollbar-width:thin;gap:12px;scroll-snap-type:x proximity;padding-bottom:12px}
+.live-category-gallery .category-photo-card{flex:0 0 126px;min-height:137px;scroll-snap-align:start}
+.live-category-icon{display:flex;align-items:center;justify-content:center;height:100px;width:100%;border-radius:12px;background:linear-gradient(135deg,#e1f0e7,#f3f8ee);color:#19754f}
+.live-category-gallery .category-photo-card>span:last-child{overflow-wrap:anywhere}
+@media(max-width:720px){.live-category-gallery .category-photo-card{flex-basis:110px;min-height:120px}.live-category-icon{height:74px}}

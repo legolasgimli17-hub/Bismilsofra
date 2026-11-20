@@ -1,4 +1,4 @@
-# Bismil Sofra — v2.1.0-beta.1 geliştirme aşaması
+# Bismil Sofra — v2.2.0-beta.1 geliştirme aşaması
 
 **Bismil'e özel, en fazla 50 aktif restoran için tasarlanan yemek sipariş PWA projesi.** Kaynak proje hâlâ geliştirme aşamasındadır; gerçek müşterilerden sipariş almaya hazır değildir.
 
@@ -111,3 +111,12 @@ Sipariş detayında **Güncel menüyle tekrar hazırla** eylemi: geçmiş ürün
 Canlı aramanın ürün adına göre eşleşen restoranları kaybetmesi düzeltildi; bozuk sepet verisi reddedilir, Auth0 kullanıcısı her okuma çağrısında gereksiz veritabanı UPDATE üretmez. API için sınıfa ayrılmış, sınırlı bellek kullanan istek kotası; açık güvenilen-proxy yapılandırması; gerçek HTTP ve regresyon testleri eklendi.
 
 [İlk v2.1 güvenlik/kalite adımı](docs/HARDENING_v2_1.md). Gerçek canlı Auth0, bağımsız ikincil bildirim, yedek/geri yükleme ve fiziksel restoran cihazı testi henüz tamamlanmadı.
+
+## v2.2 — Tutarlı sepet, dinamik kategoriler ve MFA kontrolleri
+
+- Sepet kapalı/yeni sekme ve yeniden yükleme durumlarında `localStorage` ile korunur; eski oturum sepeti bir kez taşınır. Bozuk veriler güvenli şekilde reddedilir, checkout ilk açılışta yanlışlıkla boş sepet göstermez.
+- Canlı kategori listesi aktif restoranların mevcut, satışta olan ürünlerinden gelir. Mahalleye göre filtrelenir ve kategori seçimi sunucu sonucuyla aynıdır. Örnek fotoğraflar yalnızca demo içindir.
+- JWT içindeki yalnızca `otp`, `totp`, `webauthn` gibi tek faktörlü işaretler restoran MFA koşulunu karşılamaz; doğrulanmış `mfa` işareti veya Auth0 Action'ın imzalı eşdeğer claim'i gerekir.
+- Daha fazla bilgi: [v2.2 UX & MFA inceleme notları](docs/CART_AND_CATEGORIES_v2_2.md).
+
+Bu kod sürümü, gerçek sağlayıcı ve saha testlerinin tamamlandığı anlamına gelmez.
