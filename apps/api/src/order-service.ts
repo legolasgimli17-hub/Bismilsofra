@@ -18,7 +18,7 @@ export async function placeOrder(pool:Pool,subjectUserId:string,body:unknown,key
    if(existing.rows[0].payload_hash!==hash)invalid('IDEMPOTENCY_CONFLICT','Bu işlem anahtarı farklı bir sepetle zaten kullanılmış.',409);
    return {id:existing.rows[0].id,replayed:true};
   }
-  const addr=await db.query('SELECT a.id,a.zone_id,a.full_address,a.directions,a.phone,a.label,z.enabled AS zone_enabled,z.name AS zone_name FROM addresses a JOIN delivery_zones z ON z.id=a.zone_id WHERE a.id=$1 AND a.user_id=$2 FOR SHARE OF a,z',[request.addressId,subjectUserId]);
+  const addr=await db.query('SELECT a.id,a.zone_id,a.full_address,a.directions,a.phone,a.label,z.enabled AS zone_enabled,z.name AS zone_name FROM addresses a JOIN delivery_zones z ON z.id=a.zone_id WHERE a.id=$1 AND a.user_id=$2 AND a.archived_at IS NULL FOR SHARE OF a,z',[request.addressId,subjectUserId]);
   if(!addr.rowCount||!addr.rows[0].zone_enabled)invalid('ADDRESS_UNAVAILABLE','Bu adrese sipariş verilemiyor.',404);
   const address=addr.rows[0];
   const rr=await db.query('SELECT id,active,is_open,is_busy,accepts_orders FROM restaurants WHERE id=$1 FOR SHARE',[request.restaurantId]);
@@ -136,7 +136,7 @@ export async function expirePending(pool:Pool,batch=100){return transaction(pool
 export async function quoteOrder(pool:Pool,subjectUserId:string,body:unknown){
  const request=parseOrder(body,'quote-preview-token-12345678');
  return transaction(pool,async db=>{
-  const addr=await db.query('SELECT a.zone_id,z.enabled AS zone_enabled FROM addresses a JOIN delivery_zones z ON z.id=a.zone_id WHERE a.id=$1 AND a.user_id=$2',[request.addressId,subjectUserId]);
+  const addr=await db.query('SELECT a.zone_id,z.enabled AS zone_enabled FROM addresses a JOIN delivery_zones z ON z.id=a.zone_id WHERE a.id=$1 AND a.user_id=$2 AND a.archived_at IS NULL',[request.addressId,subjectUserId]);
   if(!addr.rowCount||!addr.rows[0].zone_enabled)invalid('ADDRESS_UNAVAILABLE','Adres bulunamadı veya mahalle kapalı.',404);
   const rr=await db.query('SELECT id,active,is_open,is_busy,accepts_orders FROM restaurants WHERE id=$1',[request.restaurantId]);
   if(!rr.rowCount||!rr.rows[0].active||!rr.rows[0].is_open||rr.rows[0].is_busy||!rr.rows[0].accepts_orders)invalid('RESTAURANT_CLOSED','Restoran sipariş kabul etmiyor.',409);

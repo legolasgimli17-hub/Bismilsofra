@@ -8,6 +8,7 @@ import {readWorkerHealth} from './worker-health.ts';
 import {OrderEventBroker} from './order-event-broker.ts';
 import {searchAdminOrders,readAdminOrderDetail} from './admin-order-investigation.ts';
 import {importDraftMenu} from './admin-menu-import.ts';
+import {listCustomerAddresses,addCustomerAddress,editCustomerAddress,archiveCustomerAddress} from './address-service.ts';
 import {openOrderStream} from './order-stream.ts';
 import {parseReportDays,readPilotAdminReport,readPilotMerchantReport} from './report-service.ts';
 import {getRestaurantTeam,addRestaurantMember,updateRestaurantMember,removeRestaurantMember,
@@ -120,13 +121,22 @@ app.get('/v1/restaurants/:id/menu',async(req)=>{
  const os=gids.length?await pool.query('SELECT id,group_id,name,price_kurus,available FROM options WHERE group_id=ANY($1::uuid[])',[gids]):{rows:[]};
  return {restaurant:rest.rows[0],products:ps.rows.map(p=>({...p,optionGroups:gs.rows.filter(g=>g.product_id===p.id).map(g=>({...g,options:os.rows.filter(o=>o.group_id===g.id)}))}))};
 });
-app.get('/v1/me/addresses',async(req)=>{const {userId}=await user(req);const r=await pool.query('SELECT id,label,zone_id,full_address,directions,phone FROM addresses WHERE user_id=$1 ORDER BY created_at DESC LIMIT 30',[userId]);return {addresses:r.rows}});
+app.get('/v1/me/addresses',async(req)=>{
+ const {userId}=await user(req);
+ return listCustomerAddresses(pool,userId);
+});
 app.post('/v1/me/addresses',async(req,reply)=>{
- const {userId}=await user(req);const b=(req.body??{}) as Record<string,unknown>;
- const address=typeof b.fullAddress==='string'?b.fullAddress:'';
- if(!uuid(b.zoneId)||address.trim().length<8||address.length>900||typeof b.phone!=='string'||!/^05\d{9}$/.test(b.phone))invalid('ADDRESS_INVALID','Mahalle, adres ve telefon bilgilerini kontrol edin.');
- const zone=await pool.query('SELECT 1 FROM delivery_zones WHERE id=$1 AND enabled=true',[b.zoneId]);if(!zone.rowCount)invalid('ZONE_INVALID','Mahalle uygun değil.',400);
- const r=await pool.query('INSERT INTO addresses(user_id,zone_id,label,full_address,directions,phone) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',[userId,b.zoneId,cleanNote(b.label||'Ev',45)||'Ev',address.trim(),cleanNote(b.directions,400),b.phone]);reply.code(201);return {id:r.rows[0].id};
+ const {userId}=await user(req);
+ const result=await addCustomerAddress(pool,userId,req.body);
+ reply.code(201);return result;
+});
+app.patch('/v1/me/addresses/:id',async(req)=>{
+ const {userId}=await user(req),id=idParam(req,'id');
+ return editCustomerAddress(pool,userId,id,req.body);
+});
+app.post('/v1/me/addresses/:id/archive',async(req)=>{
+ const {userId}=await user(req),id=idParam(req,'id');
+ return archiveCustomerAddress(pool,userId,id);
 });
 app.post('/v1/orders/quote',async(req)=>{const {userId}=await user(req);return quoteOrder(pool,userId,req.body)});
 app.post('/v1/orders',async(req,reply)=>{
