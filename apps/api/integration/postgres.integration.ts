@@ -6,6 +6,7 @@ import {Pool} from 'pg';
 import {placeOrder,quoteOrder,changeStatus,expirePending} from '../src/order-service.ts';
 import {CURRENTLY_ACCEPTING_SQL} from '../src/operations.ts';
 import {dispatchEscalations} from '../src/escalation-service.ts';
+import {dispatchOutbox} from '../src/notification-service.ts';
 import {DomainError} from '../src/domain.ts';
 const dsn=process.env.INTEGRATION_DATABASE_URL;
 if(!dsn)throw Error('INTEGRATION_DATABASE_URL is required; use a disposable local DB ending with _test.');
@@ -107,4 +108,44 @@ test('PostgreSQL order / tenant / idempotency / expiry / history vertical slice'
  assert.equal(recoveredState.rows[0].attempts,2);
  const noDuplicate=await dispatchEscalations(pool,async()=>{throw Error('duplicate')},1);
  assert.equal(noDuplicate.sent,0);
+
+ // A webhook worker must release its only database connection before any
+ // network call. Test both concurrent workers and a simulated crashed lease.
+ await pool.query("UPDATE notification_outbox SET next_attempt_at=now()+interval '1 day' WHERE sent_at IS NULL");
+ const leaseOrder=await placeOrder(pool,first,confirmed,'integration-lease-'+randomUUID());
+ const outboxRow=(await pool.query("SELECT id FROM notification_outbox WHERE order_id=$1 AND type='new_order' ORDER BY id LIMIT 1",[leaseOrder.id])).rows[0];
+ assert.ok(outboxRow,'new order must create durable outbox event');
+ const oneConnection=new Pool({connectionString:dsn,max:1,connectionTimeoutMillis:1000});
+ try{
+  const deliveredIds:string[]=[];
+  const send=async(e:{id:string|number})=>{
+   const check=await oneConnection.query('SELECT 1 AS ok');
+   assert.equal(check.rows[0].ok,1,'network handler can query DB: no transaction is held');
+   deliveredIds.push(String(e.id));
+   await new Promise(resolve=>setTimeout(resolve,40));
+  };
+  const results=await Promise.all([
+   dispatchOutbox(oneConnection,send,1),
+   dispatchOutbox(oneConnection,send,1)
+  ]);
+  assert.equal(results.reduce((n,x)=>n+x.sent,0),1);
+  assert.deepEqual(deliveredIds,[String(outboxRow.id)],'two workers must not send the same leased event');
+  const ack=await pool.query('SELECT sent_at,lease_token,lease_until FROM notification_outbox WHERE id=$1',[outboxRow.id]);
+  assert.ok(ack.rows[0].sent_at);
+  assert.equal(ack.rows[0].lease_token,null);
+  assert.equal(ack.rows[0].lease_until,null);
+
+  // Simulate worker crash after claim but before provider call.
+  const crashRow=(await pool.query(`INSERT INTO notification_outbox(order_id,restaurant_id,type,payload)
+   VALUES($1,$2,'lease-recovery-test','{}'::jsonb) RETURNING id`,[leaseOrder.id,r])).rows[0];
+  await pool.query("UPDATE notification_outbox SET lease_token=$2,lease_until=now()+interval '15 minutes' WHERE id=$1",[crashRow.id,randomUUID()]);
+  const blocked=await dispatchOutbox(oneConnection,async()=>{throw Error('should be leased')},1);
+  assert.equal(blocked.processed,0,'unexpired lease must not be stolen');
+  await pool.query("UPDATE notification_outbox SET lease_until=now()-interval '1 second' WHERE id=$1",[crashRow.id]);
+  const recoveredIds:string[]=[];
+  const recoveredLease=await dispatchOutbox(oneConnection,async e=>{recoveredIds.push(String(e.id))},1);
+  assert.equal(recoveredLease.sent,1,'expired lease must be reclaimable after worker crash');
+  assert.deepEqual(recoveredIds,[String(crashRow.id)]);
+ }finally{await oneConnection.end()}
+
 });
