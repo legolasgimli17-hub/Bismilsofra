@@ -5,6 +5,7 @@ import Link from 'next/link';
 import AuthGate from '@/components/auth-gate';
 import MenuEditor,{type EditorCategory,type EditorProduct} from '@/components/menu-editor';
 import TeamManagement from '@/components/team-management';
+import PilotReports from '@/components/pilot-reports';
 import {api} from '@/lib/api';
 import {money} from '@/lib/types';
 import {inputToKurus,kurusToInput,newTimeSlot,WEEKDAY_NAMES,type MerchantScheduleSlot} from '@/lib/merchant-settings';
@@ -202,7 +203,10 @@ function ManagementScreen({token}:{token:()=>Promise<string>}){
     </div>
     <p className="muted">Ücretler kuruş olarak kaydedilir. Müşteri siparişi son onay sırasında sunucudan tekrar hesaplanır; fiyat değişmişse yeniden onay istenir.</p>
    </section>
-   {model.permissions.canManageSettings&&<TeamManagement key={rid} restaurantId={rid} token={token}/>}
+   {model.permissions.canManageSettings&&<>
+    <PilotReports key={'report-'+rid} restaurantId={rid} token={token}/>
+    <TeamManagement key={'team-'+rid} restaurantId={rid} token={token}/>
+   </>}
   </>}
  </main>;
 }

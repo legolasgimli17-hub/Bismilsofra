@@ -5,6 +5,7 @@ import {isSupportStatus,parseSupportUpdate} from './support-service.ts';
 import {RequestLimiter,trustedProxyCidrs} from './rate-limit.ts';
 import {listPilotRestaurants,createPilotRestaurant,assignPilotOwner,linkPilotDeliveryZone,createPilotDeliveryZone} from './admin-onboarding.ts';
 import {readWorkerHealth} from './worker-health.ts';
+import {parseReportDays,readPilotAdminReport,readPilotMerchantReport} from './report-service.ts';
 import {getRestaurantTeam,addRestaurantMember,updateRestaurantMember,removeRestaurantMember,
  exactAdminUserLookup,setAdminUserAccess} from './access-management.ts';
 import {DomainError,invalid,uuid,STATUSES,type Status,cleanNote} from './domain.ts';
@@ -175,6 +176,12 @@ app.patch('/v1/restaurant/:rid/team/:uid',async(req)=>{
 app.post('/v1/restaurant/:rid/team/:uid/remove',async(req)=>{
  const rid=idParam(req,'rid'),uid=idParam(req,'uid'),{userId}=await staff(req,rid,null);
  return removeRestaurantMember(pool,rid,userId,uid,req.body);
+});
+// Merchant report includes only aggregate performance, never customer PII.
+app.get('/v1/restaurant/:rid/reports',async(req)=>{
+ const rid=idParam(req,'rid'),{userId}=await staff(req,rid,null);
+ const days=parseReportDays((req.query as Record<string,unknown>).days);
+ return readPilotMerchantReport(pool,days,rid,userId);
 });
 app.get('/v1/restaurant/:rid/orders',async(req)=>{
  const rid=idParam(req,'rid');await staff(req,rid);
@@ -672,6 +679,12 @@ app.post('/v1/admin/notifications/:id/retry',async(req)=>{
 // Pilot onboarding: drafts remain closed/invisible until owner, zone, hours and
 // available menu are verified. Administration requires a fresh MFA token.
 // Exact-match account lookup: avoid bulk customer exports or substring searches.
+// Platform aggregate and per-merchant pilot KPIs (not settlement/payout evidence).
+app.get('/v1/admin/reports',async(req)=>{
+ await admin(req);
+ const days=parseReportDays((req.query as Record<string,unknown>).days);
+ return readPilotAdminReport(pool,days);
+});
 app.get('/v1/admin/users',async(req)=>{
  await admin(req);
  const email=(req.query as Record<string,unknown>).email;

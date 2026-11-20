@@ -438,3 +438,39 @@ body{background:#fbfaf7;color:#263129}
 .admin-user-result strong{font-size:14px}
 .admin-user-result .btn{min-height:44px}
 @media(max-width:720px){.team-head,.admin-user-form{flex-direction:column;align-items:stretch}.team-form-row{flex-direction:column;align-items:stretch}.admin-user-result{grid-template-columns:1fr}.team-add .btn,.admin-user-form .btn{width:100%}}
+
+/* Pilot KPI dashboard: status-derived gross totals, daily counts, and no PII. */
+.pilot-report{margin-top:28px}
+.pilot-report-heading{display:flex;justify-content:space-between;gap:20px;align-items:start;margin-bottom:22px}
+.pilot-report-heading h2{display:flex;align-items:center;gap:10px;margin:5px 0 8px;font-size:22px}
+.pilot-report-heading .muted{max-width:72ch;line-height:1.6}
+.pilot-report-controls{display:flex;align-items:end;gap:10px;flex-shrink:0}
+.pilot-report-controls label{font-size:12px;font-weight:750;display:flex;gap:5px;flex-direction:column}
+.pilot-report-controls select{min-height:43px;padding:9px 11px;border:1px solid #c9d9cf;border-radius:9px;background:#fff}
+.pilot-report-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px}
+.pilot-report-tile{border:1px solid #dce9df;border-radius:13px;padding:15px;display:flex;flex-direction:column;gap:9px;min-width:0;background:#fafdfa}
+.pilot-report-tile>span{font-size:13px;color:#355444;font-weight:700;line-height:1.35}
+.pilot-report-tile>strong{font-size:clamp(17px,2vw,23px);color:#17472e;line-height:1.3;overflow-wrap:anywhere}
+.pilot-report-tile>small{font-size:11px;color:#65766c;line-height:1.5}
+.pilot-report-graph{margin:25px 0}
+.pilot-report-graph h3{display:flex;align-items:center;gap:8px;font-size:17px;margin:0 0 16px}
+.pilot-report-scroll{overflow-x:auto;padding:8px 2px 6px}
+.pilot-report-bars{display:flex;gap:9px;justify-content:space-between;height:175px;align-items:stretch}
+.pilot-report-bar-cell{min-width:36px;display:flex;flex:1;flex-direction:column;align-items:center;gap:5px;justify-content:end}
+.pilot-report-count{font-size:11px;font-weight:800;color:#285e3b}
+.pilot-report-bar-cell>small{font-size:10px;color:#65766c;white-space:nowrap}
+.pilot-report-bar-track{height:115px;width:min(100%,42px);display:flex;align-items:end;border-radius:5px;background:#eff6f0;overflow:hidden}
+.pilot-report-bar-fill{width:100%;background:linear-gradient(180deg,#52b77f,#1e8756);min-height:0;border-radius:5px 5px 0 0}
+.pilot-report-facts{display:flex;flex-wrap:wrap;gap:10px;border-top:1px solid #e0eae2;padding-top:13px}
+.pilot-report-facts span{display:flex;gap:5px;align-items:center;color:#395746;font-size:13px}
+.pilot-report-restaurants{margin-top:25px}
+.pilot-report-restaurants h3{font-size:17px}
+.pilot-report-table-scroll{overflow-x:auto}
+.pilot-report-restaurants table{width:100%;border-collapse:collapse;min-width:650px;font-size:13px}
+.pilot-report-restaurants th{text-align:left;background:#f0f7f1;color:#345442;padding:11px 10px;font-weight:800}
+.pilot-report-restaurants td{padding:11px 10px;border-bottom:1px solid #e1eae2;vertical-align:top}
+.pilot-report-restaurants td:first-child{display:grid;gap:4px}
+.pilot-report-restaurants td:first-child small{color:#647469}
+.pilot-report-disclaimer{font-size:12px;line-height:1.6;margin-top:23px}
+@media(max-width:1000px){.pilot-report-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.pilot-report-heading{flex-direction:column;align-items:stretch}.pilot-report-controls{width:100%;justify-content:space-between}.pilot-report-tiles{gap:8px}.pilot-report-tile{padding:12px}.pilot-report-tile>strong{font-size:18px}}
