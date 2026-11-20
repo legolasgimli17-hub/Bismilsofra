@@ -19,7 +19,7 @@ test('group rules reject invalid counts and invalid archive flag',()=>{
  for(const rule of [{minSelect:3,maxSelect:1},{minSelect:-1,maxSelect:1},
   {minSelect:0,maxSelect:13},{minSelect:0,maxSelect:0},{minSelect:1.5,maxSelect:3},
   {minSelect:1,maxSelect:1,archived:'false'}]){
-  assert.throws(()=>parseGroupUpdate({name:'Soslar',minSelect:0,maxSelect:1,archived:false,revision:1,...rule}),code('OPTION_RULE_INVALID'));
+  assert.throws(()=>parseGroupUpdate(Object.assign({name:'Soslar',minSelect:0,maxSelect:1,archived:false,revision:1},rule)),code('OPTION_RULE_INVALID'));
  }
 });
 test('choice price must be bounded integer kuruş',()=>{
