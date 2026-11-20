@@ -339,9 +339,9 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal((await request(accessUrl,{method:'POST',token:oldAdministrator,body:disable})).status,403);
  assert.equal((await request(accessUrl,{method:'POST',token:administrator,
   body:{...disable,reasonCode:'unsafe arbitrary freeform PII'}})).status,400);
- const disabled=await request(accessUrl,{method:'POST',token:administrator,body:disable});
- assert.equal(disabled.status,200,JSON.stringify(disabled.body));
- assert.equal(disabled.body.user.enabled,false);
+ const accountDisabled=await request(accessUrl,{method:'POST',token:administrator,body:disable});
+ assert.equal(accountDisabled.status,200,JSON.stringify(accountDisabled.body));
+ assert.equal(accountDisabled.body.user.enabled,false);
  assert.equal((await request('/v1/me/staff-restaurants',{token:teamStaff})).status,403,
   'disabled user must lose server access despite a valid signed bearer token');
  assert.equal((await request(accessUrl,{method:'POST',token:administrator,body:disable})).status,409,
