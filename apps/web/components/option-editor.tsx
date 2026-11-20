@@ -62,7 +62,7 @@ export default function OptionEditor({restaurantId,productId,productName,token,c
   setChoiceDrafts(old=>({...old,[id]:{...old[id],...changes}}));
  }
  function editNewChoice(id:string,changes:Partial<NewChoice>){
-  setNewChoiceDrafts(old=>({...old,[id]:{name:'',price:'0,00',...old[id],...changes}}));
+  setNewChoiceDrafts(old=>({...old,[id]:Object.assign({name:'',price:'0,00'},old[id]||{},changes)}));
  }
 
  function saveGroup(group:OptionGroup){
