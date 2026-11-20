@@ -2,10 +2,10 @@
 
 import {useEffect,useState} from 'react';
 import FoodImage from './food-image';
-import {api} from '@/lib/api';
+import {api,uploadMerchantPhoto} from '@/lib/api';
 import {money} from '@/lib/types';
 import {inputToKurus,kurusToInput} from '@/lib/merchant-settings';
-import {CheckCircle2,FolderPlus,Image as ImageIcon,Plus,Save,Search,SquarePen,Tag,Undo2} from 'lucide-react';
+import {CheckCircle2,FolderPlus,Image as ImageIcon,Plus,Save,Search,SquarePen,Tag,Undo2,UploadCloud,ShieldCheck} from 'lucide-react';
 
 export type EditorCategory={id:string;name:string;sort_order:number};
 export type EditorProduct={
@@ -26,6 +26,7 @@ export default function MenuEditor({restaurantId,categories,products,token,onRef
  const [renameId,setRenameId]=useState<string|null>(null);
  const [renameName,setRenameName]=useState('');
  const [busy,setBusy]=useState(false);
+ const [rightsConfirmed,setRightsConfirmed]=useState(false);
  const [message,setMessage]=useState('');
  const [error,setError]=useState('');
  const locked=disabled||busy||!canEdit;
@@ -86,6 +87,26 @@ export default function MenuEditor({restaurantId,categories,products,token,onRef
   void operation(async()=>api(`/v1/restaurant/${restaurantId}/categories/${renameId}`,
    await token(),{method:'PATCH',body:JSON.stringify({name:renameName})}),
    'Kategori adı güncellendi.',()=>{setRenameId(null);setRenameName('')});
+ }
+ async function uploadImage(event:React.ChangeEvent<HTMLInputElement>){
+  const selectedFile=event.currentTarget.files?.[0];
+  event.currentTarget.value='';
+  if(!selectedFile||locked)return;
+  if(!rightsConfirmed){setError('Yüklemek için fotoğrafı kullanma hakkınızı onaylayın.');return}
+  if(!['image/jpeg','image/png','image/webp'].includes(selectedFile.type)){
+   setError('Yalnızca JPEG, PNG veya WebP fotoğraflar yüklenebilir.');return;
+  }
+  if(selectedFile.size>5*1024*1024||selectedFile.size===0){
+   setError('Fotoğraf 5 MB boyut sınırını geçemez.');return;
+  }
+  setBusy(true);setError('');setMessage('');
+  try{
+   const uploaded=await uploadMerchantPhoto<{imageUrl:string;mediaId:string;sizeBytes:number}>(
+    `/v1/restaurant/${restaurantId}/photos`,await token(),selectedFile,rightsConfirmed);
+   setDraft(d=>({...d,imageUrl:uploaded.imageUrl}));
+   setMessage('Fotoğraf yüklendi ve optimize edildi. Ürünü kaydettiğinizde menüye bağlanacak.');
+  }catch(e){setError(friendly(e))}
+  finally{setBusy(false)}
  }
  function changeAvailability(product:EditorProduct){
   void operation(async()=>api(`/v1/restaurant/${restaurantId}/products/${product.id}`,await token(),
@@ -181,7 +202,20 @@ export default function MenuEditor({restaurantId,categories,products,token,onRef
      </label>
      <div className="merchant-menu-image-hint">
       <ImageIcon size={18}/>
-      <p>Yalnızca restoranın izinli fotoğrafı kabul edilir: <code>/photos/urun.webp</code> veya yapılandırılmış kendi görsel sunucumuz. Bu ekrandan dosya yükleme henüz etkin değil.</p>
+      <p>Restoranınızın izinli fotoğraflarını JPEG, PNG veya WebP biçiminde yükleyebilirsiniz. Sunucu konum metaverisini temizler, görseli WebP'ye dönüştürür ve yalnızca restoranınıza bağlar.</p>
+     </div>
+     <div className="merchant-upload-panel">
+      <label className="merchant-rights-confirmation">
+       <input type="checkbox" checked={rightsConfirmed} disabled={locked}
+        onChange={event=>setRightsConfirmed(event.target.checked)}/>
+       <span>Bu fotoğrafı restoranda ve Bismil Sofra uygulamasında kullanmaya yetkim var.</span>
+      </label>
+      <label className={'merchant-upload-button'+(locked||!rightsConfirmed?' disabled':'')}>
+       <UploadCloud size={18}/> {busy?'İşleniyor…':'Telefondan veya bilgisayardan fotoğraf seç'}
+       <input type="file" accept="image/jpeg,image/png,image/webp" disabled={locked||!rightsConfirmed}
+        onChange={event=>void uploadImage(event)}/>
+      </label>
+      <small><ShieldCheck size={14}/> En fazla 5 MB. Bu hizmet sunucuda depolama hesabı yapılandırıldıktan sonra kullanılabilir.</small>
      </div>
      {draft.imageUrl&&<div className="merchant-editor-preview"><FoodImage src={draft.imageUrl} alt="Ürün görseli önizleme"/></div>}
      <button type="submit" className="btn primary" disabled={locked||!categories.length}>
