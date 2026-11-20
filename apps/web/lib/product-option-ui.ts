@@ -7,3 +7,14 @@ export function selectProductOption(current:readonly string[],optionId:string,ch
  if(current.length>=maxSelect)return [...current];
  return [...current,optionId];
 }
+
+/** Cart replacement must follow a distinct, explicit other-restaurant warning. */
+export type AddWarning='options'|'restaurant'|null;
+export const permitsCartReplacement=(warning:AddWarning):boolean=>warning==='restaurant';
+
+/** A blank form field must not silently become 0 through Number(''). */
+export function parseSelectionBound(raw:string,min:number,max:number):number|null{
+ if(!/^(0|[1-9][0-9]?)$/.test(raw))return null;
+ const n=Number(raw);
+ return n>=min&&n<=max?n:null;
+}

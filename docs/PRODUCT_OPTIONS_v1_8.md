@@ -46,3 +46,6 @@ Aynı restoran sınırı doğrulanır ve bütün mutasyonlar `audit_logs` tablos
 - Kaydedilmemiş satırların eski `revision` değeri korunur; başka cihaz değiştirmişse sunucudaki 409 kontrolü atlanmaz. Kullanıcı tüm yerel taslakları açıkça geri alabilir.
 - Artık geçersiz/pasif/ürüne ait olmayan seçeneğe bağlı sepet, sunucu fiyat teklifi alırken açıklayıcı hata ve güncel restoran menüsü bağlantısı gösterir.
 - Frontend seçenekleri için `npm run test:product-options` CI doğrulamasına eklendi.
+
+- Boş bırakılan “En az seçim” sayısı artık otomatik 0'a dönüşmez; zorunlu grup yanlışlıkla isteğe bağlı hale gelmez.
+- Gerekli opsiyon uyarısı ile **farklı restoran sepetini değiştirme onayı** birbirinden ayrıldı. Sırf seçenek eksik uyarısı görüldüğü için başka restorandaki sepet temizlenmez.

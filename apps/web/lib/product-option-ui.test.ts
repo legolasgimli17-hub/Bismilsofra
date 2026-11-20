@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {selectProductOption} from './product-option-ui.ts';
+import {selectProductOption,permitsCartReplacement,parseSelectionBound} from './product-option-ui.ts';
+import {addCartLine,EMPTY_CART} from './cart.ts';
 import {preserveDirtyDrafts} from './option-editor-state.ts';
 
 test('optional single-select allows clearing and replacing a choice',()=>{
@@ -31,4 +32,22 @@ test('refresh drops removed rows and follows server for untouched rows',()=>{
  const remote={newRow:{price:200},existing:{price:400}};
  const local={deleted:{price:100},existing:{price:300}};
  assert.deepEqual(preserveDirtyDrafts(remote,local,new Set(['deleted'])),remote);
+});
+
+test('option warning never authorizes replacing a different restaurant basket',()=>{
+ const food={productId:'p',name:'Pide',imageUrl:null,priceKurus:10000,quantity:1,
+  optionIds:[],optionLabels:[],optionExtraKurus:0};
+ const cart=addCartLine(EMPTY_CART,'restaurantA','A',food,false);
+ assert.equal(permitsCartReplacement('options'),false);
+ assert.throws(()=>addCartLine(cart,'restaurantB','B',food,permitsCartReplacement('options')),/OTHER_RESTAURANT/);
+ assert.equal(permitsCartReplacement('restaurant'),true);
+ assert.equal(addCartLine(cart,'restaurantB','B',food,permitsCartReplacement('restaurant')).restaurantId,'restaurantB');
+ assert.equal(permitsCartReplacement(null),false);
+});
+test('empty numeric bound cannot silently turn required selection into optional',()=>{
+ assert.equal(parseSelectionBound('0',0,12),0);
+ assert.equal(parseSelectionBound('12',1,12),12);
+ for(const raw of ['', ' ', '1.5', '-1', '13', '1e0', '00'])
+  assert.equal(parseSelectionBound(raw,0,12),null);
+ assert.equal(parseSelectionBound('0',1,12),null);
 });

@@ -3,6 +3,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {api} from '@/lib/api';
 import {preserveDirtyDrafts} from '@/lib/option-editor-state';
+import {parseSelectionBound} from '@/lib/product-option-ui';
 import {inputToKurus,kurusToInput} from '@/lib/merchant-settings';
 import {CheckCircle2,ChevronDown,ChevronUp,Plus,RefreshCcw,Save,SlidersHorizontal} from 'lucide-react';
 
@@ -73,8 +74,8 @@ export default function OptionEditor({restaurantId,productId,productName,token,c
  function saveGroup(group:OptionGroup){
   const d=groupDrafts[group.id];
   if(!d)return;
-  const minSelect=Number(d.minSelect),maxSelect=Number(d.maxSelect);
-  if(!Number.isInteger(minSelect)||!Number.isInteger(maxSelect)||minSelect<0||maxSelect<1||minSelect>maxSelect||maxSelect>12){
+  const minSelect=parseSelectionBound(d.minSelect,0,12),maxSelect=parseSelectionBound(d.maxSelect,1,12);
+  if(minSelect===null||maxSelect===null||minSelect>maxSelect){
    setError('Seçim sınırları geçersiz: 0–12 arası olmalı, en az seçim en çok seçimden büyük olamaz.');return;
   }
   void run(group.name+' seçenek grubu',async()=>{
