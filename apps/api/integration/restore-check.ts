@@ -32,6 +32,9 @@ const sqls={
  events:`SELECT count(*)::int AS count,md5(coalesce(string_agg(order_id::text||':'||new_status||':'||created_at::text,'|' ORDER BY id),'')) AS hash FROM order_events`,
  items:`SELECT count(*)::int AS count,md5(coalesce(string_agg(order_id::text||':'||product_name_snapshot||':'||line_total_kurus::text||':'||options_snapshot::text,'|' ORDER BY id),'')) AS hash FROM order_items`,
  snapshots:`SELECT md5(coalesce(string_agg(id::text||':'||address_snapshot::text,'|' ORDER BY id),'')) AS hash FROM orders`,
+ addresses:`SELECT count(*)::int AS count,md5(coalesce(string_agg(
+   id::text||':'||coalesce(archived_at::text,'active')||':'||zone_id::text||':'||
+   md5(full_address||':'||phone),'|' ORDER BY id),'')) AS hash FROM addresses`,
  triggers:`SELECT count(*)::int AS count FROM pg_trigger
   WHERE tgname IN ('order_events_append_only','audit_append_only','order_event_signal')
    AND tgisinternal=false`

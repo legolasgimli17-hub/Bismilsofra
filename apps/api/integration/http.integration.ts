@@ -952,6 +952,46 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  const done=await pool.query('SELECT sent_at,attempts FROM notification_outbox WHERE id=$1',[eventId]);
  assert.ok(done.rows[0].sent_at);
  assert.equal(done.rows[0].attempts,2);
+
+ // Customer address editing/archiving must not mutate old order snapshots.
+ const originalSnapshot=(await pool.query(
+  'SELECT address_snapshot FROM orders WHERE id=$1',[orderId])).rows[0].address_snapshot;
+ const editAddressUrl='/v1/me/addresses/'+addrId;
+ const alteredAddress={zoneId:zid,label:'Güncel Adres',fullAddress:'CI Yeni Sokak No 19',
+  phone:'05009999999',directions:'Yeni giriş kapısı'};
+ assert.equal((await request(editAddressUrl,{method:'PATCH',token:stranger,body:alteredAddress})).status,404,
+  'different customer cannot edit address');
+ assert.equal((await request(editAddressUrl,{method:'PATCH',token:customer,
+  body:{...alteredAddress,zoneId:randomUUID()}})).status,409);
+ const changedAddress=await request(editAddressUrl,{method:'PATCH',token:customer,
+  body:alteredAddress});
+ assert.equal(changedAddress.status,200,JSON.stringify(changedAddress.body));
+ assert.equal(changedAddress.body.address.label,'Güncel Adres');
+ assert.equal(changedAddress.body.address.phone,'05009999999');
+ assert.ok((await request('/v1/me/addresses',{token:customer})).body.addresses
+  .some((a:{id:string;label:string})=>a.id===addrId&&a.label==='Güncel Adres'));
+ assert.deepEqual((await pool.query('SELECT address_snapshot FROM orders WHERE id=$1',[orderId]))
+  .rows[0].address_snapshot,originalSnapshot,
+  'changing a saved address cannot rewrite the immutable old delivery snapshot');
+ assert.equal((await request(editAddressUrl+'/archive',{method:'POST',token:stranger})).status,404);
+ const archived=await request(editAddressUrl+'/archive',{method:'POST',token:customer});
+ assert.equal(archived.status,200,JSON.stringify(archived.body));
+ assert.equal(archived.body.archived,true);
+ assert.equal((await request('/v1/me/addresses',{token:customer})).body.addresses
+  .some((a:{id:string})=>a.id===addrId),false);
+ assert.equal((await request(editAddressUrl+'/archive',{method:'POST',token:customer})).status,404);
+ assert.equal((await request(editAddressUrl,{method:'PATCH',token:customer,body:alteredAddress})).status,404);
+ assert.equal((await request('/v1/orders/quote',{method:'POST',token:customer,body:payload})).status,404,
+  'a saved ID must not bypass archived-address checkout prohibition');
+ assert.deepEqual((await pool.query('SELECT address_snapshot FROM orders WHERE id=$1',[orderId]))
+  .rows[0].address_snapshot,originalSnapshot);
+ const addressAudit=await pool.query(`SELECT action,details FROM audit_logs
+  WHERE target_id=$1 AND action LIKE 'customer_address_%' ORDER BY id`,[addrId]);
+ assert.deepEqual(addressAudit.rows.map((x:{action:string})=>x.action),
+  ['customer_address_add','customer_address_update','customer_address_archive']);
+ assert.ok(!JSON.stringify(addressAudit.rows).includes('CI Yeni Sokak'));
+ assert.ok(!JSON.stringify(addressAudit.rows).includes('05009999999'));
+
  // Deliberately run last: spoofing a different client IP in X-Forwarded-For
  // must NOT bypass the per-origin order limiter when no peer is trusted.
  let responseCode=0;
