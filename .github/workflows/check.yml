@@ -26,6 +26,8 @@ jobs:
         run: npm run test:discovery
       - name: Merchant connection health tests
         run: npm run test:inbox
+      - name: Browser real-time stream parser tests
+        run: npm run test:realtime
       - name: Merchant workflow tests
         run: npm run test:merchant
       - name: Merchant operations form and currency tests
