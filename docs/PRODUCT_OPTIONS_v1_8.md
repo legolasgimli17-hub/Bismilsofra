@@ -38,3 +38,11 @@ Aynı restoran sınırı doğrulanır ve bütün mutasyonlar `audit_logs` tablos
 - Müşteri önce eski opsiyonu sepete koyup işletme bunu pasife aldığında, ödeme adımında anlaşılır yeniden seçim uyarısı.
 - Sadece kendi ürünlerinin seçeneklerini gören işletme hesabı ve farklı restoranın endpoint'ini deneme.
 - Restoran menüsünün yavaş bağlantıda yeniden yüklenmesi, aynı seçenek için eşzamanlı düzenlemeler, güncel fiyat onayı.
+
+## v1.8 ekran sağlamlaştırma — müşteri ve restoran paneli
+- İsteğe bağlı tek seçimli gruplarda müşteri seçimi **“Seçim istemiyorum”** ile temizleyebilir; zorunlu gruplarda bu seçenek yoktur.
+- Birden fazla seçenek alınabilen gruplarda üst sınıra ulaşıldığında diğer işaretlenmemiş seçenekler kilitlenir; mevcut seçimler kaldırılabilir.
+- Restoran seçenek editöründeki farklı gruplarda veya seçeneklerde kaydedilmemiş düzenlemeler tek bir kaydetme/yeni veri çekme işleminde sessizce silinmez.
+- Kaydedilmemiş satırların eski `revision` değeri korunur; başka cihaz değiştirmişse sunucudaki 409 kontrolü atlanmaz. Kullanıcı tüm yerel taslakları açıkça geri alabilir.
+- Artık geçersiz/pasif/ürüne ait olmayan seçeneğe bağlı sepet, sunucu fiyat teklifi alırken açıklayıcı hata ve güncel restoran menüsü bağlantısı gösterir.
+- Frontend seçenekleri için `npm run test:product-options` CI doğrulamasına eklendi.

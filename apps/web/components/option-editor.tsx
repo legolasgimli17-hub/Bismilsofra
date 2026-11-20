@@ -2,6 +2,7 @@
 
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {api} from '@/lib/api';
+import {preserveDirtyDrafts} from '@/lib/option-editor-state';
 import {inputToKurus,kurusToInput} from '@/lib/merchant-settings';
 import {CheckCircle2,ChevronDown,ChevronUp,Plus,RefreshCcw,Save,SlidersHorizontal} from 'lucide-react';
 
@@ -15,6 +16,8 @@ type Props={restaurantId:string;productId:string;productName:string;token:()=>Pr
 export default function OptionEditor({restaurantId,productId,productName,token,canEdit,disabled=false}:Props){
  const tokenRef=useRef(token);tokenRef.current=token;
  const requestSequence=useRef(0);
+ const dirtyGroups=useRef(new Set<string>());
+ const dirtyChoices=useRef(new Set<string>());
  const [groups,setGroups]=useState<OptionGroup[]>([]);
  const [groupDrafts,setGroupDrafts]=useState<Record<string,GroupDraft>>({});
  const [choiceDrafts,setChoiceDrafts]=useState<Record<string,ChoiceDraft>>({});
@@ -25,7 +28,7 @@ export default function OptionEditor({restaurantId,productId,productName,token,c
  const [open,setOpen]=useState(true);
  const [error,setError]=useState('');
  const [message,setMessage]=useState('');
- const locked=disabled||Boolean(busy)||!canEdit;
+ const locked=disabled||Boolean(busy)||loading||!canEdit;
 
  const url=`/v1/restaurant/${restaurantId}/products/${productId}/option-groups`;
  const load=useCallback(async(raise=false)=>{
@@ -35,12 +38,12 @@ export default function OptionEditor({restaurantId,productId,productName,token,c
    const response=await api<{groups:OptionGroup[]}>(url,await tokenRef.current());
    if(id!==requestSequence.current)return;
    setGroups(response.groups);
-   setGroupDrafts(Object.fromEntries(response.groups.map(g=>[g.id,{
+   setGroupDrafts(current=>preserveDirtyDrafts<GroupDraft>(Object.fromEntries(response.groups.map(g=>[g.id,{
     name:g.name,minSelect:String(g.min_select),maxSelect:String(g.max_select),archived:g.archived,revision:g.revision
-   }])));
-   setChoiceDrafts(Object.fromEntries(response.groups.flatMap(g=>g.options.map(o=>[o.id,{
+   }])),current,dirtyGroups.current));
+   setChoiceDrafts(current=>preserveDirtyDrafts<ChoiceDraft>(Object.fromEntries(response.groups.flatMap(g=>g.options.map(o=>[o.id,{
     name:o.name,price:kurusToInput(o.price_kurus),available:o.available,revision:o.revision
-   }]))));
+   }]))),current,dirtyChoices.current));
    setError('');
   }catch(e){
    if(id===requestSequence.current){setError(e instanceof Error?e.message:'Seçenek listesi alınamadı.');if(raise)throw e}
@@ -56,9 +59,11 @@ export default function OptionEditor({restaurantId,productId,productName,token,c
   finally{setBusy('')}
  }
  function editGroup(id:string,changes:Partial<GroupDraft>){
+  dirtyGroups.current.add(id);
   setGroupDrafts(old=>({...old,[id]:{...old[id],...changes}}));
  }
  function editChoice(id:string,changes:Partial<ChoiceDraft>){
+  dirtyChoices.current.add(id);
   setChoiceDrafts(old=>({...old,[id]:{...old[id],...changes}}));
  }
  function editNewChoice(id:string,changes:Partial<NewChoice>){
@@ -72,17 +77,23 @@ export default function OptionEditor({restaurantId,productId,productName,token,c
   if(!Number.isInteger(minSelect)||!Number.isInteger(maxSelect)||minSelect<0||maxSelect<1||minSelect>maxSelect||maxSelect>12){
    setError('Seçim sınırları geçersiz: 0–12 arası olmalı, en az seçim en çok seçimden büyük olamaz.');return;
   }
-  void run(group.name+' seçenek grubu',async()=>api(url+'/'+group.id,await tokenRef.current(),{
-   method:'PATCH',body:JSON.stringify({name:d.name,minSelect,maxSelect,archived:d.archived,revision:d.revision})
-  }));
+  void run(group.name+' seçenek grubu',async()=>{
+   await api(url+'/'+group.id,await tokenRef.current(),{
+    method:'PATCH',body:JSON.stringify({name:d.name,minSelect,maxSelect,archived:d.archived,revision:d.revision})
+   });
+   dirtyGroups.current.delete(group.id);
+  });
  }
  function saveChoice(group:OptionGroup,choice:Choice){
   const d=choiceDrafts[choice.id];if(!d)return;
   const priceKurus=inputToKurus(d.price);
   if(priceKurus===null){setError('Ek seçenek fiyatı geçersiz (örn. 12,50).');return}
-  void run(choice.name+' seçeneği',async()=>api(url+'/'+group.id+'/options/'+choice.id,await tokenRef.current(),{
-   method:'PATCH',body:JSON.stringify({name:d.name,priceKurus,available:d.available,revision:d.revision})
-  }));
+  void run(choice.name+' seçeneği',async()=>{
+   await api(url+'/'+group.id+'/options/'+choice.id,await tokenRef.current(),{
+    method:'PATCH',body:JSON.stringify({name:d.name,priceKurus,available:d.available,revision:d.revision})
+   });
+   dirtyChoices.current.delete(choice.id);
+  });
  }
  function addChoice(event:React.FormEvent<HTMLFormElement>,group:OptionGroup){
   event.preventDefault();
@@ -92,6 +103,9 @@ export default function OptionEditor({restaurantId,productId,productName,token,c
   void run(group.name+' grubuna yeni seçenek',async()=>api(url+'/'+group.id+'/options',await tokenRef.current(),{
    method:'POST',body:JSON.stringify({name:d.name,priceKurus})
   }),()=>setNewChoiceDrafts(old=>({...old,[group.id]:{name:'',price:'0,00'}})));
+ }
+ function discardUnsavedChanges(){
+  dirtyGroups.current.clear();dirtyChoices.current.clear();void load();
  }
  function addGroup(event:React.FormEvent<HTMLFormElement>){
   event.preventDefault();
@@ -107,9 +121,15 @@ export default function OptionEditor({restaurantId,productId,productName,token,c
   {open&&<div className="merchant-option-body">
    <p className="muted">Müşterinin seçebileceği boyut, sos, içecek veya ek malzemeleri buradan yönetin. Fiyat ve zorunlu seçimler siparişte sunucuda kontrol edilir.</p>
    <div className="merchant-option-topline">
-    <button type="button" className="merchant-mini-button" disabled={locked||loading} onClick={()=>void load()}>
+    <button type="button" className="merchant-mini-button" disabled={locked} onClick={()=>void load()}>
      <RefreshCcw size={14}/> Yenile
     </button>
+    {(dirtyGroups.current.size>0||dirtyChoices.current.size>0)&&<>
+     <small role="status">Kaydedilmemiş düzenlemeler korunuyor.</small>
+     <button type="button" className="merchant-mini-button" disabled={locked} onClick={discardUnsavedChanges}>
+      Değişiklikleri geri al
+     </button>
+    </>}
     {loading&&<small role="status">Seçenekler yükleniyor…</small>}
    </div>
    {error&&<p className="notice error" role="alert">{error}</p>}
