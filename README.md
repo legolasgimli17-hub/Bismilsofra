@@ -1,4 +1,4 @@
-# Bismil Sofra — v2.4.0-beta.1 geliştirme aşaması
+# Bismil Sofra — v2.5.0-beta.1 geliştirme aşaması
 
 **Bismil'e özel, en fazla 50 aktif restoran için tasarlanan yemek sipariş PWA projesi.** Kaynak proje hâlâ geliştirme aşamasındadır; gerçek müşterilerden sipariş almaya hazır değildir.
 
@@ -132,3 +132,11 @@ Müşteri, siparişinden destek kaydı açabilir ve `/orders` ekranından durumu
 Birincil sipariş bildirimi, ayrı ikincil uyarı ve sipariş süresi işçilerinin son çalışma kayıtları PostgreSQL'de saklanır. Yönetici paneli ilgili süreçlerin **hiç başlamamış, 35 saniyeyi aşan gecikme, hata veya güncel** durumunu gösterir. İlk/ikinci bildirimde iletim hataları işlem varmış gibi yeşile boyanmaz. Müşteri telefon ve adresleri bu telemetriye yazılmaz.
 
 [Ayrıntılı süreç sağlığı ve müdahale rehberi](docs/WORKER_WATCHDOG_v2_4.md). Bu sistem bir restoran telefonunun gerçekten çaldığını **kanıtlamaz**; iki gerçek bağımsız bildirim sağlayıcısı, dış alarm izleyicisi ve 5 restoran pilotu şarttır.
+
+## v2.5 — Restoran bağlantı kesintisinde güvenli yenileme
+
+AuthGate, aynı `getAccessTokenSilently` fonksiyonuna bağlı **kararlı bir token callback** üretir; böylece restoran ve admin sayfalarındaki polling effect'leri yalnızca bir React rerender nedeniyle yeniden kurulmaz. Restoran panelinde eski HTTP istekleri `AbortController` ile iptal edilir, güncel olmayan yanıtlar veya başka restoranın yanıtları reddedilir.
+
+Tarayıcı **offline** olayında butonlar anında kilitlenir; internet geri geldiğinde veya sekme yeniden görünür olduğunda siparişler sunucudan eşitlenir. Mevcut 7 saniyelik görünür sekme polling'i korundu. Bağlantı yokken müşteri siparişi veya restoranın kabul işlemi tarayıcıda taklit edilmez.
+
+[Restoran bağlantı ve kurtarma rehberi](docs/RECONNECT_v2_5.md). Canlı Auth0, ayrı bildirim sağlayıcıları ve saha doğrulaması hâlâ zorunludur.
