@@ -24,7 +24,8 @@ export class OrderEventBroker{
  private retry:NodeJS.Timeout|null=null;
  private readonly subscribers=new Set<Subscriber>();
  private connected=false;
- constructor(private readonly connectionString:string){}
+ private readonly connectionString:string;
+ constructor(connectionString:string){this.connectionString=connectionString}
  get ready(){return this.connected}
  get subscribersCount(){return this.subscribers.size}
  subscribe(kind:Subscriber['kind'],id:string,changed:()=>void):()=>void{
