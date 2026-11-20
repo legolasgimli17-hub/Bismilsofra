@@ -546,6 +546,41 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
 
  assert.equal((await request('/v1/me/orders/'+orderId,{token:customer})).body.order.status,'kabul_edildi');
 
+ // Operator order investigation: search by the displayed first eight hex
+ // characters, then request audited details; NEVER list customer PII.
+ const lookupRoot='/v1/admin/orders';
+ assert.equal((await request(lookupRoot+'?key='+orderId.slice(0,8),{token:customer})).status,403);
+ assert.equal((await request(lookupRoot+'?key='+orderId.slice(0,8),{token:oldAdministrator})).status,403);
+ assert.equal((await request(lookupRoot+'?key=x',{token:administrator})).status,400);
+ assert.equal((await request(lookupRoot+'?key=%25',{token:administrator})).status,400);
+ const lookup=await request(lookupRoot+'?key='+orderId.slice(0,8).toUpperCase(),{token:administrator});
+ assert.equal(lookup.status,200,JSON.stringify(lookup.body));
+ assert.ok(lookup.body.orders.some((item:{id:string})=>item.id===orderId));
+ assert.ok(!JSON.stringify(lookup.body).includes('CI Test Sokak'));
+ assert.ok(!JSON.stringify(lookup.body).includes('05000000000'));
+ assert.ok(!JSON.stringify(lookup.body).includes('customer_id'));
+ const full=await request(lookupRoot+'?key='+orderId,{token:administrator});
+ assert.equal(full.status,200);
+ assert.equal(full.body.orders[0].id,orderId);
+ assert.equal((await request(lookupRoot+'/'+orderId,{token:customer})).status,403);
+ assert.equal((await request(lookupRoot+'/'+orderId,{token:oldAdministrator})).status,403);
+ assert.equal((await request(lookupRoot+'/'+randomUUID(),{token:administrator})).status,404);
+ const auditBefore=(await pool.query("SELECT count(*)::int AS count FROM audit_logs WHERE action='admin_order_investigation' AND target_id=$1",[orderId])).rows[0].count;
+ const investigation=await request(lookupRoot+'/'+orderId,{token:administrator});
+ assert.equal(investigation.status,200,JSON.stringify(investigation.body));
+ assert.equal(investigation.body.order.id,orderId);
+ assert.equal(investigation.body.order.restaurant_id,rid);
+ assert.ok(investigation.body.items.some((item:{product_name_snapshot:string})=>item.product_name_snapshot.length>0));
+ assert.ok(investigation.body.events.some((item:{new_status:string})=>item.new_status==='kabul_edildi'));
+ assert.ok(!JSON.stringify(investigation.body).includes('CI Test Sokak'));
+ assert.ok(!JSON.stringify(investigation.body).includes('05000000000'));
+ assert.ok(!JSON.stringify(investigation.body).includes('customer_id'));
+ assert.ok(!JSON.stringify(investigation.body).includes('address_snapshot'));
+ const investigations=await pool.query("SELECT details FROM audit_logs WHERE action='admin_order_investigation' AND target_id=$1",[orderId]);
+ assert.equal(investigations.rows.length,auditBefore+1);
+ assert.deepEqual(investigations.rows.at(-1).details,{view:'status_and_items'});
+
+
  // V1 pilot KPI endpoints: real order data, server-side Istanbul day grouping,
  // no customer PII and strict owner/manager/administrator boundaries.
  assert.equal((await request('/v1/admin/reports?days=7',{token:customer})).status,403);
