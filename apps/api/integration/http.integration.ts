@@ -105,6 +105,8 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  const stranger=await sign('stranger');
  const owner=await sign('owner',{amr:['pwd','mfa'],auth_time:now});
  const noMfa=await sign('owner',{amr:['pwd'],auth_time:now});
+ const otpOnly=await sign('owner',{amr:['otp'],auth_time:now});
+ const webauthnOnly=await sign('owner',{amr:['webauthn'],auth_time:now});
  const administrator=await sign('administrator',{amr:['pwd','mfa'],auth_time:now});
  const oldAdministrator=await sign('administrator',{amr:['pwd','mfa'],auth_time:now-720});
  const unverified=await sign('unverified',{email_verified:false});
@@ -146,6 +148,10 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal(userAfter.rows[0].row_version,userBefore.rows[0].row_version,
   'routine authenticated requests must not rewrite the users row');
  assert.equal((await request('/v1/me/staff-restaurants',{token:noMfa})).status,403);
+ assert.equal((await request('/v1/me/staff-restaurants',{token:otpOnly})).status,403,
+  'single-factor OTP must not grant merchant access');
+ assert.equal((await request('/v1/me/staff-restaurants',{token:webauthnOnly})).status,403,
+  'a standalone passkey must not count as completed MFA');
  assert.equal((await request('/v1/me/staff-restaurants',{token:owner})).status,200);
  const ownerRow=await pool.query('SELECT id FROM users WHERE oidc_subject=$1',[subject('owner')]);
  const ownerId=ownerRow.rows[0].id;
