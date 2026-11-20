@@ -52,3 +52,9 @@ Migration `010_worker_heartbeats.sql` ile `worker_heartbeats` oluşturulur. `out
 `/v1/admin/alerts` MFA isteyen yöneticiye `workers` alanını döndürür; yönetici ekranında ayrı bölüm vardır. **API `/readyz` sadece veritabanı/migration hazırlığını gösterir; işçilerin durduğu halde müşteri sipariş API'sini otomatik kapatmak yerine operator alarmı gerekir.** Prod'da üçüncü taraf uptime izleyici veya servis gözlemleyici bu hatayı dışarıdan algılayıp sorumlu kişiyi uyarmalıdır.
 
 Sağlıklı heartbeat, SMS/push servisinin erişilebilirliğinin veya restoranın fiziksel cihazında ses duyulduğunun kanıtı değildir. Sağlayıcıların kendileri için sentetik uçtan uca doğrulamalar ve bağımsız yedek kanal saha provası gerekli.
+
+## v2.5 tarayıcı çevrimdışı / bağlantı dönüşü
+
+Restoran paneli `offline` olayında bekleyen inbox isteğini iptal eder, eski snapshot'ın yeniden bağlanmış gibi görünmesini engeller ve durum değiştirme butonlarını hemen kilitler. `online` ve `visibilitychange` ile yeniden sorgulanır. 7 saniyelik polling başka endpoint'i aşırı yüklememek için eski isteği iptal eder. AuthGate'in token callback'i artık kararlı tutulur; tekrar render gereksiz yeniden polling başlatmaz.
+
+**Sınır:** `navigator.onLine` yalnızca tarayıcı bağlantı sinyalidir; esas doğrulama hâlâ MFA korumalı API sorgusunun başarılı olmasına bağlıdır. Uyuyan telefonda tarayıcı ses garantisi yok; ayrı sağlayıcı ve fiziksel cihaz kabul kanıtı gerekir.

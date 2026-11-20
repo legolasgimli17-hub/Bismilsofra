@@ -1,9 +1,9 @@
 {
   "name": "bismil-sofra-api",
-  "version": "2.4.0-beta.1",
+  "version": "2.5.0-beta.1",
   "private": true,
   "type": "module",
-  "description": "Bismil Sofra v2.4 beta Fastify/PostgreSQL API; not production deployed",
+  "description": "Bismil Sofra v2.5 beta Fastify/PostgreSQL API; not production deployed",
   "engines": {
     "node": ">=22.16"
   },
