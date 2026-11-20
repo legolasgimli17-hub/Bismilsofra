@@ -159,3 +159,6 @@ Sipariş statü hareketlerinin append-only veritabanı kaydından sonra transact
 
 ## Pilot: yönetici sipariş inceleme
 Platform yöneticisi MFA sonrası `/admin` ekranından siparişin **8 karakterlik kısa numarasını veya tam UUID'sini** girip restoran, durum, tutar ve geçmişini inceleyebilir. Arama toplu müşteri listesi değildir; müşteri iletişim/adres bilgileri sunulmaz. Detay açma işlemi audit kayıtlarına eklenir. [Sipariş inceleme rehberi](docs/ADMIN_ORDER_INVESTIGATION.md).
+
+## Pilot: gerçek veritabanı geri yükleme testi
+CI artık kurgu PostgreSQL 17 verisini `pg_dump` ile yedekleyip **ayrı bir test veritabanına** `pg_restore` yapar; siparişler, para tutarları, değişmez durum geçmişi, migration checksum'ları ve kritik tetikleyiciler karşılaştırılır. Bu **üretim otomatik yedeği değildir**; şifreli canlı yedekleme ve staging restore ayrıca kurulmalı. [Ayrıntılı operasyon kontrolü](docs/RESTORE_DRILL_PILOT.md).

@@ -78,3 +78,15 @@ jobs:
         run: node --experimental-strip-types --test apps/api/integration/postgres.integration.ts
       - name: Check real HTTP API, signed JWT, isolation and notification recovery
         run: node --experimental-strip-types --test apps/api/integration/http.integration.ts
+      - name: Dump and restore disposable PostgreSQL 17 fixture
+        env:
+          POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
+          RESTORE_DATABASE_URL: postgresql://sofra:ci-test-only-password@127.0.0.1:5432/bismil_sofra_restore_test
+        run: |
+          set -euo pipefail
+          test -n "$POSTGRES_CONTAINER_ID"
+          docker exec "$POSTGRES_CONTAINER_ID" pg_dump -U sofra -d bismil_sofra_test -Fc -f /tmp/bismil_sofra_ci.dump
+          docker exec "$POSTGRES_CONTAINER_ID" createdb -U sofra -T template0 bismil_sofra_restore_test
+          docker exec "$POSTGRES_CONTAINER_ID" pg_restore --exit-on-error --no-owner --no-privileges -U sofra -d bismil_sofra_restore_test /tmp/bismil_sofra_ci.dump
+          node --experimental-strip-types apps/api/integration/restore-check.ts
+          docker exec "$POSTGRES_CONTAINER_ID" rm -f /tmp/bismil_sofra_ci.dump
