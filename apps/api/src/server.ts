@@ -56,11 +56,29 @@ app.get('/readyz',async(_req,reply)=>{
 app.get('/v1/zones',async()=>{
  const r=await pool.query('SELECT id,name FROM delivery_zones WHERE enabled=true ORDER BY name ASC');return {zones:r.rows};
 });
+/**
+ * Live category list comes from restaurant-owned available products, never from
+ * fictional home-page labels. Enforce the same active/zone rules as discovery.
+ */
+app.get('/v1/categories',async(req)=>{
+ const q=req.query as Record<string,unknown>;
+ if(q.zoneId!==undefined&&!uuid(q.zoneId))invalid('ZONE_INVALID','Mahalle kimliği geçersiz.');
+ const zone=uuid(q.zoneId)?q.zoneId:null;
+ const result=await pool.query(`SELECT DISTINCT c.name FROM categories c
+ JOIN restaurants r ON r.id=c.restaurant_id AND r.active=true
+ JOIN products p ON p.restaurant_id=r.id AND p.category_id=c.id AND p.available=true
+ WHERE ($1::uuid IS NULL OR EXISTS (
+  SELECT 1 FROM restaurant_delivery_zones dz
+  JOIN delivery_zones z ON z.id=dz.zone_id AND z.enabled=true
+  WHERE dz.restaurant_id=r.id AND dz.zone_id=$1 AND dz.enabled=true))
+ ORDER BY c.name LIMIT 50`,[zone]);
+ return {categories:result.rows.map((row:{name:string})=>row.name)};
+});
 app.get('/v1/restaurants',async(req)=>{
  const q=req.query as Record<string,unknown>;
  if(q.zoneId!==undefined&&!uuid(q.zoneId))invalid('ZONE_INVALID','Mahalle kimliği geçersiz.');
  if(q.search!==undefined&&(typeof q.search!=='string'||q.search.length>70))invalid('SEARCH_INVALID','Arama çok uzun.');
- if(q.category!==undefined&&(typeof q.category!=='string'||q.category.length>50))invalid('CATEGORY_INVALID','Kategori geçersiz.');
+ if(q.category!==undefined&&(typeof q.category!=='string'||q.category.length>90))invalid('CATEGORY_INVALID','Kategori geçersiz.');
  const zone=uuid(q.zoneId)?q.zoneId:null;
  const search=typeof q.search==='string'?q.search.trim()||null:null;
  const category=typeof q.category==='string'?q.category.trim()||null:null;
@@ -72,7 +90,10 @@ app.get('/v1/restaurants',async(req)=>{
  LEFT JOIN LATERAL (SELECT z.zone_id,z.min_basket_kurus,z.delivery_fee_kurus FROM restaurant_delivery_zones z WHERE z.restaurant_id=r.id AND z.enabled=true AND $1::uuid IS NOT NULL AND z.zone_id=$1::uuid AND EXISTS(SELECT 1 FROM delivery_zones v WHERE v.id=z.zone_id AND v.enabled=true) LIMIT 1) dz ON TRUE
  WHERE r.active=true AND ($1::uuid IS NULL OR dz.zone_id IS NOT NULL)
  AND ($2::text IS NULL OR r.name ILIKE '%'||$2||'%' OR EXISTS(SELECT 1 FROM products p WHERE p.restaurant_id=r.id AND p.available=true AND p.name ILIKE '%'||$2||'%'))
- AND ($3::text IS NULL OR EXISTS(SELECT 1 FROM categories c WHERE c.restaurant_id=r.id AND c.name ILIKE '%'||$3||'%'))
+ AND ($3::text IS NULL OR EXISTS(
+  SELECT 1 FROM categories c
+  JOIN products p ON p.category_id=c.id AND p.restaurant_id=r.id AND p.available=true
+  WHERE c.restaurant_id=r.id AND c.name=$3::text))
  ORDER BY r.name LIMIT 50`,[zone,search,category]);
  return {restaurants:r.rows};
 });

@@ -8,10 +8,11 @@ import {money,type Restaurant,type Zone} from '@/lib/types';
 import {DEMO_RESTAURANTS,DEMO_ZONES,DEMO_CATEGORIES,PHOTO,type DemoRestaurant} from '@/lib/demo';
 import {visibleRestaurants,safeFavorites,isRestaurantOrderable,type SortMode} from '@/lib/discovery';
 
-const categories=[{label:'Kebap',photo:PHOTO.kebap},{label:'Pide',photo:PHOTO.pide},{label:'Burger',photo:PHOTO.burger},{label:'Döner',photo:PHOTO.doner},{label:'Ev Yemekleri',photo:PHOTO.ev},{label:'Çiğköfte',photo:PHOTO.cig}];
+const demoCategories=[{label:'Kebap',photo:PHOTO.kebap},{label:'Pide',photo:PHOTO.pide},{label:'Burger',photo:PHOTO.burger},{label:'Döner',photo:PHOTO.doner},{label:'Ev Yemekleri',photo:PHOTO.ev},{label:'Çiğköfte',photo:PHOTO.cig}];
 const FAV_KEY='bismil-sofra-favorites-v1';
 const catOf=(r:Restaurant)=>'category' in r?String((r as DemoRestaurant).category):'Tümü';
 export default function Home(){
+ const [liveCategories,setLiveCategories]=useState<string[]>([]),[categoriesLoading,setCategoriesLoading]=useState(false);
  const [restaurants,setRestaurants]=useState<Restaurant[]>([]),[zones,setZones]=useState<Zone[]>([]),[zone,setZone]=useState(''),[query,setQuery]=useState(''),[category,setCategory]=useState('Tümü'),[onlyOpen,setOnlyOpen]=useState(false),[favoritesOnly,setFavoritesOnly]=useState(false),[sort,setSort]=useState<SortMode>('recommended'),[favorites,setFavorites]=useState<string[]>([]),[demo,setDemo]=useState(!apiConfigured()),[loading,setLoading]=useState(apiConfigured()),[error,setError]=useState('');
  useEffect(()=>{try{setFavorites(safeFavorites(JSON.parse(window.localStorage.getItem(FAV_KEY)||'[]')))}catch{setFavorites([])}},[]);
  useEffect(()=>{if(demo){setZones(DEMO_ZONES);if(zone&&!DEMO_ZONES.some(z=>z.id===zone))setZone('');setLoading(false);return;}
@@ -19,11 +20,28 @@ export default function Home(){
   let alive=true;api<{zones:Zone[]}>('/v1/zones').then(r=>{if(alive)setZones(r.zones)}).catch(e=>{if(alive)setError(e.message)});
   return()=>{alive=false};
  },[demo]);
+ useEffect(()=>{
+  if(demo||!apiConfigured()){setLiveCategories([]);setCategoriesLoading(false);return;}
+  let alive=true;
+  setCategoriesLoading(true);
+  const params=new URLSearchParams();
+  if(zone)params.set('zoneId',zone);
+  api<{categories:string[]}>(`/v1/categories${params.size?'?'+params:''}`)
+   .then(result=>{
+    if(!alive)return;
+    const names=[...new Set(result.categories.filter(name=>typeof name==='string'&&name.length>=2&&name.length<=90))];
+    setLiveCategories(names);
+    setCategory(previous=>previous==='Tümü'||names.includes(previous)?previous:'Tümü');
+   }).catch(()=>{if(alive){setLiveCategories([]);setCategory('Tümü')}})
+   .finally(()=>{if(alive)setCategoriesLoading(false)});
+  return()=>{alive=false};
+ },[demo,zone]);
  useEffect(()=>{if(demo||!apiConfigured()){setLoading(false);return;}
   let alive=true;const handle=setTimeout(()=>{setLoading(true);const params=new URLSearchParams();if(zone)params.set('zoneId',zone);if(query.trim())params.set('search',query.trim());if(category!=='Tümü')params.set('category',category);
    api<{restaurants:Restaurant[]}>(`/v1/restaurants${params.size?'?'+params:''}`).then(r=>{if(alive){setRestaurants(r.restaurants);setError('')}}).catch(e=>{if(alive){setError(e.message);setRestaurants([])}}).finally(()=>{if(alive)setLoading(false)})
   },query?250:0);return()=>{alive=false;clearTimeout(handle)};
  },[zone,demo,query,category]);
+ const categories=demo?demoCategories:liveCategories.map(label=>({label,photo:null}));
  const records:Restaurant[]=demo?(zone?DEMO_RESTAURANTS.filter(r=>r.zones.includes(zone)):DEMO_RESTAURANTS):restaurants;
  const filtered=useMemo(()=>visibleRestaurants(records,{search:query,category:demo?category:'Tümü',onlyOpen,favoritesOnly,favorites,sort},catOf,!demo),[records,query,category,onlyOpen,favoritesOnly,favorites,sort,demo]);
  const clear=()=>{setQuery('');setCategory('Tümü');setOnlyOpen(false);setFavoritesOnly(false);setSort('recommended')};
@@ -38,8 +56,8 @@ export default function Home(){
   </div><div className="hero-photo-stage"><FoodImage className="new-hero-photo" src={PHOTO.kebap} alt="Izgara yemeklerin gerçek fotoğrafı" priority/><div className="photo-caption"><UtensilsCrossed size={17}/><span>İyi yemek, yakınında.</span></div></div></div></section>
   <div className="container"><div className="demo-mode-ribbon" role="status">{demo?<><span className="demo-mode-pill">TASARIM ÖNİZLEMESİ</span><span>Restoranlar ve fiyatlar örnektir. Bu modda gerçek sipariş verilmez.</span>{apiConfigured()&&<button onClick={()=>{setDemo(false);clear()}}>Canlı verilere geç</button>}</>:<><span className="live-data-pill"><ShieldCheck size={16}/> Canlı API modu</span><span>Liste, bağlı servis üzerinden geliyor. Fiyat ve teslimat bilgisi son adımda doğrulanır.</span></>}</div></div>
   <div className="container discover"><div className="location-selector"><div className="location-text"><span className="location-icon"><MapPinned size={23}/></span><div><span className="overline">TESLİMAT KONUMU</span><strong>{zones.find(z=>z.id===zone)?.name||'Mahalleni seç'}</strong><small>Uygun restoranları görmek için mahalleni seçebilirsin.</small></div></div><div className="select-wrap"><MapPin size={17}/><select aria-label="Teslimat mahallesi" value={zone} onChange={e=>setZone(e.target.value)}><option value="">Tüm restoranlar</option>{zones.map(z=><option value={z.id} key={z.id}>{z.name}</option>)}</select><ChevronDown size={16}/></div></div>
-   <div className="premium-section-title"><div><span className="overline">SOFRANI SEÇ</span><h2>Bugün ne yesek?</h2><p>İştah açan kategorilere göz at.</p></div><span className="section-aside">{DEMO_CATEGORIES.length} lezzet kategorisi</span></div>
-   <div className="category-gallery" role="group" aria-label="Yemek kategorileri"><button className={`category-photo-card all-foods ${category==='Tümü'?'selected':''}`} onClick={()=>setCategory('Tümü')} aria-pressed={category==='Tümü'}><span className="all-category-icon"><UtensilsCrossed size={27}/></span><span>Tümü</span></button>{categories.map(c=><button className={`category-photo-card ${category===c.label?'selected':''}`} type="button" key={c.label} aria-pressed={category===c.label} onClick={()=>setCategory(category===c.label?'Tümü':c.label)}><FoodImage src={c.photo} alt={`${c.label} yemek fotoğrafı`}/><span>{c.label}</span></button>)}</div>
+   <div className="premium-section-title"><div><span className="overline">SOFRANI SEÇ</span><h2>Bugün ne yesek?</h2><p>İştah açan kategorilere göz at.</p></div><span className="section-aside">{demo?DEMO_CATEGORIES.length:categoriesLoading?'Kategoriler yükleniyor':liveCategories.length} lezzet kategorisi</span></div>
+   <div className={`category-gallery ${demo?'':'live-category-gallery'}`} role="group" aria-label="Yemek kategorileri"><button className={`category-photo-card all-foods ${category==='Tümü'?'selected':''}`} onClick={()=>setCategory('Tümü')} aria-pressed={category==='Tümü'}><span className="all-category-icon"><UtensilsCrossed size={27}/></span><span>Tümü</span></button>{categories.map(c=><button className={`category-photo-card ${category===c.label?'selected':''}`} type="button" key={c.label} aria-pressed={category===c.label} onClick={()=>setCategory(category===c.label?'Tümü':c.label)}>{c.photo?<FoodImage src={c.photo} alt={`${c.label} örnek yemek fotoğrafı`}/>:<span className="live-category-icon"><UtensilsCrossed size={27}/></span>}<span>{c.label}</span></button>)}</div>
    <div className="premium-section-title restaurants-title"><div><span className="overline">BİSMİL SOFRA</span><h2>{zone?'Sana teslimat yapabilenler':'Lezzeti keşfet'}</h2><p>{loading?'Restoranlar yükleniyor':`${filtered.length} restoran listeleniyor`}</p></div></div>
    <div className="filters-toolbar"><div className="filter-left"><button className={`filter-chip ${onlyOpen?'on':''}`} onClick={()=>setOnlyOpen(!onlyOpen)} aria-pressed={onlyOpen}><span className="tiny-dot"/> Sipariş alanlar</button><button className={`filter-chip ${favoritesOnly?'on':''}`} onClick={()=>setFavoritesOnly(!favoritesOnly)} aria-pressed={favoritesOnly}><Heart size={16}/> Favorilerim</button><button className="filter-chip filter-reset" onClick={clear}><RotateCcw size={15}/> Temizle</button></div><label className="sort-select"><ArrowUpDown size={16}/><span>Sırala</span><select value={sort} onChange={e=>setSort(e.target.value as SortMode)} aria-label="Restoranları sırala"><option value="recommended">Önerilen</option><option value="delivery">En düşük teslimat ücreti</option><option value="minimum">En düşük minimum sepet</option><option value="name">Restoran adı</option></select></label></div>
    {error&&<div className="notice error" role="alert">{error}. <button onClick={()=>{setDemo(true);setError('')}}>Örnek tasarımı görüntüle</button></div>}

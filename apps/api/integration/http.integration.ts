@@ -141,6 +141,19 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal((await request('/v1/me/staff-restaurants',{token:namespaced})).status,200);
  assert.equal((await request('/v1/me/staff-restaurants',{token:namespacedWithoutMfa})).status,403);
  assert.equal((await request('/v1/zones',{headers:{Origin:'https://evil.example'}})).status,403);
+ assert.equal((await request('/v1/categories?zoneId=not-a-uuid')).status,400);
+ const productCategory=await pool.query('SELECT c.name FROM categories c JOIN products p ON p.category_id=c.id WHERE p.id=$1',[pid]);
+ assert.equal(productCategory.rowCount,1);
+ const categoryName=productCategory.rows[0].name as string;
+ const liveCategories=await request('/v1/categories?zoneId='+zid);
+ assert.equal(liveCategories.status,200);
+ assert.ok(liveCategories.body.categories.includes(categoryName));
+ const categoryRestaurants=await request('/v1/restaurants?zoneId='+zid+'&category='+encodeURIComponent(categoryName));
+ assert.equal(categoryRestaurants.status,200);
+ assert.ok(categoryRestaurants.body.restaurants.some((r:{id:string})=>r.id===rid));
+ const nowhere=await request('/v1/categories?zoneId='+randomUUID());
+ assert.deepEqual(nowhere.body.categories,[]);
+
  assert.equal((await request('/v1/me/addresses',{token:customer})).status,200);
  const userBefore=await pool.query('SELECT xmin::text AS row_version FROM users WHERE oidc_subject=$1',[subject('customer')]);
  for(let i=0;i<3;i++)assert.equal((await request('/v1/me/addresses',{token:customer})).status,200);
