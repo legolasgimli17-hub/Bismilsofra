@@ -229,6 +229,58 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal(pilotZone.status,200,JSON.stringify(pilotZone.body));
  assert.equal(pilotZone.body.zone.min_basket_kurus,20000);
 
+ // A real menu supplied by the restaurant can now be entered as one atomic
+ // batch without exposing unfinished draft products to customers.
+ const menuBatchPath='/v1/admin/restaurants/'+pilotId+'/menu-import';
+ const pilotKey='pilot-menu-'+nonce;
+ const rows=[
+  {categoryName:'Çorbalar',productName:'CI Mercimek Çorbası',description:'İşletme onayı bekliyor',priceKurus:12500},
+  {categoryName:'Çorbalar',productName:'CI Ezogelin Çorbası',description:'',priceKurus:14000}
+ ];
+ assert.equal((await request(menuBatchPath,{method:'POST',token:customer,
+  body:{importKey:pilotKey,rows}})).status,403);
+ assert.equal((await request(menuBatchPath,{method:'POST',token:oldAdministrator,
+  body:{importKey:pilotKey,rows}})).status,403);
+ assert.equal((await request('/v1/admin/restaurants/'+rid+'/menu-import',{
+  method:'POST',token:administrator,body:{importKey:'active-'+pilotKey,rows}})).status,409,
+  'active restaurant menu must never be modified by bulk draft importer');
+ assert.equal((await request(menuBatchPath,{method:'POST',token:administrator,
+  body:{importKey:pilotKey,rows:[{...rows[0],priceKurus:12.5}]}})).status,400);
+ const imported=await request(menuBatchPath,{method:'POST',token:administrator,
+  body:{importKey:pilotKey,rows}});
+ assert.equal(imported.status,201,JSON.stringify(imported.body));
+ assert.equal(imported.body.productsCreated,2);
+ assert.equal(imported.body.categoriesCreated,1);
+ assert.equal(imported.body.productsAvailable,false);
+ assert.equal(imported.body.replayed,false);
+ const sameImport=await request(menuBatchPath,{method:'POST',token:administrator,
+  body:{importKey:pilotKey,rows}});
+ assert.equal(sameImport.status,200,JSON.stringify(sameImport.body));
+ assert.equal(sameImport.body.importId,imported.body.importId);
+ assert.equal(sameImport.body.replayed,true);
+ assert.equal((await request(menuBatchPath,{method:'POST',token:administrator,
+  body:{importKey:pilotKey,rows:[{...rows[0],priceKurus:9999}]}})).status,409);
+ const addedRows=await pool.query(`SELECT p.id,p.available,p.image_url,p.price_kurus,p.name,
+  c.name AS category FROM products p JOIN categories c ON c.id=p.category_id
+  WHERE p.restaurant_id=$1 AND c.name='Çorbalar' ORDER BY p.name`,[pilotId]);
+ assert.equal(addedRows.rows.length,2,'idempotent retries must never create duplicate products');
+ assert.ok(addedRows.rows.every((x:{available:boolean;image_url:string|null})=>
+  x.available===false&&x.image_url===null),'imported products cannot be bought before merchant review');
+ const beforeCount=(await pool.query('SELECT count(*)::int AS count FROM products WHERE restaurant_id=$1',[pilotId])).rows[0].count;
+ assert.equal((await request(menuBatchPath,{method:'POST',token:administrator,
+  body:{importKey:'duplicate-'+pilotKey,rows:[
+   {categoryName:'Deneme Kategorisi',productName:'Yeni Deneme Ürünü',description:'',priceKurus:10000},rows[0]
+  ]}})).status,409,'one duplicate must roll back the whole batch');
+ const afterCount=(await pool.query('SELECT count(*)::int AS count FROM products WHERE restaurant_id=$1',[pilotId])).rows[0].count;
+ assert.equal(afterCount,beforeCount,'failed menu import must never leave half-written products');
+ const importAudit=await pool.query(`SELECT details FROM audit_logs
+  WHERE target_id=$1 AND action='admin_menu_import'`,[pilotId]);
+ assert.equal(importAudit.rows.length,1,'a replay cannot create another audit event');
+ assert.deepEqual(importAudit.rows[0].details,{
+  importId:imported.body.importId,productsCreated:2,categoriesCreated:1,allUnavailable:true
+ });
+
+
  const pilotCategory=await request('/v1/restaurant/'+pilotId+'/categories',{method:'POST',token:pilotOwner,body:{name:'Ana Yemekler'}});
  assert.equal(pilotCategory.status,201,JSON.stringify(pilotCategory.body));
  const pilotProduct=await request('/v1/restaurant/'+pilotId+'/products',{method:'POST',token:pilotOwner,
@@ -248,6 +300,11 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  const pilotActive=await request(pilotActivate,{method:'POST',token:administrator,body:{active:true}});
  assert.equal(pilotActive.status,200,JSON.stringify(pilotActive.body));
  assert.equal(pilotActive.body.active,true);
+ assert.equal((await request(menuBatchPath,{method:'POST',token:administrator,
+  body:{importKey:'post-activation-'+nonce,rows:[
+   {categoryName:'Yeni Kategori',productName:'Yeni Ürün',description:'',priceKurus:11000}
+  ]}})).status,409,'bulk staging must never modify active restaurant menus');
+
  assert.equal((await request('/v1/restaurants')).body.restaurants.some((r:{id:string})=>r.id===pilotId),true);
  const draftSafety=await pool.query('SELECT active,is_open,accepts_orders,active_slot FROM restaurants WHERE id=$1',[pilotId]);
  assert.equal(draftSafety.rows[0].is_open,false,'activation must never auto-open the merchant');
