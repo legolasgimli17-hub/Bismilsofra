@@ -202,11 +202,17 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal((await request('/v1/admin/restaurants/'+pilotId+'/owner',{method:'POST',token:administrator,
   body:{email:'missing@example.invalid'}})).status,404,
   'owner must first sign up and verify their account');
+ // A verified email is not globally unique in the historical DB: choose an
+ // independent fictional principal for this onboarding test. Ambiguous email
+ // addresses fail closed rather than assigning an arbitrary account.
+ const pilotEmail='pilot-owner-'+nonce.slice(0,12)+'@example.invalid';
+ const pilotOwner=await sign('pilot-owner',{email:pilotEmail,amr:['pwd','mfa'],auth_time:now});
+ assert.equal((await request('/v1/me/staff-restaurants',{token:pilotOwner})).status,200);
  const ownerAttached=await request('/v1/admin/restaurants/'+pilotId+'/owner',{method:'POST',token:administrator,
-  body:{email:' OWNER@EXAMPLE.INVALID '}});
+  body:{email:pilotEmail.toUpperCase()}});
  assert.equal(ownerAttached.status,201,JSON.stringify(ownerAttached.body));
  assert.equal((await request('/v1/admin/restaurants/'+pilotId+'/owner',{method:'POST',token:administrator,
-  body:{email:'owner@example.invalid'}})).status,409,'draft cannot receive two owners');
+  body:{email:pilotEmail}})).status,409,'draft cannot receive two owners');
 
  const zoneName='CI Yeni Mahalle '+nonce.slice(0,6);
  const newZone=await request('/v1/admin/zones',{method:'POST',token:administrator,body:{name:zoneName}});
@@ -223,18 +229,18 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal(pilotZone.status,200,JSON.stringify(pilotZone.body));
  assert.equal(pilotZone.body.zone.min_basket_kurus,20000);
 
- const pilotCategory=await request('/v1/restaurant/'+pilotId+'/categories',{method:'POST',token:owner,body:{name:'Ana Yemekler'}});
+ const pilotCategory=await request('/v1/restaurant/'+pilotId+'/categories',{method:'POST',token:pilotOwner,body:{name:'Ana Yemekler'}});
  assert.equal(pilotCategory.status,201,JSON.stringify(pilotCategory.body));
- const pilotProduct=await request('/v1/restaurant/'+pilotId+'/products',{method:'POST',token:owner,
+ const pilotProduct=await request('/v1/restaurant/'+pilotId+'/products',{method:'POST',token:pilotOwner,
   body:{categoryId:pilotCategory.body.category.id,name:'CI Ürün',description:'Test ürünüdür',
    priceKurus:25000,imageUrl:null}});
  assert.equal(pilotProduct.status,201,JSON.stringify(pilotProduct.body));
  const pilotProductId=pilotProduct.body.product.id as string;
  assert.equal((await request(pilotActivate,{method:'POST',token:administrator,body:{active:true}})).status,409,
   'unavailable product and missing hours must block activation');
- assert.equal((await request('/v1/restaurant/'+pilotId+'/hours',{method:'PUT',token:owner,
+ assert.equal((await request('/v1/restaurant/'+pilotId+'/hours',{method:'PUT',token:pilotOwner,
   body:{slots:[{dayOfWeek:0,openTime:'09:00',closeTime:'22:00'}]}})).status,200);
- assert.equal((await request('/v1/restaurant/'+pilotId+'/products/'+pilotProductId,{method:'PATCH',token:owner,
+ assert.equal((await request('/v1/restaurant/'+pilotId+'/products/'+pilotProductId,{method:'PATCH',token:pilotOwner,
   body:{available:true}})).status,200);
  const pilotReady=(await request('/v1/admin/restaurants',{token:administrator})).body.restaurants
   .find((r:{id:string})=>r.id===pilotId);
