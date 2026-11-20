@@ -7,6 +7,8 @@ import {placeOrder,quoteOrder,changeStatus,activateRestaurant,transaction} from 
 import {MERCHANT_SUMMARY_QUERY,hasRequiredMigrations,CURRENTLY_ACCEPTING_SQL,REQUIRED_MIGRATIONS} from './operations.ts';
 import {parseWeeklyHours,parseZonePolicy} from './merchant-management.ts';
 import {parseProductDraft,parseCategoryDraft} from './merchant-menu.ts';
+import {MAX_OPTION_GROUPS_PER_PRODUCT,MAX_CHOICES_PER_GROUP,parseNewGroup,parseGroupUpdate,
+ parseNewChoice,parseChoiceUpdate,assertEnoughChoices,normalizedOptionName} from './merchant-options.ts';
 import {prepareRestaurantPhoto,photoStorageSettings,s3MediaStorage,photoObjectKey,photoPublicUrl,MAX_PHOTO_UPLOAD_BYTES} from './media-service.ts';
 
 if(!process.env.DATABASE_URL)throw new Error('DATABASE_URL gerekli');
@@ -75,7 +77,7 @@ app.get('/v1/restaurants/:id/menu',async(req)=>{
  if(!rest.rowCount)invalid('NOT_FOUND','Restoran bulunamadı.',404);
  const ps=await pool.query('SELECT id,category_id,name,description,price_kurus,image_url,available FROM products WHERE restaurant_id=$1 ORDER BY sort_order,name LIMIT 500',[id]);
  const ids=ps.rows.map(p=>p.id);
- const gs=ids.length?await pool.query('SELECT id,product_id,name,min_select,max_select FROM option_groups WHERE product_id=ANY($1::uuid[])',[ids]):{rows:[]};
+ const gs=ids.length?await pool.query('SELECT id,product_id,name,min_select,max_select FROM option_groups WHERE product_id=ANY($1::uuid[]) AND archived=false',[ids]):{rows:[]};
  const gids=gs.rows.map(g=>g.id);
  const os=gids.length?await pool.query('SELECT id,group_id,name,price_kurus,available FROM options WHERE group_id=ANY($1::uuid[])',[gids]):{rows:[]};
  return {restaurant:rest.rows[0],products:ps.rows.map(p=>({...p,optionGroups:gs.rows.filter(g=>g.product_id===p.id).map(g=>({...g,options:os.rows.filter(o=>o.group_id===g.id)}))}))};
@@ -332,6 +334,115 @@ app.patch('/v1/restaurant/:rid/products/:pid/details',async(req)=>{
   await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',
    [userId,'menu_product_update','product',pid,JSON.stringify({restaurantId:rid,categoryId:input.categoryId,priceKurus:input.priceKurus,revisionBefore:revision})]);
   return {product:p.rows[0]};
+ });
+});
+// Restaurant product customizations. Archiving a group hides it from NEW
+// checkouts without changing historical immutable order item snapshots.
+app.get('/v1/restaurant/:rid/products/:pid/option-groups',async req=>{
+ const rid=idParam(req,'rid'),pid=idParam(req,'pid');await staff(req,rid,'menu');
+ const product=await pool.query('SELECT id FROM products WHERE restaurant_id=$1 AND id=$2',[rid,pid]);
+ if(!product.rowCount)invalid('NOT_FOUND','Bu restoranın ürünü bulunamadı.',404);
+ const groups=await pool.query(`SELECT id,name,min_select,max_select,archived,revision FROM option_groups
+  WHERE product_id=$1 ORDER BY name,id LIMIT 8`,[pid]);
+ const gids=groups.rows.map(g=>g.id);
+ const options=gids.length?(await pool.query(`SELECT id,group_id,name,price_kurus,available,revision FROM options
+  WHERE group_id=ANY($1::uuid[]) ORDER BY name,id`,[gids])).rows:[];
+ return {groups:groups.rows.map(g=>({...g,options:options.filter(o=>o.group_id===g.id)}))};
+});
+app.post('/v1/restaurant/:rid/products/:pid/option-groups',async(req,reply)=>{
+ const rid=idParam(req,'rid'),pid=idParam(req,'pid'),{userId}=await staff(req,rid,'menu');
+ const input=parseNewGroup(req.body);
+ const result=await transaction(pool,async db=>{
+  const product=await db.query('SELECT id FROM products WHERE restaurant_id=$1 AND id=$2 FOR UPDATE',[rid,pid]);
+  if(!product.rowCount)invalid('NOT_FOUND','Bu restoranın ürünü bulunamadı.',404);
+  const existing=await db.query('SELECT id,name FROM option_groups WHERE product_id=$1',[pid]);
+  if(existing.rows.length>=MAX_OPTION_GROUPS_PER_PRODUCT)invalid('OPTION_GROUP_LIMIT','Üründe en fazla 8 seçenek grubu bulunabilir.',409);
+  if(existing.rows.some(g=>normalizedOptionName(g.name)===normalizedOptionName(input.name)))
+   invalid('OPTION_DUPLICATE','Bu seçenek grubu zaten mevcut.',409);
+  const group=await db.query(`INSERT INTO option_groups(product_id,name,min_select,max_select)
+   VALUES($1,$2,0,1) RETURNING id,name,min_select,max_select,archived,revision`,[pid,input.name]);
+  await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',
+   [userId,'option_group_create','option_group',group.rows[0].id,JSON.stringify({restaurantId:rid,productId:pid})]);
+  return group.rows[0];
+ });
+ reply.code(201);return {group:result};
+});
+app.patch('/v1/restaurant/:rid/products/:pid/option-groups/:gid',async req=>{
+ const rid=idParam(req,'rid'),pid=idParam(req,'pid'),gid=idParam(req,'gid');
+ const {userId}=await staff(req,rid,'menu');
+ const input=parseGroupUpdate(req.body);
+ return transaction(pool,async db=>{
+  const group=await db.query(`SELECT g.id,g.name,g.min_select,g.max_select,g.archived,g.revision
+   FROM option_groups g JOIN products p ON p.id=g.product_id
+   WHERE g.id=$1 AND g.product_id=$2 AND p.restaurant_id=$3 FOR UPDATE OF g`,[gid,pid,rid]);
+  if(!group.rowCount)invalid('NOT_FOUND','Seçenek grubu bulunamadı.',404);
+  if(group.rows[0].revision!==input.revision)
+   invalid('OPTION_CONFLICT','Bu seçenek grubu başka çalışan tarafından değiştirildi. Yenileyin.',409);
+  const all=await db.query('SELECT id,name,available FROM options WHERE group_id=$1',[gid]);
+  assertEnoughChoices(input.minSelect,all.rows.filter(o=>o.available===true).length,input.archived);
+  const other=await db.query('SELECT id,name FROM option_groups WHERE product_id=$1 AND id<>$2',[pid,gid]);
+  if(other.rows.some(g=>normalizedOptionName(g.name)===normalizedOptionName(input.name)))
+   invalid('OPTION_DUPLICATE','Bu seçenek grubu zaten mevcut.',409);
+  const changed=await db.query(`UPDATE option_groups
+    SET name=$1,min_select=$2,max_select=$3,archived=$4,revision=revision+1
+    WHERE id=$5 AND product_id=$6 AND revision=$7
+    RETURNING id,name,min_select,max_select,archived,revision`,
+   [input.name,input.minSelect,input.maxSelect,input.archived,gid,pid,input.revision]);
+  if(!changed.rowCount)invalid('OPTION_CONFLICT','Seçenek grubu değişti. Yenileyin.',409);
+  await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',
+   [userId,'option_group_update','option_group',gid,JSON.stringify({restaurantId:rid,productId:pid,revisionBefore:input.revision})]);
+  return {group:changed.rows[0]};
+ });
+});
+app.post('/v1/restaurant/:rid/products/:pid/option-groups/:gid/options',async(req,reply)=>{
+ const rid=idParam(req,'rid'),pid=idParam(req,'pid'),gid=idParam(req,'gid');
+ const {userId}=await staff(req,rid,'menu');
+ const input=parseNewChoice(req.body);
+ const result=await transaction(pool,async db=>{
+  const group=await db.query(`SELECT g.id FROM option_groups g JOIN products p ON p.id=g.product_id
+    WHERE g.id=$1 AND g.product_id=$2 AND p.restaurant_id=$3 FOR UPDATE OF g`,[gid,pid,rid]);
+  if(!group.rowCount)invalid('NOT_FOUND','Seçenek grubu bulunamadı.',404);
+  const choices=await db.query('SELECT id,name FROM options WHERE group_id=$1',[gid]);
+  if(choices.rows.length>=MAX_CHOICES_PER_GROUP)
+   invalid('OPTION_CHOICE_LIMIT','Bir grupta en fazla 12 seçenek bulunabilir.',409);
+  if(choices.rows.some(o=>normalizedOptionName(o.name)===normalizedOptionName(input.name)))
+   invalid('OPTION_DUPLICATE','Bu seçenek zaten mevcut.',409);
+  const created=await db.query(`INSERT INTO options(group_id,name,price_kurus,available)
+    VALUES($1,$2,$3,true) RETURNING id,group_id,name,price_kurus,available,revision`,
+   [gid,input.name,input.priceKurus]);
+  await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',
+   [userId,'option_choice_create','option',created.rows[0].id,JSON.stringify({restaurantId:rid,productId:pid,groupId:gid,priceKurus:input.priceKurus})]);
+  return created.rows[0];
+ });
+ reply.code(201);return {option:result};
+});
+app.patch('/v1/restaurant/:rid/products/:pid/option-groups/:gid/options/:oid',async req=>{
+ const rid=idParam(req,'rid'),pid=idParam(req,'pid'),gid=idParam(req,'gid'),oid=idParam(req,'oid');
+ const {userId}=await staff(req,rid,'menu');
+ const input=parseChoiceUpdate(req.body);
+ return transaction(pool,async db=>{
+  const group=await db.query(`SELECT g.id,g.min_select,g.archived FROM option_groups g
+   JOIN products p ON p.id=g.product_id
+   WHERE g.id=$1 AND g.product_id=$2 AND p.restaurant_id=$3 FOR UPDATE OF g`,[gid,pid,rid]);
+  if(!group.rowCount)invalid('NOT_FOUND','Seçenek grubu bulunamadı.',404);
+  const current=await db.query('SELECT id,revision,available FROM options WHERE id=$1 AND group_id=$2 FOR UPDATE',[oid,gid]);
+  if(!current.rowCount)invalid('NOT_FOUND','Seçenek bu grupta bulunamadı.',404);
+  if(current.rows[0].revision!==input.revision)
+   invalid('OPTION_CONFLICT','Bu seçenek başka çalışan tarafından değiştirildi. Yenileyin.',409);
+  const all=await db.query('SELECT id,name,available FROM options WHERE group_id=$1',[gid]);
+  if(all.rows.some(o=>o.id!==oid&&normalizedOptionName(o.name)===normalizedOptionName(input.name)))
+   invalid('OPTION_DUPLICATE','Bu seçenek zaten mevcut.',409);
+  const availableCount=all.rows.filter(o=>o.available===true).length;
+  const futureCount=availableCount+(input.available?1:0)-(current.rows[0].available===true?1:0);
+  assertEnoughChoices(Number(group.rows[0].min_select),futureCount,group.rows[0].archived===true);
+  const changed=await db.query(`UPDATE options SET name=$1,price_kurus=$2,available=$3,revision=revision+1
+    WHERE id=$4 AND group_id=$5 AND revision=$6
+    RETURNING id,group_id,name,price_kurus,available,revision`,
+   [input.name,input.priceKurus,input.available,oid,gid,input.revision]);
+  if(!changed.rowCount)invalid('OPTION_CONFLICT','Seçenek değişti. Yenileyin.',409);
+  await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',
+   [userId,'option_choice_update','option',oid,JSON.stringify({restaurantId:rid,productId:pid,groupId:gid,revisionBefore:input.revision,available:input.available,priceKurus:input.priceKurus})]);
+  return {option:changed.rows[0]};
  });
 });
 app.put('/v1/restaurant/:rid/hours',async(req)=>{
