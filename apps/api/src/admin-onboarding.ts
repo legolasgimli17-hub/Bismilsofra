@@ -46,7 +46,9 @@ export function parseRestaurantZone(raw:unknown){
 }
 export async function listPilotRestaurants(pool:Pool){
  const result=await pool.query(`SELECT r.id,r.name,r.slug,r.phone,r.active,r.is_open,r.accepts_orders,r.active_slot,
-  EXISTS(SELECT 1 FROM restaurant_staff s WHERE s.restaurant_id=r.id AND s.role='owner') AS has_owner,
+  EXISTS(SELECT 1 FROM restaurant_staff s
+   JOIN users u ON u.id=s.user_id AND u.enabled=true
+   WHERE s.restaurant_id=r.id AND s.role='owner') AS has_owner,
   EXISTS(SELECT 1 FROM products p WHERE p.restaurant_id=r.id AND p.available=true) AS has_menu,
   EXISTS(SELECT 1 FROM restaurant_hours h WHERE h.restaurant_id=r.id) AS has_hours,
   EXISTS(SELECT 1 FROM restaurant_delivery_zones dz

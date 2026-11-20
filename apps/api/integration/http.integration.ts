@@ -373,6 +373,24 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  const userAudit=await pool.query("SELECT action,details FROM audit_logs WHERE target_id=$1 AND action='admin_user_access'",[staffUid]);
  assert.equal(userAudit.rows.length,2,'disable and restore each have durable audit event');
  assert.ok(!JSON.stringify(userAudit.rows).includes(teamStaffEmail));
+ // A disabled owner on an INACTIVE draft must never satisfy later activation.
+ // This closes the gap between admin account restrictions and pilot readiness.
+ const ownerSuspended=await request('/v1/admin/users/'+pilotOwnerUid+'/access',{
+  method:'POST',token:administrator,
+  body:{enabled:false,expectedEnabled:true,reasonCode:'suspicious_activity'}});
+ assert.equal(ownerSuspended.status,200,JSON.stringify(ownerSuspended.body));
+ assert.equal((await request('/v1/me/staff-restaurants',{token:pilotOwner})).status,403);
+ const disabledOwnerRoster=await request('/v1/admin/restaurants',{token:administrator});
+ assert.equal(disabledOwnerRoster.status,200);
+ assert.equal(disabledOwnerRoster.body.restaurants.find((r:{id:string})=>r.id===pilotId).has_owner,false);
+ const ownerNotReady=await request(pilotActivate,{method:'POST',token:administrator,body:{active:true}});
+ assert.equal(ownerNotReady.status,409,'disabled account cannot satisfy the owner go-live gate');
+ const restoredOwner=await request('/v1/admin/users/'+pilotOwnerUid+'/access',{
+  method:'POST',token:administrator,
+  body:{enabled:true,expectedEnabled:false,reasonCode:'appeal'}});
+ assert.equal(restoredOwner.status,200);
+ assert.equal((await request('/v1/admin/restaurants',{token:administrator})).body.restaurants
+  .find((r:{id:string})=>r.id===pilotId).has_owner,true);
 
 
  assert.equal((await request('/v1/admin/alerts',{token:customer})).status,403);
