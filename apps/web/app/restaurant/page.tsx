@@ -109,11 +109,38 @@ function Inner({token}:{token:()=>Promise<string>}){
   if(running){setList(r.restaurants);setRid(r.restaurants[0]?.id||'')}
  }).catch(e=>{if(running){setState('offline');setError(e instanceof Error?e.message:'Restoran listesi yüklenemedi')}});
   return()=>{running=false}},[token]);
- useEffect(()=>{void load();const timer=setInterval(()=>{setNow(Date.now());if(document.visibilityState==='visible')void load()},7000);
-  const resume=()=>{if(document.visibilityState==='visible')void load()};
+ useEffect(()=>{
+  const offline=()=>{
+   requestSequence.current++;requestController.current?.abort();
+   setBrowserOnline(false);setState('offline');setNow(Date.now());
+   setError('Bu cihaz internete bağlı değil. Siparişler güncellenemiyor.');
+  };
+  const online=()=>{
+   setBrowserOnline(true);setNow(Date.now());setState('connecting');
+   if(document.visibilityState==='visible')void load();
+  };
+  const resume=()=>{
+   setNow(Date.now());
+   if(document.visibilityState==='visible'){
+    if(navigator.onLine)online();else offline();
+   }
+  };
+  if(!navigator.onLine)offline();else void load();
+  const timer=setInterval(()=>{
+   setNow(Date.now());
+   if(document.visibilityState==='visible'&&navigator.onLine)void load();
+  },7000);
+  window.addEventListener('online',online);
+  window.addEventListener('offline',offline);
   document.addEventListener('visibilitychange',resume);
-  return()=>{clearInterval(timer);document.removeEventListener('visibilitychange',resume)}},[load]);
- const connected=canActOnInbox(state,lastSyncMs,now);
+  return()=>{
+   clearInterval(timer);
+   window.removeEventListener('online',online);window.removeEventListener('offline',offline);
+   document.removeEventListener('visibilitychange',resume);
+   requestController.current?.abort();
+  };
+ },[load]);
+ const connected=canActOnInbox(state,lastSyncMs,now,browserOnline);
  const selectedMerchant=list.find(r=>r.id===rid);
  const canManage=selectedMerchant?.role==='owner'||selectedMerchant?.role==='manager'||selectedMerchant?.can_manage_orders===true;
  async function toggleDetail(id:string){
