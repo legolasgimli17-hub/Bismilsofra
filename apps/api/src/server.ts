@@ -245,16 +245,17 @@ app.post('/v1/restaurant/:rid/photos',{
  if(req.headers['x-photo-rights-affirmed']!=='true')
   invalid('PHOTO_RIGHTS_REQUIRED','Yalnızca paylaşma hakkınız olan restoran fotoğraflarını yükleyebilirsiniz.',400);
  const settings=photoStorageSettings();
- if(!settings)invalid('PHOTO_STORAGE_NOT_READY','Fotoğraf yükleme sunucusu henüz yapılandırılmadı.',503);
- if(!Buffer.isBuffer(req.body))
-  invalid('PHOTO_TYPE','Fotoğrafı JPEG, PNG veya WebP dosyası olarak gönderin.',415);
+ if(!settings)return invalid('PHOTO_STORAGE_NOT_READY','Fotoğraf yükleme sunucusu henüz yapılandırılmadı.',503);
+ const rawImage=req.body;
+ if(!Buffer.isBuffer(rawImage))
+  return invalid('PHOTO_TYPE','Fotoğrafı JPEG, PNG veya WebP dosyası olarak gönderin.',415);
  const current=await pool.query(`SELECT
    count(*)::int AS total,
    count(*) FILTER (WHERE created_at>now()-interval '1 hour')::int AS recent
   FROM restaurant_media WHERE restaurant_id=$1`,[rid]);
  if(current.rows[0].total>=1000||current.rows[0].recent>=40)
   invalid('PHOTO_LIMIT','Fotoğraf kotasına ulaşıldı; eski fotoğrafları düzenleyin.',429);
- const photo=await prepareRestaurantPhoto(req.body);
+ const photo=await prepareRestaurantPhoto(rawImage);
  const key=photoObjectKey(rid);
  const url=photoPublicUrl(settings,key);
  const storage=s3MediaStorage(settings);
