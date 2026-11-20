@@ -4,7 +4,7 @@ import Link from 'next/link';
 import AuthGate from '@/components/auth-gate';
 import {api,ApiError} from '@/lib/api';
 import {money,statusText} from '@/lib/types';
-import {canActOnInbox,inboxLabel,unseenPendingIds,type InboxHealth} from '@/lib/inbox-health';
+import {canActOnInbox,currentInboxRequest,inboxLabel,unseenPendingIds,type InboxHealth} from '@/lib/inbox-health';
 import {canSubmitMerchantAction,merchantNextActions} from '@/lib/merchant-workflow';
 import {RefreshCcw,Bell,ShieldCheck,WifiOff,Wifi,AlertTriangle,ChevronDown,Clock3,PackageCheck,MapPin,ClipboardList} from 'lucide-react';
 type Merchant={id:string;name:string;role:string;can_view_orders:boolean;can_manage_orders:boolean;can_manage_menu:boolean};
@@ -26,6 +26,8 @@ function Inner({token}:{token:()=>Promise<string>}){
  const [detailLoading,setDetailLoading]=useState(''),[reasons,setReasons]=useState<Record<string,string>>({});
  const ridRef=useRef(rid);
  const requestSequence=useRef(0);
+ const requestController=useRef<AbortController|null>(null);
+ const [browserOnline,setBrowserOnline]=useState(true);
  const seenIds=useRef<string[]>([]);
  const sawSnapshot=useRef(false);
  const alertAudio=useRef<AudioContext|null>(null);
@@ -57,13 +59,31 @@ function Inner({token}:{token:()=>Promise<string>}){
   }catch{setError('Sesli uyarı etkinleştirilemedi. Tarayıcı izinlerini kontrol edin.')}
  }
  useEffect(()=>()=>{soundOnRef.current=false;void alertAudio.current?.close()},[]);
- useEffect(()=>{ridRef.current=rid;requestSequence.current++;seenIds.current=[];sawSnapshot.current=false;setIncomingCount(0);setPending([]);setActive([]);setDetails({});setOpenOrder(null);setTruncated(false);setLastSync('');setLastSyncMs(0);setState('connecting');setError('')},[rid]);
+ useEffect(()=>{
+  ridRef.current=rid;requestSequence.current++;
+  requestController.current?.abort();requestController.current=null;
+  seenIds.current=[];sawSnapshot.current=false;setIncomingCount(0);
+  setPending([]);setActive([]);setDetails({});setOpenOrder(null);
+  setTruncated(false);setLastSync('');setLastSyncMs(0);
+  setState('connecting');setError('');
+ },[rid]);
  const load=useCallback(async()=>{
   if(!rid)return;
+  if(!navigator.onLine){
+   requestSequence.current++;requestController.current?.abort();
+   setBrowserOnline(false);setState('offline');setNow(Date.now());return;
+  }
   const sequence=++requestSequence.current;
+  requestController.current?.abort();
+  const controller=new AbortController();
+  requestController.current=controller;
   try{
-   const t=await token();const r=await api<{pending:Summary[];active:Summary[];serverTime:string;pendingTruncated:boolean;activeTruncated:boolean}>(`/v1/restaurant/${rid}/inbox`,t);
-   if(ridRef.current!==rid||sequence!==requestSequence.current)return;
+   const t=await token();
+   if(controller.signal.aborted)return;
+   const r=await api<{pending:Summary[];active:Summary[];serverTime:string;pendingTruncated:boolean;activeTruncated:boolean}>(
+    `/v1/restaurant/${rid}/inbox`,t,{signal:controller.signal});
+   if(!currentInboxRequest(rid,ridRef.current,sequence,requestSequence.current,
+     controller.signal.aborted,navigator.onLine))return;
    const currentIds=r.pending.map(o=>o.id);
    const newIds=unseenPendingIds(seenIds.current,currentIds);
    if(sawSnapshot.current&&newIds.length>0){
@@ -73,12 +93,16 @@ function Inner({token}:{token:()=>Promise<string>}){
    seenIds.current=currentIds;sawSnapshot.current=true;
    setPending(r.pending);setActive(r.active);setTruncated(Boolean(r.pendingTruncated||r.activeTruncated));
    setLastSync(new Date(r.serverTime).toLocaleTimeString('tr-TR'));
-   const stamp=Date.now();setLastSyncMs(stamp);setNow(stamp);setState('connected');setError('');
+   const stamp=Date.now();setLastSyncMs(stamp);setNow(stamp);setBrowserOnline(true);setState('connected');setError('');
   }catch(e){
-   if(ridRef.current!==rid||sequence!==requestSequence.current)return;
-   setState('offline');
-   if(e instanceof ApiError&&[401,403].includes(e.status)){setPending([]);setActive([]);setDetails({});seenIds.current=[];sawSnapshot.current=false}
+   if(controller.signal.aborted||ridRef.current!==rid||sequence!==requestSequence.current)return;
+   setBrowserOnline(navigator.onLine);setState('offline');
+   if(e instanceof ApiError&&[401,403].includes(e.status)){
+    setPending([]);setActive([]);setDetails({});seenIds.current=[];sawSnapshot.current=false;
+   }
    setError(e instanceof Error?e.message:'Bağlantı hatası');
+  }finally{
+   if(requestController.current===controller)requestController.current=null;
   }
  },[rid,token]);
  useEffect(()=>{let running=true;token().then(t=>api<{restaurants:Merchant[]}>('/v1/me/staff-restaurants',t)).then(r=>{
