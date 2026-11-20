@@ -318,7 +318,7 @@ app.post('/v1/restaurant/:rid/products/:pid/option-groups/:gid/options',async(re
   await optionAudit(db,userId,'option_choice_create',result.rows[0].id,rid);
   return result.rows[0];
  });
- reply.code(201);return {choice};
+ reply.code(201);return {option:choice};
 });
 app.patch('/v1/restaurant/:rid/products/:pid/option-groups/:gid/options/:oid',async req=>{
  const rid=idParam(req,'rid'),pid=idParam(req,'pid'),gid=idParam(req,'gid'),oid=idParam(req,'oid'),{userId}=await staff(req,rid,'menu');
@@ -338,7 +338,7 @@ app.patch('/v1/restaurant/:rid/products/:pid/option-groups/:gid/options/:oid',as
   const result=await db.query(`UPDATE options SET name=$1,price_kurus=$2,available=$3,revision=revision+1
    WHERE id=$4 RETURNING *`,[draft.name,draft.priceKurus,draft.available,oid]);
   await optionAudit(db,userId,'option_choice_update',oid,rid);
-  return {choice:result.rows[0]};
+  return {option:result.rows[0]};
  });
 });
 
