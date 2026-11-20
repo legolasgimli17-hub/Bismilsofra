@@ -140,6 +140,11 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal((await request('/v1/me/staff-restaurants',{token:namespacedWithoutMfa})).status,403);
  assert.equal((await request('/v1/zones',{headers:{Origin:'https://evil.example'}})).status,403);
  assert.equal((await request('/v1/me/addresses',{token:customer})).status,200);
+ const userBefore=await pool.query('SELECT xmin::text AS row_version FROM users WHERE oidc_subject=$1',[subject('customer')]);
+ for(let i=0;i<3;i++)assert.equal((await request('/v1/me/addresses',{token:customer})).status,200);
+ const userAfter=await pool.query('SELECT xmin::text AS row_version FROM users WHERE oidc_subject=$1',[subject('customer')]);
+ assert.equal(userAfter.rows[0].row_version,userBefore.rows[0].row_version,
+  'routine authenticated requests must not rewrite the users row');
  assert.equal((await request('/v1/me/staff-restaurants',{token:noMfa})).status,403);
  assert.equal((await request('/v1/me/staff-restaurants',{token:owner})).status,200);
  const ownerRow=await pool.query('SELECT id FROM users WHERE oidc_subject=$1',[subject('owner')]);
@@ -466,4 +471,13 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  const done=await pool.query('SELECT sent_at,attempts FROM notification_outbox WHERE id=$1',[eventId]);
  assert.ok(done.rows[0].sent_at);
  assert.equal(done.rows[0].attempts,2);
+ // Deliberately run last: spoofing a different client IP in X-Forwarded-For
+ // must NOT bypass the per-origin order limiter when no peer is trusted.
+ let responseCode=0;
+ for(let i=0;i<15;i++){
+  const response=await fetch(base+'/v1/orders',{method:'POST',
+   headers:{'X-Forwarded-For':'192.0.2.'+(i+1)},signal:AbortSignal.timeout(4000)});
+  responseCode=response.status;
+ }
+ assert.equal(responseCode,429,'untrusted forwarded IP must not evade order quota');
 });
