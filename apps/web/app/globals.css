@@ -486,3 +486,36 @@ body{background:#fbfaf7;color:#263129}
  .merchant-control-bar select{min-height:48px}
 }
 @media(max-width:370px){.merchant-order-actions{grid-template-columns:1fr}}
+
+/* Private order investigation by exact number, no customer roster. */
+.admin-order-investigation{margin-top:28px}
+.admin-order-head h2{display:flex;gap:9px;align-items:center;font-size:21px;margin:0 0 8px}
+.admin-order-head p{max-width:75ch;line-height:1.6}
+.admin-order-search{display:flex;align-items:end;gap:12px;margin:16px 0 22px}
+.admin-order-search label{display:flex;flex-direction:column;gap:7px;font-size:13px;font-weight:800;flex:1;max-width:440px}
+.admin-order-search input{border:1px solid #cad9ce;border-radius:10px;background:white;min-height:46px;padding:10px 13px;font-size:14px;width:100%}
+.admin-order-search .btn{min-height:46px}
+.admin-order-results{display:grid;gap:11px}
+.admin-order-result{display:grid;grid-template-columns:minmax(150px,1.3fr) minmax(150px,1fr) auto;align-items:center;gap:15px;border:1px solid #dce9dd;border-radius:12px;padding:15px;background:#fafdfa}
+.admin-order-result>div:first-child,.admin-order-result-status{display:flex;flex-direction:column;gap:5px}
+.admin-order-result strong{font-size:14px}
+.admin-order-result span{font-size:13px;color:#3e5345;overflow-wrap:anywhere}
+.admin-order-result small{display:flex;gap:5px;align-items:center;color:#657568;font-size:11px}
+.admin-order-result .btn{min-height:44px;white-space:nowrap}
+.admin-order-detail{margin-top:20px;border:1px solid #cfe3d4;border-radius:15px;padding:18px;background:#f9fcfa}
+.admin-order-detail h3{display:flex;align-items:center;gap:8px;margin:0 0 18px;font-size:19px;overflow-wrap:anywhere}
+.admin-order-detail h4{font-size:16px;margin:20px 0 10px}
+.admin-order-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.admin-order-facts>div{border-radius:10px;border:1px solid #dce9dc;padding:12px;background:white;display:flex;flex-direction:column;gap:7px}
+.admin-order-facts span{font-size:12px;color:#607165}
+.admin-order-facts strong{font-size:14px;overflow-wrap:anywhere}
+.admin-order-lines>div{display:flex;justify-content:space-between;align-items:start;gap:12px;padding:11px 0;border-bottom:1px solid #dde9df;font-size:13px}
+.admin-order-lines>div>span{display:flex;flex-direction:column;gap:5px}
+.admin-order-lines small{font-size:12px;color:#657568}
+.admin-order-history{margin:0;padding-left:22px}
+.admin-order-history li{padding:9px 0;border-bottom:1px solid #e0eae1}
+.admin-order-history li div{display:flex;align-items:start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.admin-order-history small{font-size:12px;color:#657568}
+.admin-order-history p{font-size:13px;margin:7px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:850px){.admin-order-result{grid-template-columns:1fr 1fr}.admin-order-result .btn{grid-column:1/-1;width:100%}.admin-order-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.admin-order-search{flex-direction:column;align-items:stretch}.admin-order-search label{max-width:none}.admin-order-result{grid-template-columns:1fr}.admin-order-result .btn{grid-column:auto;min-height:52px}.admin-order-detail{padding:14px}.admin-order-facts{gap:8px}}

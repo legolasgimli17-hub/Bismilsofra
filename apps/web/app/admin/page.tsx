@@ -5,6 +5,7 @@ import SupportOperations from '@/components/support-operations';
 import PilotOnboarding from '@/components/pilot-onboarding';
 import PilotReports from '@/components/pilot-reports';
 import UserAccessOperations from '@/components/user-access-operations';
+import AdminOrderInvestigation from '@/components/admin-order-investigation';
 import {api} from '@/lib/api';
 import {AlertTriangle,ShieldCheck,RefreshCcw,WifiOff,BellRing,Clock3} from 'lucide-react';
 
@@ -99,6 +100,7 @@ function Inner({token}:{token:()=>Promise<string>}){
    {alerts?.workers?.some(x=>x.status!=='running')&&
     <p className="notice error" role="alert">Bir veya daha fazla arka plan işçisi kontrol edilmeli. Süreç/DB bağlantısını ve bildirim sağlayıcısını doğrulayın; gerekirse operasyon sorumlusuna haber verin.</p>}
   </section>
+  <AdminOrderInvestigation token={token}/>
   <SupportOperations token={token}/>
   <p className="muted">Uyarı sıfır görünse bile pilot öncesi gerçek SMS/push ve bağımsız yedek kanal testleri gereklidir. Destek talebi durumları müşterinin Siparişlerim ekranında görülebilir; otomatik müşteri mesajı veya para iadesi yapılmaz.</p>
  </section>;
