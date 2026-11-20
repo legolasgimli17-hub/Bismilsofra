@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 
 if(!process.env.DATABASE_URL)throw new Error('DATABASE_URL gerekli');
 const pool=new Pool({connectionString:process.env.DATABASE_URL,max:1,connectionTimeoutMillis:5000});
-const migrations=['001_initial.sql','003_reliability.sql','004_escalation.sql','005_product_revisions.sql','006_restaurant_media.sql','007_product_options_editor.sql','008_outbox_leases.sql'];
+const migrations=['001_initial.sql','003_reliability.sql','004_escalation.sql','005_product_revisions.sql','006_restaurant_media.sql','007_product_options_editor.sql','008_outbox_leases.sql','009_escalation_leases.sql'];
 const src=(name:string)=>readFileSync(fileURLToPath(new URL('../sql/'+name,import.meta.url)),'utf8');
 const checksum=(text:string)=>createHash('sha256').update(text).digest('hex');
 const withoutWrapper=(sql:string)=>sql.replace(/^\s*BEGIN;\s*/i,'').replace(/\s*COMMIT;\s*$/i,'');
