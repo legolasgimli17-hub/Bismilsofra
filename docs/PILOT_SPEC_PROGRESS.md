@@ -13,7 +13,7 @@ Tarih: 20 Kasım 2026. Kaynak: 17.11.2026 tarihli `spec.md v0.1` ve `Bismil_Yeme
 | --- | --- | --- |
 | Profesyonel müşteri vitrini / kategori / menü | Next.js restoran listesi, mahalle filtresi, ürün seçenekleri, arama, demo ve gerçek API ayrımı var | Gerçek restoran fotoğrafları, cihaz erişilebilirlik testi, sayfa hızı ve kullanıcı denemesi |
 | Güvenli müşteri hesabı ve esnaf MFA | İmzalı OIDC token, yetki, test senaryoları var | **Gerçek Auth0 tenant**, doğrulama e-postası, şifre sıfırlama, MFA ve hesap kurtarma uçtan uca |
-| Sepet / mahalle / kapıda ödeme | Sunucu fiyat/uygunluk doğrulaması, idempotency, teslimat ücreti, geçmiş sipariş var | Gerçek ilk müşteri akışı, adres anlaşılabilirliği, iptal testleri |
+| Sepet / mahalle / kapıda ödeme | Sunucu fiyat/uygunluk doğrulaması, idempotency, teslimat ücreti, geçmiş sipariş; **bu PR:** müşteri adres defteri, ekleme/düzenleme/arşivleme, eski sipariş snapshot'ını koruma | Gerçek ilk müşteri akışı, adres formu ve kapıda ödeme cihaz testleri |
 | Restoran sipariş ve menü paneli | Sipariş kabul/red, durum, saat/mahalle/ürün/seçenek/ekstra, reconnect, foto yükleme kodu var | Gerçek tablet/telefon, bildirim sesi ve kayıp bağlantı saha testi |
 | **Restoran pilot kurulumu** | Admin kapalı taslak, doğrulanmış owner, mahalle/ücret, menü/saat kontrolü, aktivasyon/kapatma | 5 gerçek işletme onayı, doğrulanmış hesaplar, izinli görseller, eğitim |
 | Admin toplu menü kurulumu | **Bu PR:** Excel/Sheets'den 4 sütun yapıştırma; 1–50 ürün önizlemesi, veritabanı transaction/tekrar deneme koruması; ürünler satışa kapalı | 5 gerçek işletmenin menü/fiyat onayı, fotoğraf telifi ve ürün/opsiyon kontrolü |

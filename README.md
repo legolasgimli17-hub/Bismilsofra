@@ -165,3 +165,6 @@ CI artık kurgu PostgreSQL 17 verisini `pg_dump` ile yedekleyip **ayrı bir test
 
 ## Pilot: toplu gerçek menü kurulumu
 Yönetici `/admin` altında kapalı restoran taslağı seçerek Excel/Sheets'teki dört sütunluk (kategori, ürün, açıklama, TL fiyat) gerçek menüyü toplu aktarabilir. 50 ürün/batch; aynı talep tekrarında çift kayıt açılmaz ve ürünler işletme yetkilisi onaylayana kadar **satışa kapalı** kalır. [Menü aktarım rehberi](docs/ADMIN_MENU_IMPORT_PILOT.md).
+
+## Müşteri — Adreslerim
+`/account` artık doğrulanmış kullanıcıya kayıtlı adreslerini ekleme, düzenleme ve arşivleme imkânı verir. Arşivlenmiş adrese **yeni sipariş** verilemez; geçmiş siparişlerin immutable teslimat bilgisi korunur. `/checkout` üzerinden hesabın adres defterine gidilebilir. [Adres yönetimi ve veri geçmişi](docs/CUSTOMER_ADDRESS_BOOK.md).
