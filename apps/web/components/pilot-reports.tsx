@@ -107,7 +107,7 @@ export default function PilotReports({token,restaurantId}:{token:()=>Promise<str
     </table></div>
     <p className="muted">En fazla 50 restoran gösterilir; önce en çok sipariş almış işletmeler listelenir.</p>
    </div>}
-   <p className="muted pilot-report-disclaimer">**Muhasebe notu:** Teslim edildi değeri restorana ait kapıda nakit/POS sipariş tutarlarının toplamıdır. Gerçek tahsilat, iade, platform komisyonu veya banka mutabakatı anlamına gelmez. Bu rapor müşteri ziyaret→sipariş dönüşümünü ölçmez; bunun için ayrı, izinli analitik gerekir.</p>
+   <p className="muted pilot-report-disclaimer">Muhasebe notu: Teslim edildi değeri restorana ait kapıda nakit/POS sipariş tutarlarının toplamıdır. Gerçek tahsilat, iade, platform komisyonu veya banka mutabakatı anlamına gelmez. Bu rapor müşteri ziyaret→sipariş dönüşümünü ölçmez; bunun için ayrı, izinli analitik gerekir.</p>
   </>}
  </section>;
 }

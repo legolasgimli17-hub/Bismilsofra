@@ -17,7 +17,7 @@ Tarih: 20 Kasım 2026. Kaynak: 17.11.2026 tarihli `spec.md v0.1` ve `Bismil_Yeme
 | Restoran sipariş ve menü paneli | Sipariş kabul/red, durum, saat/mahalle/ürün/seçenek/ekstra, reconnect, foto yükleme kodu var | Gerçek tablet/telefon, bildirim sesi ve kayıp bağlantı saha testi |
 | **Restoran pilot kurulumu** | **Bu PR:** admin kapalı taslak, doğrulanmış owner, mahalle/ücret, menu/saat kontrolü, aktivasyon/kapatma | 5 gerçek işletme onayı, doğrulanmış hesaplar, izinli görseller, eğitim |
 | Admin kullanıcı kısıtlama ve personel yönetimi | **Bu PR:** yönetici tam e-posta eşleşmesiyle hesap durumu değiştirir; restoran sahibi/yöneticisi personel ekler, yetki verir, çıkarır; audit ve tenant izolasyonu testleri | Gerçek Auth0 hesapları, provider session iptali, pilot personel eğitimi |
-| Admin raporları / pilot metrikleri | Sipariş olay geçmişi mevcut; günlük/restoran bazlı rapor paneli **eksik** | Sipariş dönüşümü, kabul süresi, kayıp/iptal ve tekrar sipariş oranı |
+| Admin raporları / pilot metrikleri | **Bu PR:** 7/30 gün Türkiye saati günlük sipariş, kabul süresi, iptal/red, süre aşımı, teslim ve tekrarlı müşteri agregaları; işletme ve platform rapor ekranları | 2–4 hafta gerçek siparişle KPI doğrulama; müşteri ziyaret→sipariş analitiği ve ticari mutabakat hâlâ eksik |
 | Gerçek zamanlı restoran uyarısı | Polling, dayanıklı birincil outbox, ikinci worker, worker watchdog var | **SSE/WebSocket**, kabul edilene dek tekrarlayan alarm, iki bağımsız gerçek sağlayıcı, fiziksel cihaz testi |
 | Müşteri destek talepleri | Admin inceleme/kapama, müşteri durum takibi, audit mevcut | Destek çalışanı/iletişim kanalı ve anlaşmazlık süreci |
 | Mobil PWA | `manifest.webmanifest`, service worker, responsive düzen mevcut | Gerçek Android/iPhone kurulum, offline/error akışı ve 360px kullanılabilirlik kanıtı |
@@ -34,4 +34,4 @@ Tarih: 20 Kasım 2026. Kaynak: 17.11.2026 tarihli `spec.md v0.1` ve `Bismil_Yeme
 Her yeni işte: gerçek UI + API + yetkilendirme; olumlu/olumsuz/yarış durumları için test; GitHub PR ve yeşil CI; değişmeyen 50 aktif sınırı; mevcut sipariş geçmişinin korunması; saha gerekiyorsa ayrıca "gerçek cihazda doğrulandı" kanıtı. PR birleştirme tek başına ticari hazır oluş değildir.
 
 ## Sonraki geliştirme dilimi
-Restoran kurulumu geçtiğinde, **temel sipariş/performans raporları ve gerçek mobil sipariş kabul deneyimi** şartnamedeki en önemli açık ürün işlevleridir. Sadece bildirim işçileri/polling ile sürüm büyütülmeyecek.
+Restoran kurulumu geçtiğinde, **gerçek mobil sipariş kabul deneyimi, tekrarlayan alarm/SSE ve saha pilotu** şartnamedeki en önemli açık ürün işlevleridir. Sadece bildirim işçileri/polling ile sürüm büyütülmeyecek.

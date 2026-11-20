@@ -149,3 +149,6 @@ Tarayıcı **offline** olayında butonlar anında kilitlenir; internet geri geld
 
 ## Pilot: kullanıcı ve restoran personeli kontrolü
 Restoran sahibinin **Ekip ve yetkiler** ekranında çalışan ve yöneticiler, kişi bazlı ayrı izinlerle yönetilir. Platform admini **Kullanıcı erişim yönetimi** ekranında doğrulanmış hesapları sadece tam e-posta ile bulup kısıtlayabilir veya yeniden açabilir. İşlemler MFA ve sunucuda tenant bazlı rol kontrolüyle korunur; kritik değişiklikler audit'tedir. [Erişim yönetimi güvenlik sınırları](docs/ACCESS_MANAGEMENT_PILOT.md).
+
+## Pilot: sipariş ve restoran performans raporları
+Admin ve restoran sahibi/yöneticisi, 7/30 günlük yerel tarih sipariş trendi, kabul süresi, red/iptal, süre aşımı, teslim ve dönem içi tekrar sipariş veren müşteri sayılarını görebilir. Raporlar sunucuda agregadır, müşteri PII'si içermiyor; kapıda ödeme **restoranın tahsil ettiği para kanıtı değildir**. [Rapor metrik tanımları](docs/PILOT_REPORTS.md).
