@@ -4,7 +4,7 @@ import type {Cart,CartLine,MenuProduct} from './types.ts';
  * This pure browser preview is advisory; checkout MUST quote and reconfirm on the server.
  */
 export type PastOrderLine={
- product_id:string|null;product_name_snapshot:string;quantity:number;unit_kurus:number;
+ product_id:string|null;product_name_snapshot:string;quantity:number;unit_kurus:number;line_total_kurus:number;
  options_snapshot:{id:string;name:string;priceKurus:number}[];
 };
 export type ReorderIssue={index:number;name:string;message:string};

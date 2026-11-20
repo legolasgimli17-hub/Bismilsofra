@@ -23,3 +23,6 @@
 Gerçek Auth0 tenant, MFA, HTTPS staging, 5 restoranın tablet/telefonlarında kullanım testi, en az iki bağımsız bildirim sağlayıcısı, yedekleme/restore, gerçek yemek fotoğrafları ve 360px/390px erişilebilirlik doğrulaması. Canlı kullanıma hazır olmakla karıştırılmamalı.
 
 **Şartname sabit:** 5→20→50 aktif restoran; Bismil; restoranın kendi kuryesi; yalnızca kapıda nakit/POS.
+
+## Ek sipariş fiyatlandırma tutarlılığı
+Fiyat teklifi oluşturan `quoteOrder` kodunda arşivlenmiş seçenek grupları `archived=false` ile filtrelenir. Sipariş kaydı yapan `placeOrder` zaten aynı filtreyi kullanıyordu; teklif ve gerçek sipariş kuralları artık tutarlı. Gerçek HTTP+PostgreSQL testi, pasif yapılmış zorunlu grupta seçimsiz yeni teklifin geçerli olduğunu ve eski pasif seçenek ID'sinin `OPTION_FOREIGN` ile reddedildiğini doğrular.

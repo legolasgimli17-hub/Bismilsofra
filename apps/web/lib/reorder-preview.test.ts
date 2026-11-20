@@ -8,7 +8,7 @@ const product:MenuProduct={id:'p',category_id:'c',name:'Döner',description:null
  price_kurus:10000,image_url:null,available:true,optionGroups:[
  {id:'g',product_id:'p',name:'Ekstralar',min_select:1,max_select:2,options:[choice]}
  ]};
-const past:PastOrderLine={product_id:'p',product_name_snapshot:'Döner',quantity:2,unit_kurus:11000,
+const past:PastOrderLine={product_id:'p',product_name_snapshot:'Döner',quantity:2,unit_kurus:11000,line_total_kurus:22000,
  options_snapshot:[{id:'extra',name:'Kaşar',priceKurus:1000}]};
 const preview=(p:MenuProduct=product,lines:PastOrderLine[]=[past],orderable=true)=>
  buildReorderPreview('r','Restoran',orderable,lines,[p]);
