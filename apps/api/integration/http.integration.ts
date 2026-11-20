@@ -496,9 +496,54 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  const detail=await request('/v1/restaurant/'+rid+'/orders/'+orderId,{token:owner});
  assert.equal(detail.status,200);
  assert.equal(detail.body.order.address_snapshot.address,'CI Test Sokak 12 Daire 3');
+ // Signed Bearer SSE feeds: no tokens/identifiers in URL or event payloads.
+ assert.equal((await request('/v1/restaurant/'+rid+'/events',{token:customer})).status,403);
+ assert.equal((await request('/v1/restaurant/'+rid+'/events',{token:noMfa})).status,403);
+ assert.equal((await request('/v1/restaurant/'+pilotId+'/events',{token:owner})).status,403);
+ assert.equal((await request('/v1/me/orders/'+orderId+'/events',{token:stranger})).status,404);
+ const merchantController=new AbortController(),customerController=new AbortController();
+ const merchantStream=await fetch(base+'/v1/restaurant/'+rid+'/events',{
+  headers:{Authorization:'Bearer '+owner,Accept:'text/event-stream'},signal:merchantController.signal});
+ const customerStream=await fetch(base+'/v1/me/orders/'+orderId+'/events',{
+  headers:{Authorization:'Bearer '+customer,Accept:'text/event-stream'},signal:customerController.signal});
+ assert.equal(merchantStream.status,200,'SSE tenant authenticated');
+ assert.equal(customerStream.status,200,'SSE order ownership authenticated');
+ assert.match(merchantStream.headers.get('content-type')||'',/text\/event-stream/);
+ const merchantReader=merchantStream.body!.getReader(),customerReader=customerStream.body!.getReader();
+ const decoder=new TextDecoder();
+ const merchantHello=await merchantReader.read(),customerHello=await customerReader.read();
+ assert.match(decoder.decode(merchantHello.value),/event: ready/);
+ assert.match(decoder.decode(customerHello.value),/event: ready/);
  const accepted=await request('/v1/restaurant/'+rid+'/orders/'+orderId+'/status',{
   method:'POST',token:owner,body:{to:'kabul_edildi'}});
  assert.equal(accepted.status,200,JSON.stringify(accepted.body));
+
+ // Transaction-committed DB NOTIFY fans out to both authorized streams.
+ const waitForChanged=async(reader:ReadableStreamDefaultReader<Uint8Array>):Promise<string>=>{
+  let buffer='';
+  for(let i=0;i<8;i++){
+   const next=await reader.read();
+   if(next.done)throw Error('SSE closed before changed signal');
+   buffer+=decoder.decode(next.value);
+   if(buffer.includes('event: changed'))return buffer;
+  }
+  throw Error('SSE changed signal not received');
+ };
+ const watchdog=setTimeout(()=>{merchantController.abort();customerController.abort()},3500);
+ try{
+  const [merchantChange,customerChange]=await Promise.all([
+   waitForChanged(merchantReader),waitForChanged(customerReader)
+  ]);
+  for(const change of [merchantChange,customerChange]){
+   assert.match(change,/event: changed/);
+   assert.doesNotMatch(change,/CI Test Sokak|05000000000|customerId|restaurantId|idempotency/i);
+  }
+ }finally{
+  clearTimeout(watchdog);
+  merchantController.abort();customerController.abort();
+  await Promise.all([merchantReader.cancel().catch(()=>{}),customerReader.cancel().catch(()=>{})]);
+ }
+
  assert.equal((await request('/v1/me/orders/'+orderId,{token:customer})).body.order.status,'kabul_edildi');
 
  // V1 pilot KPI endpoints: real order data, server-side Istanbul day grouping,

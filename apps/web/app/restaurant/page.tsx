@@ -6,6 +6,7 @@ import {api,ApiError} from '@/lib/api';
 import {money,statusText} from '@/lib/types';
 import {canActOnInbox,currentInboxRequest,inboxLabel,unseenPendingIds,type InboxHealth} from '@/lib/inbox-health';
 import {canSubmitMerchantAction,merchantNextActions} from '@/lib/merchant-workflow';
+import {useOrderEventStream} from '@/hooks/use-order-event-stream';
 import {RefreshCcw,Bell,ShieldCheck,WifiOff,Wifi,AlertTriangle,ChevronDown,Clock3,PackageCheck,MapPin,ClipboardList} from 'lucide-react';
 type Merchant={id:string;name:string;role:string;can_view_orders:boolean;can_manage_orders:boolean;can_manage_menu:boolean};
 type Summary={id:string;status:string;total_kurus:number;created_at:string;expires_at:string};
@@ -30,6 +31,7 @@ function Inner({token}:{token:()=>Promise<string>}){
  const [browserOnline,setBrowserOnline]=useState(true);
  const seenIds=useRef<string[]>([]);
  const sawSnapshot=useRef(false);
+ const alarmHealth=useRef({pending:0,state:'connecting' as InboxHealth,syncAt:0,online:true});
  const alertAudio=useRef<AudioContext|null>(null);
  const soundOnRef=useRef(false);
  const [soundOn,setSoundOn]=useState(false);
@@ -59,6 +61,20 @@ function Inner({token}:{token:()=>Promise<string>}){
   }catch{setError('Sesli uyarı etkinleştirilemedi. Tarayıcı izinlerini kontrol edin.')}
  }
  useEffect(()=>()=>{soundOnRef.current=false;void alertAudio.current?.close()},[]);
+ // The user must explicitly enable browser audio once. Thereafter the chime
+ // repeats while an unaccepted order is present, not just on its first arrival.
+ useEffect(()=>{
+  alarmHealth.current={pending:pending.length,state,syncAt:lastSyncMs,online:browserOnline};
+ },[pending.length,state,lastSyncMs,browserOnline]);
+ useEffect(()=>{
+  const timer=setInterval(()=>{
+   const h=alarmHealth.current;
+   if(soundOnRef.current&&h.pending>0&&document.visibilityState==='visible'&&
+      navigator.onLine&&canActOnInbox(h.state,h.syncAt,Date.now(),h.online))
+    playChime();
+  },11_000);
+  return()=>clearInterval(timer);
+ },[]);
  useEffect(()=>{
   ridRef.current=rid;requestSequence.current++;
   requestController.current?.abort();requestController.current=null;
@@ -67,8 +83,11 @@ function Inner({token}:{token:()=>Promise<string>}){
   setTruncated(false);setLastSync('');setLastSyncMs(0);
   setState('connecting');setError('');
  },[rid]);
- const load=useCallback(async()=>{
+ const load=useCallback(async(priority=false)=>{
   if(!rid)return;
+  // Periodic reconciliation is single-flight; SSE/manual refresh can supersede.
+  // Slow mobile requests must not be cancelled every 7 seconds forever.
+  if(!priority&&requestController.current&&!requestController.current.signal.aborted)return;
   if(!navigator.onLine){
    requestSequence.current++;requestController.current?.abort();
    setBrowserOnline(false);setState('offline');setNow(Date.now());return;
@@ -105,6 +124,8 @@ function Inner({token}:{token:()=>Promise<string>}){
    if(requestController.current===controller)requestController.current=null;
   }
  },[rid,token]);
+ const realtime=useOrderEventStream(rid?'/v1/restaurant/'+rid+'/events':null,
+  token,()=>{void load(true)});
  useEffect(()=>{let running=true;token().then(t=>api<{restaurants:Merchant[]}>('/v1/me/staff-restaurants',t)).then(r=>{
   if(running){setList(r.restaurants);setRid(r.restaurants[0]?.id||'')}
  }).catch(e=>{if(running){setState('offline');setError(e instanceof Error?e.message:'Restoran listesi yüklenemedi')}});
@@ -117,7 +138,7 @@ function Inner({token}:{token:()=>Promise<string>}){
   };
   const online=()=>{
    setBrowserOnline(true);setNow(Date.now());setState('connecting');
-   if(document.visibilityState==='visible')void load();
+   if(document.visibilityState==='visible')void load(true);
   };
   const resume=()=>{
    setNow(Date.now());
@@ -158,7 +179,7 @@ function Inner({token}:{token:()=>Promise<string>}){
   try{
    await api(`/v1/restaurant/${rid}/orders/${order.id}/status`,await token(),{method:'POST',body:JSON.stringify({to,reason})});
    setDetails(d=>{const copy={...d};delete copy[order.id];return copy});setReasons(r=>({...r,[order.id]:''}));
-   await load();
+   await load(true);
   }catch(e){setError(e instanceof Error?e.message:'İşlem başarısız.');setState('offline')}
   finally{setBusyOrder('')}
  }
@@ -200,14 +221,15 @@ function Inner({token}:{token:()=>Promise<string>}){
  }
  return <section className="container main-section merchant-v09">
   <div className="section-heading"><div><span className="overline">RESTORAN YÖNETİMİ</span><h1>Sipariş operasyon merkezi</h1><p>Yalnızca yetkili olduğun restoranların kayıtları</p></div>
-   <button className="btn outline" disabled={Boolean(busyOrder)} onClick={()=>void load()}><RefreshCcw size={17}/> Güncelle</button></div>
+   <button className="btn outline" disabled={Boolean(busyOrder)} onClick={()=>void load(true)}><RefreshCcw size={17}/> Güncelle</button></div>
   <div className={`merchant-connection ${connected?'healthy':'lost'}`} role="status" aria-live="polite">{connected?<Wifi size={19}/>:<WifiOff size={19}/>}
    <div><strong>{inboxLabel(state,connected)}</strong><span>{connected?`Son eşitleme: ${lastSync}`:'İnternet veya sunucu bağlantısını doğrulayın. Durum değişikliği şu anda engellendi.'}</span></div></div>
-  <div className="merchant-banner"><ShieldCheck size={20}/><span>Restoran erişimi MFA ile korunur. Siparişler 7 saniyede bir yenilenir. Sekme kapalıyken veya telefon uyurken ses garantisi yoktur; yedek uyarı şarttır.</span></div>
+  <div className="merchant-banner"><ShieldCheck size={20}/><span>Restoran erişimi MFA ile korunur. {realtime==='live'?'Anlık sipariş sinyali bağlı (SSE).':'Anlık sinyal yok; 7 saniyelik sunucu eşitlemesi devrede.'} Eşitleme sürekli yedek olarak çalışır. Telefon uyurken veya sekme kapalıyken ses garantisi yoktur; bağımsız uyarı kanalı gereklidir.</span></div>
   <div className="merchant-sound-row">
    <button type="button" className="btn outline" onClick={()=>void toggleSound()} aria-pressed={soundOn}>
     <Bell size={17}/> {soundOn?'Sesli uyarıyı kapat':'Sesli uyarıyı aç ve dene'}
    </button>
+   {pending.length>0&&<span role="alert" className="merchant-pending-critical"><Bell size={17}/> {pending.length} kabul bekleyen sipariş · {soundOn?'Sesli uyarı tekrar ediyor':'SES KAPALI — uyarıyı açın'}</span>}
    {incomingCount>0&&<span role="status" className="merchant-new-count">{incomingCount} yeni sipariş algılandı (bu oturum)</span>}
    <small>Ses yalnızca bu sekmede, açıkça etkinleştirildiğinde çalar.</small>
   </div>

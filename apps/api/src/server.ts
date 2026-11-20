@@ -5,6 +5,8 @@ import {isSupportStatus,parseSupportUpdate} from './support-service.ts';
 import {RequestLimiter,trustedProxyCidrs} from './rate-limit.ts';
 import {listPilotRestaurants,createPilotRestaurant,assignPilotOwner,linkPilotDeliveryZone,createPilotDeliveryZone} from './admin-onboarding.ts';
 import {readWorkerHealth} from './worker-health.ts';
+import {OrderEventBroker} from './order-event-broker.ts';
+import {openOrderStream} from './order-stream.ts';
 import {parseReportDays,readPilotAdminReport,readPilotMerchantReport} from './report-service.ts';
 import {getRestaurantTeam,addRestaurantMember,updateRestaurantMember,removeRestaurantMember,
  exactAdminUserLookup,setAdminUserAccess} from './access-management.ts';
@@ -23,6 +25,7 @@ const origin=process.env.CORS_ORIGIN;
 if(!origin||origin==='*')throw new Error('CORS_ORIGIN tek bir güvenilir domain olmalı');
 const port=Number(process.env.PORT||4000);
 const pool=new Pool({connectionString:process.env.DATABASE_URL,max:12,connectionTimeoutMillis:5000,statement_timeout:8000});
+const events=new OrderEventBroker(process.env.ORDER_EVENTS_LISTEN_DATABASE_URL||process.env.DATABASE_URL);
 const app=Fastify({logger:{level:process.env.NODE_ENV==='production'?'info':'warn',redact:['req.headers.authorization','req.body.phone','req.body.fullAddress','req.body.address','res.headers.set-cookie']},bodyLimit:65536,trustProxy:trustedProxyCidrs(process.env.TRUSTED_PROXY_CIDRS),requestTimeout:15000});
 app.addContentTypeParser('application/octet-stream',{parseAs:'buffer',bodyLimit:MAX_PHOTO_UPLOAD_BYTES},
  (_request,body,done)=>done(null,body));
@@ -41,6 +44,7 @@ app.addHook('onRequest',async(req,reply)=>{
   return reply.code(429).send({code:'RATE_LIMIT',message:'Çok fazla istek. Biraz sonra yeniden deneyin.'});
  }
 });
+app.addHook('onClose',async()=>{await events.stop()});
 app.setErrorHandler((error,req,reply)=>{
  if(error instanceof DomainError)return reply.code(error.statusCode).send({code:error.code,message:error.message});
  if((error as {validation?:unknown}).validation)return reply.code(400).send({code:'INVALID_REQUEST',message:'Gönderilen alanlar hatalı.'});
@@ -152,6 +156,14 @@ app.get('/v1/me/orders/:id',async(req)=>{
 app.post('/v1/me/orders/:id/cancel',async(req)=>{
  const {userId}=await user(req);const id=idParam(req,'id');
  return changeStatus(pool,'customer',userId,id,'musteri_iptal');
+});
+// Server push is a short-lived authenticated INVALIDATION feed, never
+// a substitute for the definitive customer order status endpoint.
+app.get('/v1/me/orders/:id/events',async(req,reply)=>{
+ const id=idParam(req,'id'),{userId}=await user(req);
+ const owned=await pool.query('SELECT 1 FROM orders WHERE id=$1 AND customer_id=$2',[id,userId]);
+ if(!owned.rowCount)invalid('NOT_FOUND','Sipariş bulunamadı.',404);
+ return openOrderStream(req,reply,events,pool,'customer',userId,userId,origin);
 });
 app.get('/v1/me/staff-restaurants',async(req)=>{
  const {userId,identity}=await user(req);requireMfa(identity);
@@ -538,6 +550,12 @@ app.patch('/v1/restaurant/:rid/zones/:zid',async(req)=>{
 });
 
 // Full pending snapshot supports reconnect/reconciliation when transient notifications fail.
+// No customer addresses or order identifiers are streamed: only an empty
+// "changed" hint; client loads the current authorized inbox on every signal.
+app.get('/v1/restaurant/:rid/events',async(req,reply)=>{
+ const rid=idParam(req,'rid'),{userId}=await staff(req,rid,'view');
+ return openOrderStream(req,reply,events,pool,'restaurant',rid,userId,origin);
+});
 app.get('/v1/restaurant/:rid/inbox',async(req)=>{
  const rid=idParam(req,'rid');await staff(req,rid,'view');
  const pending=await pool.query(`SELECT id,status,total_kurus,created_at,expires_at
@@ -727,6 +745,7 @@ async function start(){
  try{
   const applied=await pool.query('SELECT filename FROM schema_migrations WHERE filename=ANY($1::text[])',[[...REQUIRED_MIGRATIONS]]);
   if(!hasRequiredMigrations(applied.rows))throw new Error('Required database migrations missing. Refusing to start API.');
+  await events.start(); // listener failure is nonfatal: HTTP snapshots remain authoritative
   await app.listen({port:Number.isInteger(port)?port:4000,host:'127.0.0.1'});
   console.log('API http://127.0.0.1:'+port+' üzerinde. Canlı kullanım için yapılandırma ve testler gerekli.');
  }

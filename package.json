@@ -17,8 +17,9 @@
     "test:discovery": "node --experimental-strip-types --test apps/web/lib/discovery.test.ts",
     "test:inbox": "node --experimental-strip-types --test apps/web/lib/inbox-health.test.ts",
     "test:merchant": "node --experimental-strip-types --test apps/web/lib/merchant-workflow.test.ts",
-    "test:all": "npm run test:api && npm run test:cart && npm run test:discovery && npm run test:inbox && npm run test:merchant && npm run test:merchant-settings && npm run test:product-options && npm run test:reorder",
+    "test:all": "npm run test:api && npm run test:cart && npm run test:discovery && npm run test:inbox && npm run test:merchant && npm run test:merchant-settings && npm run test:product-options && npm run test:reorder && npm run test:realtime",
     "typecheck": "npm --workspace apps/api run typecheck && npm --workspace apps/web run typecheck",
-    "test:merchant-settings": "node --experimental-strip-types --test apps/web/lib/merchant-settings.test.ts"
+    "test:merchant-settings": "node --experimental-strip-types --test apps/web/lib/merchant-settings.test.ts",
+    "test:realtime": "node --experimental-strip-types --test apps/web/lib/order-stream-client.test.ts"
   }
 }
