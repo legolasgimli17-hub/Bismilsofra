@@ -5,6 +5,8 @@ import {isSupportStatus,parseSupportUpdate} from './support-service.ts';
 import {RequestLimiter,trustedProxyCidrs} from './rate-limit.ts';
 import {listPilotRestaurants,createPilotRestaurant,assignPilotOwner,linkPilotDeliveryZone,createPilotDeliveryZone} from './admin-onboarding.ts';
 import {readWorkerHealth} from './worker-health.ts';
+import {getRestaurantTeam,addRestaurantMember,updateRestaurantMember,removeRestaurantMember,
+ exactAdminUserLookup,setAdminUserAccess} from './access-management.ts';
 import {DomainError,invalid,uuid,STATUSES,type Status,cleanNote} from './domain.ts';
 import {verifyBearer,provisionVerifiedUser,requireMfa,requireStaff,requireAdmin} from './auth.ts';
 import {placeOrder,quoteOrder,changeStatus,activateRestaurant,transaction} from './order-service.ts';
@@ -154,6 +156,25 @@ app.get('/v1/me/staff-restaurants',async(req)=>{
  const {userId,identity}=await user(req);requireMfa(identity);
  const r=await pool.query(`SELECT r.id,r.name,s.role,s.can_view_orders,s.can_manage_orders,s.can_manage_menu FROM restaurant_staff s JOIN restaurants r ON r.id=s.restaurant_id WHERE s.user_id=$1 ORDER BY r.name LIMIT 50`,[userId]);
  return {restaurants:r.rows};
+});
+// Merchant roster: no global user enumeration. A verified owner or manager
+// can view/edit only their restaurant and may never demote an owner.
+app.get('/v1/restaurant/:rid/team',async(req)=>{
+ const rid=idParam(req,'rid'),{userId}=await staff(req,rid,null);
+ return getRestaurantTeam(pool,rid,userId);
+});
+app.post('/v1/restaurant/:rid/team',async(req,reply)=>{
+ const rid=idParam(req,'rid'),{userId}=await staff(req,rid,null);
+ const member=await addRestaurantMember(pool,rid,userId,req.body);
+ reply.code(201);return {member};
+});
+app.patch('/v1/restaurant/:rid/team/:uid',async(req)=>{
+ const rid=idParam(req,'rid'),uid=idParam(req,'uid'),{userId}=await staff(req,rid,null);
+ return updateRestaurantMember(pool,rid,userId,uid,req.body);
+});
+app.post('/v1/restaurant/:rid/team/:uid/remove',async(req)=>{
+ const rid=idParam(req,'rid'),uid=idParam(req,'uid'),{userId}=await staff(req,rid,null);
+ return removeRestaurantMember(pool,rid,userId,uid,req.body);
 });
 app.get('/v1/restaurant/:rid/orders',async(req)=>{
  const rid=idParam(req,'rid');await staff(req,rid);
@@ -650,6 +671,16 @@ app.post('/v1/admin/notifications/:id/retry',async(req)=>{
 });
 // Pilot onboarding: drafts remain closed/invisible until owner, zone, hours and
 // available menu are verified. Administration requires a fresh MFA token.
+// Exact-match account lookup: avoid bulk customer exports or substring searches.
+app.get('/v1/admin/users',async(req)=>{
+ await admin(req);
+ const email=(req.query as Record<string,unknown>).email;
+ return exactAdminUserLookup(pool,email);
+});
+app.post('/v1/admin/users/:id/access',async(req)=>{
+ const id=idParam(req,'id'),{userId}=await admin(req);
+ return setAdminUserAccess(pool,userId,id,req.body);
+});
 app.get('/v1/admin/restaurants',async(req)=>{
  await admin(req);
  return listPilotRestaurants(pool);
