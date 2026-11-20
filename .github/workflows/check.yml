@@ -28,6 +28,8 @@ jobs:
         run: npm run test:inbox
       - name: Browser real-time stream parser tests
         run: npm run test:realtime
+      - name: Spreadsheet menu import preview tests
+        run: npm run test:menu-import
       - name: Merchant workflow tests
         run: npm run test:merchant
       - name: Merchant operations form and currency tests

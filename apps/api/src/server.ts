@@ -7,6 +7,7 @@ import {listPilotRestaurants,createPilotRestaurant,assignPilotOwner,linkPilotDel
 import {readWorkerHealth} from './worker-health.ts';
 import {OrderEventBroker} from './order-event-broker.ts';
 import {searchAdminOrders,readAdminOrderDetail} from './admin-order-investigation.ts';
+import {importDraftMenu} from './admin-menu-import.ts';
 import {openOrderStream} from './order-stream.ts';
 import {parseReportDays,readPilotAdminReport,readPilotMerchantReport} from './report-service.ts';
 import {getRestaurantTeam,addRestaurantMember,updateRestaurantMember,removeRestaurantMember,
@@ -730,6 +731,13 @@ app.post('/v1/admin/restaurants',async(req,reply)=>{
  const {userId}=await admin(req);
  const restaurant=await createPilotRestaurant(pool,userId,req.body);
  reply.code(201);return {restaurant};
+});
+// Operator batch staging: products are private drafts pending merchant review.
+app.post('/v1/admin/restaurants/:id/menu-import',async(req,reply)=>{
+ const id=idParam(req,'id'),{userId}=await admin(req);
+ const result=await importDraftMenu(pool,userId,id,req.body);
+ if(!result.replayed)reply.code(201);
+ return result;
 });
 app.post('/v1/admin/restaurants/:id/owner',async(req,reply)=>{
  const id=idParam(req,'id'),{userId}=await admin(req);

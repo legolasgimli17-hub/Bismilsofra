@@ -162,3 +162,6 @@ Platform yöneticisi MFA sonrası `/admin` ekranından siparişin **8 karakterli
 
 ## Pilot: gerçek veritabanı geri yükleme testi
 CI artık kurgu PostgreSQL 17 verisini `pg_dump` ile yedekleyip **ayrı bir test veritabanına** `pg_restore` yapar; siparişler, para tutarları, değişmez durum geçmişi, migration checksum'ları ve kritik tetikleyiciler karşılaştırılır. Bu **üretim otomatik yedeği değildir**; şifreli canlı yedekleme ve staging restore ayrıca kurulmalı. [Ayrıntılı operasyon kontrolü](docs/RESTORE_DRILL_PILOT.md).
+
+## Pilot: toplu gerçek menü kurulumu
+Yönetici `/admin` altında kapalı restoran taslağı seçerek Excel/Sheets'teki dört sütunluk (kategori, ürün, açıklama, TL fiyat) gerçek menüyü toplu aktarabilir. 50 ürün/batch; aynı talep tekrarında çift kayıt açılmaz ve ürünler işletme yetkilisi onaylayana kadar **satışa kapalı** kalır. [Menü aktarım rehberi](docs/ADMIN_MENU_IMPORT_PILOT.md).
