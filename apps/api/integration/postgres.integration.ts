@@ -146,6 +146,40 @@ test('PostgreSQL order / tenant / idempotency / expiry / history vertical slice'
   const recoveredLease=await dispatchOutbox(oneConnection,async e=>{recoveredIds.push(String(e.id))},1);
   assert.equal(recoveredLease.sent,1,'expired lease must be reclaimable after worker crash');
   assert.deepEqual(recoveredIds,[String(crashRow.id)]);
+
+  // Independent fallback must have the SAME lock-free and recovery properties.
+  await pool.query("UPDATE restaurant_escalations SET next_attempt_at=now()+interval '1 day' WHERE sent_at IS NULL AND cancelled_at IS NULL");
+  const fallbackOrder=await placeOrder(pool,first,confirmed,'integration-fallback-lease-'+randomUUID());
+  await pool.query("UPDATE restaurant_escalations SET next_attempt_at=now()-interval '1 second' WHERE order_id=$1",[fallbackOrder.id]);
+  const fallbackSent:string[]=[];
+  const fallbackDeliver=async(e:{id:string|number})=>{
+   const check=await oneConnection.query('SELECT 1 AS ok');
+   assert.equal(check.rows[0].ok,1,'fallback delivery releases the one DB connection before network');
+   fallbackSent.push(String(e.id));
+   await new Promise(resolve=>setTimeout(resolve,40));
+  };
+  const fallbackPair=await Promise.all([
+   dispatchEscalations(oneConnection,fallbackDeliver,1),
+   dispatchEscalations(oneConnection,fallbackDeliver,1)
+  ]);
+  assert.equal(fallbackPair.reduce((n,v)=>n+v.sent,0),1,'only one fallback worker may deliver');
+  assert.deepEqual(fallbackSent,['escalation:'+fallbackOrder.id]);
+  const fallbackAck=await pool.query('SELECT sent_at,lease_token,lease_until FROM restaurant_escalations WHERE order_id=$1',[fallbackOrder.id]);
+  assert.ok(fallbackAck.rows[0].sent_at);
+  assert.equal(fallbackAck.rows[0].lease_token,null);
+  assert.equal(fallbackAck.rows[0].lease_until,null);
+
+  const interrupted=await placeOrder(pool,first,confirmed,'integration-fallback-crash-'+randomUUID());
+  await pool.query(`UPDATE restaurant_escalations SET
+   next_attempt_at=now()-interval '1 second',
+   lease_token=$2,lease_until=now()+interval '10 minutes' WHERE order_id=$1`,[interrupted.id,randomUUID()]);
+  const fallbackBlocked=await dispatchEscalations(oneConnection,async()=>{throw Error('locked fallback')},1);
+  assert.equal(fallbackBlocked.processed,0);
+  await pool.query("UPDATE restaurant_escalations SET lease_until=now()-interval '1 second' WHERE order_id=$1",[interrupted.id]);
+  const fallbackRecovered:string[]=[];
+  const recoveredFallback=await dispatchEscalations(oneConnection,async e=>{fallbackRecovered.push(String(e.id))},1);
+  assert.equal(recoveredFallback.sent,1);
+  assert.deepEqual(fallbackRecovered,['escalation:'+interrupted.id]);
  }finally{await oneConnection.end()}
 
 });
