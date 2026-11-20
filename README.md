@@ -1,4 +1,4 @@
-# Bismil Sofra — v2.3.0-beta.1 geliştirme aşaması
+# Bismil Sofra — v2.4.0-beta.1 geliştirme aşaması
 
 **Bismil'e özel, en fazla 50 aktif restoran için tasarlanan yemek sipariş PWA projesi.** Kaynak proje hâlâ geliştirme aşamasındadır; gerçek müşterilerden sipariş almaya hazır değildir.
 
@@ -126,3 +126,9 @@ Bu kod sürümü, gerçek sağlayıcı ve saha testlerinin tamamlandığı anlam
 Müşteri, siparişinden destek kaydı açabilir ve `/orders` ekranından durumunu görebilir. Yönetici `/admin` alanında yalnızca doğrulanmış güncel MFA sonrası talepleri listeleyebilir; serbest metin açıklamaları ayrı ve istek üzerine alınır. Yönetici talebi inceleniyor/çözüldü/kapandı aşamalarına taşır, eski duruma dayalı çakışmalı işlemler `409` alır. Her durum değişimi `audit_logs` tablosuna müşteri adresi veya açıklama eklenmeden yazılır.
 
 [Operasyon rehberi](docs/SUPPORT_OPERATIONS_v2_3.md). Otomatik SMS/e-posta bildirimi, para iadesi, gerçek destek ekibi ve sağlayıcı bağlantıları bu kod sürümünün kapsamında değildir; pilot öncesi ayrıca kurulmalı.
+
+## v2.4 — Arka plan işçileri için watchdog
+
+Birincil sipariş bildirimi, ayrı ikincil uyarı ve sipariş süresi işçilerinin son çalışma kayıtları PostgreSQL'de saklanır. Yönetici paneli ilgili süreçlerin **hiç başlamamış, 35 saniyeyi aşan gecikme, hata veya güncel** durumunu gösterir. İlk/ikinci bildirimde iletim hataları işlem varmış gibi yeşile boyanmaz. Müşteri telefon ve adresleri bu telemetriye yazılmaz.
+
+[Ayrıntılı süreç sağlığı ve müdahale rehberi](docs/WORKER_WATCHDOG_v2_4.md). Bu sistem bir restoran telefonunun gerçekten çaldığını **kanıtlamaz**; iki gerçek bağımsız bildirim sağlayıcısı, dış alarm izleyicisi ve 5 restoran pilotu şarttır.

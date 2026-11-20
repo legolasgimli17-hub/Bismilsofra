@@ -44,3 +44,11 @@ Bu doküman, en fazla **50 aktif restoran** ve ilk **5 restoran pilotu** için p
 - `schema_migrations` geçmişini ve uygulanmış SQL'i el ile değiştirme; yeni değişiklik için yeni migration yaz.
 - Alarm sağlayıcıları API loglarına müşteri kişisel verisi döndürmemeli; fallback worker sağlayıcı hata metnini kaydetmez.
 - Her sürümde gerçek PostgreSQL ile sözleşme testini, üretim build'ini ve iki kanallı kesinti provası kontrol listesini yeniden yürüt.
+
+## v2.4 işçi watchdog eklemesi
+
+Migration `010_worker_heartbeats.sql` ile `worker_heartbeats` oluşturulur. `outbox`, `escalation`, `expiry` süreçleri her tamamlanmış çevrimde kendi türünün kaydını günceller. Süreç hiç çalışmamışsa `missing`, son kayıt 35 saniyeden eskiyse `stale`, son çevrimde hata olduysa `error`, teslimat hatası raporlandıysa `delivery_error` görünür.
+
+`/v1/admin/alerts` MFA isteyen yöneticiye `workers` alanını döndürür; yönetici ekranında ayrı bölüm vardır. **API `/readyz` sadece veritabanı/migration hazırlığını gösterir; işçilerin durduğu halde müşteri sipariş API'sini otomatik kapatmak yerine operator alarmı gerekir.** Prod'da üçüncü taraf uptime izleyici veya servis gözlemleyici bu hatayı dışarıdan algılayıp sorumlu kişiyi uyarmalıdır.
+
+Sağlıklı heartbeat, SMS/push servisinin erişilebilirliğinin veya restoranın fiziksel cihazında ses duyulduğunun kanıtı değildir. Sağlayıcıların kendileri için sentetik uçtan uca doğrulamalar ve bağımsız yedek kanal saha provası gerekli.
