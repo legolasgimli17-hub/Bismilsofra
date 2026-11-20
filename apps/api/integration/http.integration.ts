@@ -11,6 +11,7 @@ import {randomUUID} from 'node:crypto';
 import {Pool} from 'pg';
 import {exportJWK,generateKeyPair,SignJWT} from 'jose';
 import {dispatchOutbox} from '../src/notification-service.ts';
+import {recordWorkerCycle} from '../src/worker-health.ts';
 import sharp from 'sharp';
 
 const connection=process.env.INTEGRATION_DATABASE_URL;
@@ -174,7 +175,25 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  await pool.query('INSERT INTO platform_admins(user_id) VALUES($1)',[adminRow.rows[0].id]);
  assert.equal((await request('/v1/admin/alerts',{token:customer})).status,403);
  assert.equal((await request('/v1/admin/alerts',{token:oldAdministrator})).status,403);
- assert.equal((await request('/v1/admin/alerts',{token:administrator})).status,200);
+ const initialHealth=await request('/v1/admin/alerts',{token:administrator});
+ assert.equal(initialHealth.status,200);
+ assert.ok(initialHealth.body.workers.some((w:{name:string;status:string})=>w.name==='outbox'&&w.status==='missing'),
+  'a missing worker cannot silently look healthy');
+ // Simulated heartbeats use the real PostgreSQL migration and a signed-admin API.
+ await recordWorkerCycle(pool,'outbox',{success:true,work:1});
+ await recordWorkerCycle(pool,'escalation',{success:true,failed:1});
+ await recordWorkerCycle(pool,'expiry',{success:false});
+ const status=await request('/v1/admin/alerts',{token:administrator});
+ assert.equal(status.status,200);
+ assert.deepEqual(status.body.workers.map((w:{status:string})=>w.status),
+  ['running','delivery_error','error']);
+ const persisted=await pool.query('SELECT last_failure_at,last_work_at FROM worker_heartbeats WHERE worker_name=$1',['outbox']);
+ assert.ok(persisted.rows[0].last_work_at);
+ assert.equal(persisted.rows[0].last_failure_at,null);
+ await pool.query("UPDATE worker_heartbeats SET last_seen_at=now()-interval '2 minutes' WHERE worker_name='outbox'");
+ const missed=await request('/v1/admin/alerts',{token:administrator});
+ assert.equal(missed.body.workers.find((w:{name:string})=>w.name==='outbox').status,'stale');
+ assert.equal((await request('/v1/admin/alerts',{token:oldAdministrator})).status,403);
  const address=await request('/v1/me/addresses',{method:'POST',token:customer,
   body:{zoneId:zid,fullAddress:'CI Test Sokak 12 Daire 3',label:'Ev',phone:'05000000000',directions:'Kapının önünde'}});
  assert.equal(address.status,201,JSON.stringify(address.body));

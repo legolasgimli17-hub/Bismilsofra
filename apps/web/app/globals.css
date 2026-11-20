@@ -359,3 +359,17 @@ body{background:#fbfaf7;color:#263129}
 .customer-support-row a{font-weight:750;text-decoration:underline}
 .customer-support-row small{color:#64746b}
 @media(max-width:690px){.support-console-head{flex-direction:column;align-items:stretch}.support-console-filters{flex-wrap:wrap}.support-console-filters>*{flex:1}.support-case-controls .btn{font-size:12px}}
+
+/* v2.4 — Worker liveness status, never a delivery guarantee. */
+.admin-worker-watchdog{margin-top:24px}
+.admin-worker-watchdog>h2{display:flex;align-items:center;gap:9px}
+.admin-worker-watchdog>.muted{max-width:74ch;line-height:1.65}
+.admin-worker-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}
+.admin-worker-card{border:1px solid #d6e5da;border-radius:13px;padding:15px;background:#f9fcfa;display:flex;flex-direction:column;gap:8px}
+.admin-worker-card>strong{line-height:1.4;font-size:14px}
+.admin-worker-card small{font-size:12px;line-height:1.5;overflow-wrap:anywhere;color:#596c61}
+.admin-worker-card .admin-worker-label{font-size:13px;display:flex;gap:7px;align-items:center;margin:3px 0;font-weight:800}
+.admin-worker-ok .admin-worker-label{color:#146b45}
+.admin-worker-fault{border-color:#e6c0a4;background:#fff9f5}
+.admin-worker-fault .admin-worker-label{color:#ab422e}
+@media(max-width:900px){.admin-worker-grid{grid-template-columns:1fr}}

@@ -30,3 +30,8 @@ test('public availability combines manual state, hours, closures, delivery area'
  assert.match(CURRENTLY_ACCEPTING_SQL,/restaurant_closures/);
  assert.match(CURRENTLY_ACCEPTING_SQL,/Europe\/Istanbul/);
 });
+
+test('readiness requires worker heartbeat migration before it reports ready',()=>{
+ assert.ok(REQUIRED_MIGRATIONS.includes('010_worker_heartbeats.sql'));
+ assert.equal(hasRequiredMigrations(REQUIRED_MIGRATIONS.filter(x=>x!=='010_worker_heartbeats.sql').map(filename=>({filename}))),false);
+});

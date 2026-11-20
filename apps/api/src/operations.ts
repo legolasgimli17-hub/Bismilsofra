@@ -4,7 +4,7 @@ export const MERCHANT_SUMMARY_QUERY = `SELECT id,status,subtotal_kurus,delivery_
  FROM orders WHERE restaurant_id=$1 ORDER BY created_at DESC LIMIT 80`;
 
 /** Readiness is not true when the PostgreSQL connection exists but schema is stale. */
-export const REQUIRED_MIGRATIONS = ['001_initial.sql','003_reliability.sql','004_escalation.sql','005_product_revisions.sql','006_restaurant_media.sql','007_product_options_editor.sql','008_outbox_leases.sql','009_escalation_leases.sql'] as const;
+export const REQUIRED_MIGRATIONS = ['001_initial.sql','003_reliability.sql','004_escalation.sql','005_product_revisions.sql','006_restaurant_media.sql','007_product_options_editor.sql','008_outbox_leases.sql','009_escalation_leases.sql','010_worker_heartbeats.sql'] as const;
 export function hasRequiredMigrations(rows:readonly {filename:string}[]):boolean {
  const applied=new Set(rows.map(row=>row.filename));
  return REQUIRED_MIGRATIONS.every(name=>applied.has(name));

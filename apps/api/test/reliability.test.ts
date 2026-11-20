@@ -135,7 +135,7 @@ test('webhook configuration rejects insecure URL or weak signature secret',()=>{
 });
 test('migration manifest requires 001–009 and never fictional seed 002',()=>{
  const source=readFileSync(new URL('../src/migrate.ts',import.meta.url),'utf8');
- assert.match(source,/001_initial\.sql/);assert.match(source,/003_reliability\.sql/);assert.match(source,/004_escalation\.sql/);assert.match(source,/005_product_revisions\.sql/);assert.match(source,/006_restaurant_media\.sql/);assert.match(source,/007_product_options_editor\.sql/);assert.match(source,/008_outbox_leases\.sql/);assert.match(source,/009_escalation_leases\.sql/);
+ assert.match(source,/001_initial\.sql/);assert.match(source,/003_reliability\.sql/);assert.match(source,/004_escalation\.sql/);assert.match(source,/005_product_revisions\.sql/);assert.match(source,/006_restaurant_media\.sql/);assert.match(source,/007_product_options_editor\.sql/);assert.match(source,/008_outbox_leases\.sql/);assert.match(source,/009_escalation_leases\.sql/);assert.match(source,/010_worker_heartbeats\.sql/);
  assert.doesNotMatch(source,/['"]002_development_example\.sql['"]/);
  assert.match(source,/schema_migrations/);assert.match(source,/sha256/);
 });
