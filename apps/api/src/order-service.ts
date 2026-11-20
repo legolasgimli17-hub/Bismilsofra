@@ -98,7 +98,9 @@ export async function activateRestaurant(pool:Pool,adminUserId:string,restaurant
    // A draft without its merchant, an available menu, delivery and hours
    // must never be advertised as an active pilot restaurant.
    const readiness=await db.query(`SELECT
-    EXISTS(SELECT 1 FROM restaurant_staff s WHERE s.restaurant_id=$1 AND s.role='owner') AS has_owner,
+    EXISTS(SELECT 1 FROM restaurant_staff s
+     JOIN users u ON u.id=s.user_id AND u.enabled=true
+     WHERE s.restaurant_id=$1 AND s.role='owner') AS has_owner,
     EXISTS(SELECT 1 FROM products p WHERE p.restaurant_id=$1 AND p.available=true) AS has_menu,
     EXISTS(SELECT 1 FROM restaurant_hours h WHERE h.restaurant_id=$1) AS has_hours,
     EXISTS(SELECT 1 FROM restaurant_delivery_zones dz
