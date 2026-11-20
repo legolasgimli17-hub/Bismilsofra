@@ -91,3 +91,17 @@ Yeni ürün seçenekleri panelinde restoranın kendi yemekleri için **sos, ekst
 - [Seçenek grupları kullanım/iş kuralları](docs/PRODUCT_OPTIONS_v1_8.md)
 - MFA + restoranın `can_manage_menu` yetkisi zorunlu; son sipariş toplamı yalnızca backend tarafından hesaplanır.
 - Üretime çıkmak için gerçek Auth0, S3/CDN, iki bağımsız bildirim kanalı ve 5 restoranın sahada test edilmesi hâlâ gereklidir.
+
+## v1.9 — Bildirim işçilerinde çökme kurtarma
+
+`008_outbox_leases.sql` ve `009_escalation_leases.sql` sipariş bildirimi ve bağımsız yedek alarm sağlayıcılarıyla HTTP iletişimi sırasında uzun veritabanı transaction'larını kaldırır. Fencing token, lease süresi ve yeniden deneme vardır. Gerçek iki sağlayıcı ve fiziksel cihazlarla test hâlâ gereklidir.
+
+- [v1.9 güvenilir outbox](docs/OUTBOX_RELIABILITY_v1_9.md)
+- [v1.10 ikincil alarm kurtarma](docs/FALLBACK_ALERT_RELIABILITY_v1_10.md)
+
+## v2.0 — Geçmiş siparişi yeniden hazırlama (geliştirme)
+
+Sipariş detayında **Güncel menüyle tekrar hazırla** eylemi: geçmiş ürünleri/opsiyonları canlı menüyle eşler, değişen fiyatları gösterir, eski/kapalı seçenekleri reddeder ve mevcut sepeti açık onay olmadan silmez. Oluşturduğu sepet yalnızca taslaktır; kesin tutar yine backend `quote` + `placeOrder` üzerinden hesaplanır.
+
+- [v2.0 tekrar sipariş rehberi ve güvenlik kuralları](docs/REORDER_v2_0.md)
+- `npm run test:reorder`; gerçek HTTP+PostgreSQL sahiplik testi dahil.

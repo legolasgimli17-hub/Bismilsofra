@@ -113,7 +113,7 @@ app.get('/v1/me/orders/:id',async(req)=>{
  const {userId}=await user(req),id=idParam(req,'id');
  const r=await pool.query('SELECT id,restaurant_id,status,subtotal_kurus,delivery_fee_kurus,total_kurus,payment_method,created_at,updated_at FROM orders WHERE id=$1 AND customer_id=$2',[id,userId]);
  if(!r.rowCount)invalid('NOT_FOUND','Sipariş bulunamadı.',404);
- const items=await pool.query('SELECT product_name_snapshot,unit_kurus,quantity,line_total_kurus,options_snapshot FROM order_items WHERE order_id=$1',[id]);
+ const items=await pool.query('SELECT product_id,product_name_snapshot,unit_kurus,quantity,line_total_kurus,options_snapshot FROM order_items WHERE order_id=$1',[id]);
  const events=await pool.query('SELECT previous_status,new_status,created_at,reason FROM order_events WHERE order_id=$1 ORDER BY id',[id]);
  return {order:r.rows[0],items:items.rows,events:events.rows};
 });
