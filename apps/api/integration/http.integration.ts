@@ -329,6 +329,80 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal(publicCreated.name,'CI Özel Pide');
  assert.equal(publicCreated.price_kurus,newPrice);
  assert.equal(publicCreated.available,true);
+ // Customer cannot manage extras; authenticated restaurant owner can.
+ const optsBase='/v1/restaurant/'+rid+'/products/'+newProductId+'/option-groups';
+ assert.equal((await request(optsBase,{token:customer})).status,403);
+ assert.equal((await request(optsBase,{token:noMfa})).status,403);
+ assert.equal((await request(optsBase,{token:owner})).status,200);
+ assert.equal((await request(optsBase,{method:'POST',token:customer,body:{name:'Sahte Grup'}})).status,403);
+ const groupCreated=await request(optsBase,{method:'POST',token:owner,body:{name:'Ekstra Malzemeler'}});
+ assert.equal(groupCreated.status,201,JSON.stringify(groupCreated.body));
+ const gid=groupCreated.body.group.id as string;
+ assert.equal(groupCreated.body.group.min_select,0);
+ assert.equal(groupCreated.body.group.max_select,1);
+ assert.equal(groupCreated.body.group.revision,1);
+ assert.equal((await request(optsBase,{method:'POST',token:owner,body:{name:'ekstra malzemeler'}})).status,409);
+ const groupPath=optsBase+'/'+gid;
+ const minTooSoon=await request(groupPath,{method:'PATCH',token:owner,
+  body:{name:'Ekstra Malzemeler',minSelect:1,maxSelect:1,archived:false,revision:1}});
+ assert.equal(minTooSoon.status,409);
+ assert.equal(minTooSoon.body.code,'OPTION_MIN_REQUIRED');
+ const firstExtra=await request(groupPath+'/options',{method:'POST',token:owner,
+  body:{name:'Ekstra Kaşar',priceKurus:2500}});
+ assert.equal(firstExtra.status,201,JSON.stringify(firstExtra.body));
+ const kaşarId=firstExtra.body.option.id as string;
+ assert.equal(firstExtra.body.option.revision,1);
+ assert.equal((await request(groupPath+'/options',{method:'POST',token:owner,
+  body:{name:'ekstra kaşar',priceKurus:2200}})).status,409);
+ assert.equal((await request(groupPath+'/options',{method:'POST',token:owner,
+  body:{name:'Ekstra',priceKurus:-100}})).status,400);
+ const requiredGroup=await request(groupPath,{method:'PATCH',token:owner,
+  body:{name:'Ekstra Malzemeler',minSelect:1,maxSelect:1,archived:false,revision:1}});
+ assert.equal(requiredGroup.status,200);
+ assert.equal(requiredGroup.body.group.revision,2);
+ const prohibitedDisable=await request(groupPath+'/options/'+kaşarId,{method:'PATCH',token:owner,
+  body:{name:'Ekstra Kaşar',priceKurus:2500,available:false,revision:1}});
+ assert.equal(prohibitedDisable.status,409);
+ assert.equal(prohibitedDisable.body.code,'OPTION_MIN_REQUIRED');
+ const secondExtra=await request(groupPath+'/options',{method:'POST',token:owner,
+  body:{name:'Sos',priceKurus:0}});
+ assert.equal(secondExtra.status,201);
+ const sosId=secondExtra.body.option.id as string;
+ const disabled=await request(groupPath+'/options/'+kaşarId,{method:'PATCH',token:owner,
+  body:{name:'Ekstra Kaşar',priceKurus:2500,available:false,revision:1}});
+ assert.equal(disabled.status,200);
+ assert.equal(disabled.body.option.revision,2);
+ const staleOption=await request(groupPath+'/options/'+kaşarId,{method:'PATCH',token:owner,
+  body:{name:'Eski Kaşar',priceKurus:2700,available:true,revision:1}});
+ assert.equal(staleOption.status,409);
+ assert.equal(staleOption.body.code,'OPTION_CONFLICT');
+ const restoredOptions=await request(optsBase,{token:owner});
+ assert.equal(restoredOptions.status,200);
+ assert.ok(restoredOptions.body.groups.find((g:{id:string})=>g.id===gid));
+ assert.equal(restoredOptions.body.groups.find((g:{id:string})=>g.id===gid).options.length,2);
+ const userMenu=await request('/v1/restaurants/'+rid+'/menu');
+ assert.equal(userMenu.status,200);
+ const groupOnMenu=userMenu.body.products.find((p:{id:string})=>p.id===newProductId).optionGroups
+  .find((g:{id:string})=>g.id===gid);
+ assert.ok(groupOnMenu);
+ assert.equal(groupOnMenu.min_select,1);
+ assert.equal(groupOnMenu.options.find((o:{id:string})=>o.id===kaşarId).available,false);
+ const extrasQuote=await request('/v1/orders/quote',{method:'POST',token:customer,
+  body:{...payload,items:[{productId:newProductId,quantity:1,optionIds:[sosId]}]}});
+ assert.equal(extrasQuote.status,200,JSON.stringify(extrasQuote.body));
+ assert.equal(extrasQuote.body.totals.totalKurus,newPrice+quote.body.totals.deliveryFeeKurus);
+ const archivedGroup=await request(groupPath,{method:'PATCH',token:owner,
+  body:{name:'Ekstra Malzemeler',minSelect:1,maxSelect:1,archived:true,revision:2}});
+ assert.equal(archivedGroup.status,200);
+ const afterArchive=await request('/v1/restaurants/'+rid+'/menu');
+ assert.equal(afterArchive.body.products.find((p:{id:string})=>p.id===newProductId)
+  .optionGroups.some((g:{id:string})=>g.id===gid),false);
+ const restoredGroup=await request(groupPath,{method:'PATCH',token:owner,
+  body:{name:'Ekstra Malzemeler',minSelect:1,maxSelect:1,archived:false,revision:3}});
+ assert.equal(restoredGroup.status,200);
+ assert.equal(restoredGroup.body.group.revision,4);
+ assert.equal((await request('/v1/restaurant/'+randomUUID()+'/products/'+newProductId+'/option-groups',{token:owner})).status,403);
+
  
  const snapshotBefore=await pool.query('SELECT unit_kurus,line_total_kurus FROM order_items WHERE order_id=$1',[orderId]);
  const changedOriginal=await request('/v1/restaurant/'+rid+'/products/'+pid+'/details',{
