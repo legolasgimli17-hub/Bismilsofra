@@ -67,3 +67,11 @@
 Önce `005_product_revisions.sql` migration'ını çalıştır; `PUBLIC_IMAGE_CDN_HOST` ve web `NEXT_PUBLIC_IMAGE_CDN_HOST` aynı onaylı HTTPS medya sağlayıcısına işaret etmelidir. Fotoğraf URL kaydı gerçek dosya yükleme hizmeti değildir.
 
 [Menü düzenleme ve güvenlik sözleşmesi](../../docs/MENU_EDITOR_v1_6.md).
+
+## v1.7 gerçek restoran medya yüklemesi
+
+`POST /v1/restaurant/:rid/photos`: MFA'lı restoranın `menu` yetkisi, ham `application/octet-stream` JPEG/PNG/WebP, `X-Photo-Rights-Affirmed:true`. Sunucu 5 MB / 20 megapiksel sınırıyla WebP dönüştürür, EXIF'i kaldırır ve S3 uyumlu objeye kaydeder. Geri dönüş `{mediaId,imageUrl,width,height,sizeBytes}`.
+
+Üretim için `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `MEDIA_PUBLIC_ORIGIN`, `PUBLIC_IMAGE_CDN_HOST` sunucu ortamında tanımlanmalı; web `NEXT_PUBLIC_IMAGE_CDN_HOST` aynı alan adına bakmalıdır. Yanlış/eksik yapılandırmada yükleme 503 ile güvenli şekilde durur.
+
+`006_restaurant_media.sql` migration'ı gereklidir. CDN fotoğrafı ürüne bağlanırken sahiplik kaydı REST API'de kontrol edilir. [Ayrıntılı güvenlik ve kurulum](../../docs/PHOTO_UPLOAD_v1_7.md).
