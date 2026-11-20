@@ -95,6 +95,19 @@ export async function activateRestaurant(pool:Pool,adminUserId:string,restaurant
   if(!rr.rowCount)invalid('NOT_FOUND','Restoran bulunamadı.',404);
   let slot:number|null=null;
   if(active){
+   // A draft without its merchant, an available menu, delivery and hours
+   // must never be advertised as an active pilot restaurant.
+   const readiness=await db.query(`SELECT
+    EXISTS(SELECT 1 FROM restaurant_staff s WHERE s.restaurant_id=$1 AND s.role='owner') AS has_owner,
+    EXISTS(SELECT 1 FROM products p WHERE p.restaurant_id=$1 AND p.available=true) AS has_menu,
+    EXISTS(SELECT 1 FROM restaurant_hours h WHERE h.restaurant_id=$1) AS has_hours,
+    EXISTS(SELECT 1 FROM restaurant_delivery_zones dz
+     JOIN delivery_zones z ON z.id=dz.zone_id AND z.enabled=true
+     WHERE dz.restaurant_id=$1 AND dz.enabled=true) AS has_delivery
+    `,[restaurantId]);
+   const checks=readiness.rows[0];
+   if(!checks.has_owner||!checks.has_menu||!checks.has_hours||!checks.has_delivery)
+    invalid('RESTAURANT_NOT_READY','Restoranı etkinleştirmek için doğrulanmış sahip, satıştaki ürün, çalışma saatleri ve teslimat mahallesi gerekli.',409);
    slot=rr.rows[0].active_slot;
    if(slot===null){const free=await db.query('SELECT s AS slot FROM generate_series(1,50) s WHERE NOT EXISTS(SELECT 1 FROM restaurants r WHERE r.active_slot=s) ORDER BY s LIMIT 1');if(!free.rowCount)invalid('CAPACITY_FULL','50 aktif restoran kapasitesi dolu.',409);slot=free.rows[0].slot;}
   }

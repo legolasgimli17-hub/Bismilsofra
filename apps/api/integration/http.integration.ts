@@ -173,6 +173,95 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal((await request('/v1/me/addresses',{token:administrator})).status,200);
  const adminRow=await pool.query('SELECT id FROM users WHERE oidc_subject=$1',[subject('administrator')]);
  await pool.query('INSERT INTO platform_admins(user_id) VALUES($1)',[adminRow.rows[0].id]);
+
+ // Pilot restaurant onboarding is a genuinely missing product workflow:
+ // register a CLOSED draft, assign a verified merchant and delivery zones,
+ // let that owner prepare their actual menu/hours, then activate.
+ assert.equal((await request('/v1/admin/restaurants',{token:customer})).status,403);
+ assert.equal((await request('/v1/admin/restaurants',{token:oldAdministrator})).status,403);
+ assert.equal((await request('/v1/admin/restaurants',{token:administrator})).status,200);
+ assert.equal((await request('/v1/admin/restaurants',{method:'POST',token:administrator,
+  body:{name:'CI Pilotu',slug:'../../invalid'}})).status,400);
+ const pilotSlug='ci-pilot-'+nonce.slice(0,8);
+ const createdPilot=await request('/v1/admin/restaurants',{method:'POST',token:administrator,
+  body:{name:'CI Pilot Mutfağı',slug:pilotSlug,phone:'05001234567'}});
+ assert.equal(createdPilot.status,201,JSON.stringify(createdPilot.body));
+ const pilotId=createdPilot.body.restaurant.id as string;
+ assert.equal(createdPilot.body.restaurant.active,false,'new restaurants must be private drafts');
+ assert.equal(createdPilot.body.restaurant.is_open,false);
+ assert.equal(createdPilot.body.restaurant.accepts_orders,false);
+ assert.equal((await request('/v1/admin/restaurants',{method:'POST',token:administrator,
+  body:{name:'İkinci',slug:pilotSlug}})).status,409,'duplicate slug must be rejected');
+ assert.equal((await request('/v1/restaurants')).body.restaurants.some((r:{id:string})=>r.id===pilotId),false,
+  'draft must not become visible before approved activation');
+ const pilotActivate='/v1/admin/restaurants/'+pilotId+'/activation';
+ assert.equal((await request(pilotActivate,{method:'POST',token:administrator,body:{active:true}})).status,409,
+  'cannot activate an unprepared merchant');
+ assert.equal((await request('/v1/admin/restaurants/'+pilotId+'/owner',{method:'POST',token:customer,
+  body:{email:'owner@example.invalid'}})).status,403);
+ assert.equal((await request('/v1/admin/restaurants/'+pilotId+'/owner',{method:'POST',token:administrator,
+  body:{email:'missing@example.invalid'}})).status,404,
+  'owner must first sign up and verify their account');
+ // A verified email is not globally unique in the historical DB: choose an
+ // independent fictional principal for this onboarding test. Ambiguous email
+ // addresses fail closed rather than assigning an arbitrary account.
+ const pilotEmail='pilot-owner-'+nonce.slice(0,12)+'@example.invalid';
+ const pilotOwner=await sign('pilot-owner',{email:pilotEmail,amr:['pwd','mfa'],auth_time:now});
+ assert.equal((await request('/v1/me/staff-restaurants',{token:pilotOwner})).status,200);
+ const ownerAttached=await request('/v1/admin/restaurants/'+pilotId+'/owner',{method:'POST',token:administrator,
+  body:{email:pilotEmail.toUpperCase()}});
+ assert.equal(ownerAttached.status,201,JSON.stringify(ownerAttached.body));
+ assert.equal((await request('/v1/admin/restaurants/'+pilotId+'/owner',{method:'POST',token:administrator,
+  body:{email:pilotEmail}})).status,409,'draft cannot receive two owners');
+
+ const zoneName='CI Yeni Mahalle '+nonce.slice(0,6);
+ const newZone=await request('/v1/admin/zones',{method:'POST',token:administrator,body:{name:zoneName}});
+ assert.equal(newZone.status,201,JSON.stringify(newZone.body));
+ assert.equal((await request('/v1/admin/zones',{method:'POST',token:administrator,
+  body:{name:zoneName.toLowerCase()}})).status,409);
+ assert.equal((await request('/v1/zones')).body.zones.some((z:{id:string})=>z.id===newZone.body.zone.id),true);
+ assert.equal((await request('/v1/admin/restaurants/'+pilotId+'/zones',{method:'POST',token:administrator,
+  body:{zoneId:newZone.body.zone.id,enabled:true,minBasketKurus:0,deliveryFeeKurus:-1}})).status,400);
+ assert.equal((await request('/v1/admin/restaurants/'+pilotId+'/zones',{method:'POST',token:administrator,
+  body:{zoneId:randomUUID(),enabled:true,minBasketKurus:0,deliveryFeeKurus:0}})).status,404);
+ const pilotZone=await request('/v1/admin/restaurants/'+pilotId+'/zones',{method:'POST',token:administrator,
+  body:{zoneId:newZone.body.zone.id,enabled:true,minBasketKurus:20000,deliveryFeeKurus:1500}});
+ assert.equal(pilotZone.status,200,JSON.stringify(pilotZone.body));
+ assert.equal(pilotZone.body.zone.min_basket_kurus,20000);
+
+ const pilotCategory=await request('/v1/restaurant/'+pilotId+'/categories',{method:'POST',token:pilotOwner,body:{name:'Ana Yemekler'}});
+ assert.equal(pilotCategory.status,201,JSON.stringify(pilotCategory.body));
+ const pilotProduct=await request('/v1/restaurant/'+pilotId+'/products',{method:'POST',token:pilotOwner,
+  body:{categoryId:pilotCategory.body.category.id,name:'CI Ürün',description:'Test ürünüdür',
+   priceKurus:25000,imageUrl:null}});
+ assert.equal(pilotProduct.status,201,JSON.stringify(pilotProduct.body));
+ const pilotProductId=pilotProduct.body.product.id as string;
+ assert.equal((await request(pilotActivate,{method:'POST',token:administrator,body:{active:true}})).status,409,
+  'unavailable product and missing hours must block activation');
+ assert.equal((await request('/v1/restaurant/'+pilotId+'/hours',{method:'PUT',token:pilotOwner,
+  body:{slots:[{dayOfWeek:0,openTime:'09:00',closeTime:'22:00'}]}})).status,200);
+ assert.equal((await request('/v1/restaurant/'+pilotId+'/products/'+pilotProductId,{method:'PATCH',token:pilotOwner,
+  body:{available:true}})).status,200);
+ const pilotReady=(await request('/v1/admin/restaurants',{token:administrator})).body.restaurants
+  .find((r:{id:string})=>r.id===pilotId);
+ assert.ok(pilotReady.has_owner&&pilotReady.has_menu&&pilotReady.has_hours&&pilotReady.has_delivery);
+ const pilotActive=await request(pilotActivate,{method:'POST',token:administrator,body:{active:true}});
+ assert.equal(pilotActive.status,200,JSON.stringify(pilotActive.body));
+ assert.equal(pilotActive.body.active,true);
+ assert.equal((await request('/v1/restaurants')).body.restaurants.some((r:{id:string})=>r.id===pilotId),true);
+ const draftSafety=await pool.query('SELECT active,is_open,accepts_orders,active_slot FROM restaurants WHERE id=$1',[pilotId]);
+ assert.equal(draftSafety.rows[0].is_open,false,'activation must never auto-open the merchant');
+ assert.equal(draftSafety.rows[0].accepts_orders,false);
+ assert.ok(draftSafety.rows[0].active_slot>=1&&draftSafety.rows[0].active_slot<=50);
+ assert.equal((await request(pilotActivate,{method:'POST',token:administrator,body:{active:false}})).status,200);
+ assert.equal((await request('/v1/restaurants')).body.restaurants.some((r:{id:string})=>r.id===pilotId),false);
+ const audit=await pool.query("SELECT action,details FROM audit_logs WHERE target_id=$1 ORDER BY id",[pilotId]);
+ assert.ok(audit.rows.some((x:{action:string})=>x.action==='admin_restaurant_create'));
+ assert.ok(audit.rows.some((x:{action:string})=>x.action==='admin_restaurant_owner'));
+ assert.ok(audit.rows.some((x:{action:string})=>x.action==='admin_restaurant_zone'));
+ assert.ok(!JSON.stringify(audit.rows).includes('OWNER@EXAMPLE.INVALID'),
+  'operator audit logs must not duplicate owner email');
+
  assert.equal((await request('/v1/admin/alerts',{token:customer})).status,403);
  assert.equal((await request('/v1/admin/alerts',{token:oldAdministrator})).status,403);
  const initialHealth=await request('/v1/admin/alerts',{token:administrator});

@@ -45,7 +45,7 @@ test('merchant without staff membership cannot alter order',async()=>{
  assert.equal(db.seen.some((q:any)=>q.sql.startsWith('UPDATE orders')),false);
 });
 test('capacity full cannot activate 51st restaurant',async()=>{
- const db=fakePool((s)=>s.includes('FROM platform_admins')?result([{}]):s.includes('pg_advisory_xact_lock')?result([{}]):s.includes('FROM restaurants WHERE id')?result([{id:ids.rest,active:false,active_slot:null}]):s.includes('FROM generate_series(1,50)')?result():(()=>{throw new Error('Unexpected '+s)})());
+ const db=fakePool((s)=>s.includes('FROM platform_admins')?result([{}]):s.includes('pg_advisory_xact_lock')?result([{}]):s.includes('FROM restaurants WHERE id')?result([{id:ids.rest,active:false,active_slot:null}]):s.includes('AS has_owner')?result([{has_owner:true,has_menu:true,has_hours:true,has_delivery:true}]):s.includes('FROM generate_series(1,50)')?result():(()=>{throw new Error('Unexpected '+s)})());
  await assert.rejects(()=>activateRestaurant(db,ids.user,ids.rest,true),(e)=>code(e,'CAPACITY_FULL'));
  assert.equal(db.seen.some((q:any)=>q.sql.startsWith('UPDATE restaurants')),false);
 });
@@ -60,4 +60,15 @@ test('expiry worker writes status and event in same transaction',async()=>{
 test('failed expiry event rolls back status change',async()=>{
  const db=fakePool((s)=>s.includes('FROM orders WHERE status=')?result([{id:ids.order,restaurant_id:ids.rest,status:'beklemede'}]):s.startsWith('UPDATE orders')?result():s.startsWith('INSERT INTO order_events')?(()=>{throw new Error('simulated DB outage')})():(()=>{throw new Error('Unexpected '+s)})());
  await assert.rejects(()=>expirePending(db));assert.equal(db.seen.at(-1).sql,'ROLLBACK');
+});
+
+test('activation refuses a restaurant lacking verified owner, menu, hours and delivery',async()=>{
+ const db=fakePool((s)=>s.includes('FROM platform_admins')?result([{}]):
+  s.includes('pg_advisory_xact_lock')?result([{}]):
+  s.includes('FROM restaurants WHERE id')?result([{id:ids.rest,active:false,active_slot:null}]):
+  s.includes('AS has_owner')?result([{has_owner:false,has_menu:false,has_hours:false,has_delivery:false}]):
+  (()=>{throw new Error('Unexpected '+s)})());
+ await assert.rejects(()=>activateRestaurant(db,ids.user,ids.rest,true),
+  e=>code(e,'RESTAURANT_NOT_READY'));
+ assert.equal(db.seen.some((q:any)=>q.sql.startsWith('UPDATE restaurants')),false);
 });

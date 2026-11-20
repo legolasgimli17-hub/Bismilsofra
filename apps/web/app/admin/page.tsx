@@ -2,6 +2,7 @@
 import {useCallback,useEffect,useState} from 'react';
 import AuthGate from '@/components/auth-gate';
 import SupportOperations from '@/components/support-operations';
+import PilotOnboarding from '@/components/pilot-onboarding';
 import {api} from '@/lib/api';
 import {AlertTriangle,ShieldCheck,RefreshCcw,WifiOff,BellRing,Clock3} from 'lucide-react';
 
@@ -53,7 +54,7 @@ function Inner({token}:{token:()=>Promise<string>}){
   {label:'İkincil uyarı sorunları',description:'Kabul edilmemiş siparişler için ayrı kanaldaki gecikme ve hatalar.',data:alerts?.escalationIssues||[],icon:'fallback'}
  ] as const;
  return <section className="container main-section">
-  <div className="section-heading"><div><span className="overline">PLATFORM YÖNETİMİ</span><h1>Operasyon güvenliği</h1><p>Geciken siparişler ve iki ayrı uyarı kanalı</p></div>
+  <div className="section-heading"><div><span className="overline">PLATFORM YÖNETİMİ</span><h1>Platform yönetimi</h1><p>Restoran kurulumları, sipariş uyarıları ve destek operasyonları</p></div>
    <button className="btn outline" type="button" disabled={loading} onClick={()=>void load()}><RefreshCcw size={17}/>{loading?'Kontrol ediliyor…':'Yenile'}</button>
   </div>
   <div className="merchant-banner"><ShieldCheck size={20}/><span>Yalnızca doğrulanmış yönetici ve MFA erişebilir. Burada müşteri adresleri veya telefonları bulunmaz.</span></div>
@@ -74,6 +75,7 @@ function Inner({token}:{token:()=>Promise<string>}){
       </p>)}
    </article>)}
   </div>
+  <PilotOnboarding token={token}/>
   <section className="panel admin-worker-watchdog" aria-label="Sipariş işçileri sağlık kontrolü">
    <h2><Clock3 size={20}/> Sipariş işçileri</h2>
    <p className="muted">Bu kontrol arka plan süreçlerinin durumunu gösterir. Bir işçinin çalışması, bildirim sağlayıcısının veya restoran telefonunun alarmı aldığını kanıtlamaz.</p>

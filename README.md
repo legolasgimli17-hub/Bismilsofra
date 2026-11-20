@@ -140,3 +140,9 @@ AuthGate, aynı `getAccessTokenSilently` fonksiyonuna bağlı **kararlı bir tok
 Tarayıcı **offline** olayında butonlar anında kilitlenir; internet geri geldiğinde veya sekme yeniden görünür olduğunda siparişler sunucudan eşitlenir. Mevcut 7 saniyelik görünür sekme polling'i korundu. Bağlantı yokken müşteri siparişi veya restoranın kabul işlemi tarayıcıda taklit edilmez.
 
 [Restoran bağlantı ve kurtarma rehberi](docs/RECONNECT_v2_5.md). Canlı Auth0, ayrı bildirim sağlayıcıları ve saha doğrulaması hâlâ zorunludur.
+
+## Şartnameyle uyum ve 5 restoran pilot yol haritası
+
+**Kodda bulunması, gerçek sahada çalıştığının kanıtı değildir.** v0.1/v0.2 şartnamelerinden ve sonradan kabul edilen üst sınırdan türetilen güncel kabul listesi: [Pilot kapsamı ve eksiklerin dürüst takibi](docs/PILOT_SPEC_PROGRESS.md).
+
+Şu an geliştirilen pilot kurulum ekranı yöneticinin **kapalı restoran taslağı** oluşturmasına, doğrulanmış işletme sahibini bağlamasına, mahalle ücretini belirlemesine ve işletme menü/saatleri hazırladıktan sonra aktifleştirmesine olanak sağlar. Aktif restoran sayısı en çok **50** olarak kalır. Gerçek restoran izni ve hesapları olmadan işletme canlıya açılmaz.
