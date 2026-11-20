@@ -258,6 +258,16 @@ async function optionAudit(db:import('pg').PoolClient,userId:string,action:strin
  await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',
  [userId,action,'menu_option',id,JSON.stringify({restaurantId:rid})]);
 }
+app.get('/v1/restaurant/:rid/products/:pid/option-groups',async req=>{
+ const rid=idParam(req,'rid'),pid=idParam(req,'pid');
+ await staff(req,rid,'menu');
+ const product=await pool.query('SELECT id FROM products WHERE restaurant_id=$1 AND id=$2',[rid,pid]);
+ if(!product.rowCount)return invalid('NOT_FOUND','Ürün bu restoranda bulunamadı.',404);
+ const groups=await pool.query('SELECT id,product_id,name,min_select,max_select,archived,revision FROM option_groups WHERE product_id=$1 ORDER BY id LIMIT 8',[pid]);
+ const ids=groups.rows.map(g=>g.id);
+ const choices=ids.length?await pool.query('SELECT id,group_id,name,price_kurus,available,revision FROM options WHERE group_id=ANY($1::uuid[]) ORDER BY id LIMIT 96',[ids]):{rows:[]};
+ return {groups:groups.rows.map(g=>({...g,options:choices.rows.filter(o=>o.group_id===g.id)}))};
+});
 app.post('/v1/restaurant/:rid/products/:pid/option-groups',async(req,reply)=>{
  const rid=idParam(req,'rid'),pid=idParam(req,'pid'),{userId}=await staff(req,rid,'menu');
  const draft=parseNewGroup(req.body);
@@ -292,7 +302,7 @@ app.patch('/v1/restaurant/:rid/products/:pid/option-groups/:gid',async req=>{
   return {group:result.rows[0]};
  });
 });
-app.post('/v1/restaurant/:rid/products/:pid/option-groups/:gid/choices',async(req,reply)=>{
+app.post('/v1/restaurant/:rid/products/:pid/option-groups/:gid/options',async(req,reply)=>{
  const rid=idParam(req,'rid'),pid=idParam(req,'pid'),gid=idParam(req,'gid'),{userId}=await staff(req,rid,'menu');
  const draft=parseNewChoice(req.body);
  const choice=await transaction(pool,async db=>{
@@ -310,7 +320,7 @@ app.post('/v1/restaurant/:rid/products/:pid/option-groups/:gid/choices',async(re
  });
  reply.code(201);return {choice};
 });
-app.patch('/v1/restaurant/:rid/products/:pid/option-groups/:gid/choices/:oid',async req=>{
+app.patch('/v1/restaurant/:rid/products/:pid/option-groups/:gid/options/:oid',async req=>{
  const rid=idParam(req,'rid'),pid=idParam(req,'pid'),gid=idParam(req,'gid'),oid=idParam(req,'oid'),{userId}=await staff(req,rid,'menu');
  const draft=parseChoiceUpdate(req.body);
  return transaction(pool,async db=>{
