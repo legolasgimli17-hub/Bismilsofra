@@ -38,7 +38,9 @@ export function trustedProxyCidrs(raw:string|undefined):string[]|false{
  */
 export class RequestLimiter{
  private readonly entries=new Map<string,{count:number;expires:number}>();
- constructor(private readonly maxEntries=20_000){
+ private readonly maxEntries:number;
+ constructor(maxEntries=20_000){
+  this.maxEntries=maxEntries;
   if(!Number.isInteger(maxEntries)||maxEntries<1)throw Error('Invalid limiter capacity');
  }
  check(ip:string,method:string,url:string,now=Date.now()):RateDecision{
