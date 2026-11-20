@@ -28,7 +28,7 @@ export function parseOwnerEmail(raw:unknown):string{
  const b=raw as Record<string,unknown>|null;
  if(!b||typeof b!=='object'||Array.isArray(b)||typeof b.email!=='string')
   invalid('OWNER_INVALID','Kayıtlı ve e-postası doğrulanmış kullanıcı gerekli.');
- const email=(b.email as string).trim().toLowerCase();
+ const email=(b?.email as string).trim().toLowerCase();
  if(email.length<5||email.length>250||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
   invalid('OWNER_INVALID','Geçerli e-posta girin.');
  return email;
