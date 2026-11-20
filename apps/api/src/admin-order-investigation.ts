@@ -9,7 +9,7 @@ import {transaction} from './order-service.ts';
 export type OrderLookupKey={fullId:string|null;prefix:string|null};
 export function parseOrderLookupKey(raw:unknown):OrderLookupKey{
  if(typeof raw!=='string')invalid('ORDER_SEARCH_INVALID','Sipariş numarası gerekli.');
- const key=raw.trim().toLowerCase();
+ const key=(raw as string).trim().toLowerCase();
  if(uuid(key))return {fullId:key,prefix:null};
  if(/^[a-f0-9]{8}$/.test(key))return {fullId:null,prefix:key};
  return invalid('ORDER_SEARCH_INVALID','Tam sipariş numarası veya ekranda görünen 8 karakter gereklidir.');
