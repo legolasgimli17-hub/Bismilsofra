@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import {Pool} from 'pg';
 import {isSupportStatus,parseSupportUpdate} from './support-service.ts';
 import {RequestLimiter,trustedProxyCidrs} from './rate-limit.ts';
+import {readWorkerHealth} from './worker-health.ts';
 import {DomainError,invalid,uuid,STATUSES,type Status,cleanNote} from './domain.ts';
 import {verifyBearer,provisionVerifiedUser,requireMfa,requireStaff,requireAdmin} from './auth.ts';
 import {placeOrder,quoteOrder,changeStatus,activateRestaurant,transaction} from './order-service.ts';
@@ -596,7 +597,8 @@ app.get('/v1/admin/alerts',async(req)=>{
   WHERE sent_at IS NULL AND cancelled_at IS NULL
    AND (dead_at IS NOT NULL OR (next_attempt_at<=now() AND due_at<now()-interval '20 seconds'))
   GROUP BY restaurant_id ORDER BY count DESC LIMIT 50`);
- return {latePending:pending.rows,notificationIssues:delivery.rows,escalationIssues:escalations.rows};
+ const workers=await readWorkerHealth(pool);
+ return {latePending:pending.rows,notificationIssues:delivery.rows,escalationIssues:escalations.rows,workers};
 });
 // MFA-protected diagnostic list: never returns customer PII.
 app.get('/v1/admin/escalations',async(req)=>{

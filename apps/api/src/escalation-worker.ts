@@ -2,6 +2,7 @@
 import {Pool} from 'pg';
 import {createSignedWebhook} from './notification-service.ts';
 import {dispatchEscalations} from './escalation-service.ts';
+import {recordWorkerCycle} from './worker-health.ts';
 
 const database=process.env.DATABASE_URL;
 const url=process.env.ESCALATION_WEBHOOK_URL;
@@ -17,8 +18,13 @@ process.on('SIGINT',()=>{running=false});process.on('SIGTERM',()=>{running=false
 while(running){
  try{
   const report=await dispatchEscalations(pool,deliver,3);
+  await recordWorkerCycle(pool,'escalation',{success:true,work:report.sent,failed:report.failed});
   if(report.processed)console.log(JSON.stringify({time:new Date().toISOString(),...report}));
- }catch(error){console.error('escalation-worker failed',error)}
+ }catch{
+  console.error('escalation-worker cycle failed');
+  try{await recordWorkerCycle(pool,'escalation',{success:false})}
+  catch{console.error('escalation-worker heartbeat unavailable')}
+ }
  await new Promise(resolve=>setTimeout(resolve,3000));
 }
 await pool.end();
