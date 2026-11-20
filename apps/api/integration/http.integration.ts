@@ -233,15 +233,15 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
   body:{expectedStatus:'acik',to:'incelemede'}});
  assert.equal(acceptedCase.status,200,JSON.stringify(acceptedCase.body));
  assert.equal((await request(supportPath,{method:'POST',token:administrator,
-  body:{expectedStatus:'acik',to:'cozuldu'})).status,409,
+  body:{expectedStatus:'acik',to:'cozuldu'}})).status,409,
   'stale concurrent support edits must be rejected');
  const resolvedCase=await request(supportPath,{method:'POST',token:administrator,
   body:{expectedStatus:'incelemede',to:'cozuldu'}});
  assert.equal(resolvedCase.status,200);
  assert.equal((await request(supportPath,{method:'POST',token:administrator,
-  body:{expectedStatus:'cozuldu',to:'kapandi'})).status,200);
+  body:{expectedStatus:'cozuldu',to:'kapandi'}})).status,200);
  assert.equal((await request(supportPath,{method:'POST',token:administrator,
-  body:{expectedStatus:'kapandi',to:'incelemede'})).status,409);
+  body:{expectedStatus:'kapandi',to:'incelemede'}})).status,409);
  const customerCases=await request('/v1/me/support-cases',{token:customer});
  assert.equal(customerCases.body.cases.find((c:{id:string})=>c.id===caseId).status,'kapandi');
  const history=await pool.query("SELECT details FROM audit_logs WHERE action='support_case_status' AND target_id=$1 ORDER BY id",[caseId]);
