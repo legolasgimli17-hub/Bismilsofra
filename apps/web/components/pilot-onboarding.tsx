@@ -25,7 +25,7 @@ export default function PilotOnboarding({token}:{token:()=>Promise<string>}){
  const [ownerEmail,setOwnerEmail]=useState('');
  const [newZoneName,setNewZoneName]=useState('');
  const [zoneId,setZoneId]=useState('');
- const [minimum,setMinimum]=useState('200,00'),[fee,setFee]=useState('15,00');
+ const [minimum,setMinimum]=useState(''),[fee,setFee]=useState('');
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
  const [error,setError]=useState(''),[success,setSuccess]=useState('');
  const selected=records.find(r=>r.id===selectedId);
@@ -167,8 +167,8 @@ export default function PilotOnboarding({token}:{token:()=>Promise<string>}){
       <label>Teslimat mahallesi<select required value={zoneId} onChange={e=>setZoneId(e.target.value)}>
        {zones.map(z=><option value={z.id} key={z.id}>{z.name}</option>)}</select></label>
       <div className="pilot-money">
-       <label>Minimum sepet (TL)<input inputMode="decimal" value={minimum} onChange={e=>setMinimum(e.target.value)}/></label>
-       <label>Teslimat ücreti (TL)<input inputMode="decimal" value={fee} onChange={e=>setFee(e.target.value)}/></label>
+       <label>Minimum sepet (TL)<input required inputMode="decimal" placeholder="Gerçek tutar" value={minimum} onChange={e=>setMinimum(e.target.value)}/></label>
+       <label>Teslimat ücreti (TL)<input required inputMode="decimal" placeholder="Gerçek tutar" value={fee} onChange={e=>setFee(e.target.value)}/></label>
       </div>
       <button className="btn outline" disabled={busy||!zoneId} type="submit">Mahalleyi bağla / güncelle</button>
      </form>
