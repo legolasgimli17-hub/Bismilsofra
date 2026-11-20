@@ -16,3 +16,9 @@
 Auth0 gerçek tenant/MFA, iki farklı bildirim sağlayıcısı, restorandaki fiziksel cihaz kesinti tatbikatı, HTTPS staging, secret yönetimi, back-up geri yükleme testi, KVKK ve veri saklama politikası, izinli gerçek fotoğraflar/CDN, 5 restoran pilotu, gerçek mobil/erişilebilirlik E2E.
 
 Kapsam değişmedi: 5→20→50 aktif restoran, restoranın kendi kuryesi, kapıda nakit/POS, online ödeme yok.
+
+## Bağımlılık güncelleme takibi
+`.github/dependabot.yml` haftalık npm ve GitHub Actions güncelleme PR'ları için oluşturuldu. Bu PR'lar kod incelemesi ve CI görmeden kendiliğinden `main` üzerine alınmaz. GitHub deposunda Dependabot güvenlik uyarıları/dependency graph etkinleştirilmeli ve yönetici tarafından doğrulanmalıdır. Canlı bağımlılıkların açığı olmadığı sonucuna bu aşamada varılmıyor.
+
+## Sürüm kimliği
+Root package, API, web ve lockfile aynı `2.1.0-beta.1` sürümünü taşır. Bu sadece kod sürümüdür; production-ready veya dağıtılmış olarak işaretlenmemiştir.

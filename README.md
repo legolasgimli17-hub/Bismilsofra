@@ -1,4 +1,4 @@
-# Bismil Sofra — v2.0.0-beta.1 geliştirme aşaması
+# Bismil Sofra — v2.1.0-beta.1 geliştirme aşaması
 
 **Bismil'e özel, en fazla 50 aktif restoran için tasarlanan yemek sipariş PWA projesi.** Kaynak proje hâlâ geliştirme aşamasındadır; gerçek müşterilerden sipariş almaya hazır değildir.
 
