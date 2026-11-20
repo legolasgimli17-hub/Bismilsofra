@@ -1,7 +1,6 @@
 /** A durable, best-effort webhook dispatcher. Delivery is at-least-once: receiver MUST dedupe X-Sofra-Event-ID. */
 import type {Pool} from 'pg';
-import {createHmac} from 'node:crypto';
-import {transaction} from './order-service.ts';
+import {createHmac,randomUUID} from 'node:crypto';
 
 type OutboxEvent={id:string|number;order_id:string;restaurant_id:string;type:string;payload:unknown;attempts:number};
 export type Deliver=(event:OutboxEvent)=>Promise<void>;
@@ -16,29 +15,57 @@ export function createSignedWebhook(url:string,secret:string):Deliver{
   if(!response.ok)throw new Error('Webhook failed HTTP '+response.status);
  };
 }
+/**
+ * Claim ONE event atomically, commit it, then send the HTTP request WITHOUT a
+ * database transaction or row lock held over the network. The lease is a
+ * fencing token: a slow/crashed worker cannot acknowledge another worker's job.
+ *
+ * This is at-least-once, not exactly-once; receivers MUST persist deduplication
+ * by x-sofra-event-id, including after a server restart.
+ */
 export async function dispatchOutbox(pool:Pool,deliver:Deliver,batch=10){
- return transaction(pool,async db=>{
-  const res=await db.query(`SELECT id,order_id,restaurant_id,type,payload,attempts FROM notification_outbox
-   WHERE sent_at IS NULL AND dead_at IS NULL AND next_attempt_at<=now()
-   ORDER BY id FOR UPDATE SKIP LOCKED LIMIT $1`,[Math.max(1,Math.min(batch,30))]);
-  let sent=0,failed=0,dead=0;
-  for(const event of res.rows as OutboxEvent[]){
-   try{
-    await deliver(event);
-    await db.query('UPDATE notification_outbox SET sent_at=now(),last_error=NULL,attempts=attempts+1 WHERE id=$1',[event.id]);
-    sent++;
-   }catch(error){
-    const nextAttempts=Number(event.attempts)+1;
-    const terminal=nextAttempts>=12;
-    const retrySec=Math.min(3600,5*2**Math.min(10,Number(event.attempts)));
-    const message=error instanceof Error?error.message:'delivery error';
-    await db.query(`UPDATE notification_outbox SET attempts=attempts+1,last_error=$2,
-     dead_at=CASE WHEN $3::boolean THEN now() ELSE NULL END,
-     next_attempt_at=now()+($4::int*interval '1 second') WHERE id=$1`,
-     [event.id,message.slice(0,180),terminal,retrySec]);
-    failed++;if(terminal)dead++;
-   }
+ const limit=Number.isInteger(batch)?Math.max(1,Math.min(batch,30)):10;
+ let processed=0,sent=0,failed=0,dead=0;
+ for(let index=0;index<limit;index++){
+  const leaseToken=randomUUID();
+  const claim=await pool.query(`WITH candidate AS (
+    SELECT id FROM notification_outbox
+    WHERE sent_at IS NULL AND dead_at IS NULL
+     AND next_attempt_at<=now()
+     AND (lease_until IS NULL OR lease_until<=now())
+    ORDER BY next_attempt_at,id
+    FOR UPDATE SKIP LOCKED LIMIT 1
+   )
+   UPDATE notification_outbox n
+    SET lease_token=$1::uuid,lease_until=now()+interval '30 seconds'
+    FROM candidate c WHERE n.id=c.id
+    RETURNING n.id,n.order_id,n.restaurant_id,n.type,n.payload,n.attempts`,
+   [leaseToken]);
+  if(!claim.rowCount)break;
+  processed++;
+  const event=claim.rows[0] as OutboxEvent;
+  try{
+   await deliver(event);
+   const ack=await pool.query(`UPDATE notification_outbox SET sent_at=now(),
+      last_error=NULL,attempts=attempts+1,lease_token=NULL,lease_until=NULL
+     WHERE id=$1 AND lease_token=$2::uuid AND sent_at IS NULL
+     RETURNING id`,[event.id,leaseToken]);
+   if(ack.rowCount)sent++;
+  }catch{
+   const attempt=Number(event.attempts)+1;
+   const terminal=attempt>=12;
+   const retrySec=Math.min(3600,5*2**Math.min(10,Number(event.attempts)));
+   // Never persist raw provider errors: they can contain credentials or PII.
+   const updated=await pool.query(`UPDATE notification_outbox SET
+      attempts=attempts+1,last_error='DELIVERY_FAILED',
+      dead_at=CASE WHEN $3::boolean THEN now() ELSE NULL END,
+      next_attempt_at=now()+($4::int * interval '1 second'),
+      lease_token=NULL,lease_until=NULL
+     WHERE id=$1 AND lease_token=$2::uuid AND sent_at IS NULL
+     RETURNING id`,
+    [event.id,leaseToken,terminal,retrySec]);
+   if(updated.rowCount){failed++;if(terminal)dead++}
   }
-  return {processed:res.rows.length,sent,failed,dead};
- });
+ }
+ return {processed,sent,failed,dead};
 }
