@@ -7,6 +7,7 @@ import {placeOrder,quoteOrder,changeStatus,activateRestaurant,transaction} from 
 import {MERCHANT_SUMMARY_QUERY,hasRequiredMigrations,CURRENTLY_ACCEPTING_SQL,REQUIRED_MIGRATIONS} from './operations.ts';
 import {parseWeeklyHours,parseZonePolicy} from './merchant-management.ts';
 import {parseProductDraft,parseCategoryDraft} from './merchant-menu.ts';
+import {prepareRestaurantPhoto,photoStorageSettings,s3MediaStorage,photoObjectKey,photoPublicUrl,MAX_PHOTO_UPLOAD_BYTES} from './media-service.ts';
 
 if(!process.env.DATABASE_URL)throw new Error('DATABASE_URL gerekli');
 const origin=process.env.CORS_ORIGIN;
@@ -14,12 +15,14 @@ if(!origin||origin==='*')throw new Error('CORS_ORIGIN tek bir güvenilir domain 
 const port=Number(process.env.PORT||4000);
 const pool=new Pool({connectionString:process.env.DATABASE_URL,max:12,connectionTimeoutMillis:5000,statement_timeout:8000});
 const app=Fastify({logger:{level:process.env.NODE_ENV==='production'?'info':'warn',redact:['req.headers.authorization','req.body.phone','req.body.fullAddress','req.body.address','res.headers.set-cookie']},bodyLimit:65536,trustProxy:false,requestTimeout:15000});
+app.addContentTypeParser('application/octet-stream',{parseAs:'buffer',bodyLimit:MAX_PHOTO_UPLOAD_BYTES},
+ (_request,body,done)=>done(null,body));
 const hits=new Map<string,{count:number,expires:number}>();
 app.addHook('onRequest',async(req,reply)=>{
  reply.header('X-Content-Type-Options','nosniff').header('Referrer-Policy','no-referrer').header('Cache-Control','no-store').header('X-Frame-Options','DENY');
  const sentOrigin=req.headers.origin;
  if(sentOrigin&&sentOrigin!==origin)return reply.code(403).send({code:'ORIGIN_FORBIDDEN',message:'Bu kaynaktan erişim engellendi.'});
- if(sentOrigin){reply.header('Access-Control-Allow-Origin',origin).header('Vary','Origin').header('Access-Control-Allow-Headers','Authorization,Content-Type,Idempotency-Key').header('Access-Control-Allow-Methods','GET,POST,PATCH,OPTIONS')}
+ if(sentOrigin){reply.header('Access-Control-Allow-Origin',origin).header('Vary','Origin').header('Access-Control-Allow-Headers','Authorization,Content-Type,Idempotency-Key,X-Photo-Rights-Affirmed').header('Access-Control-Allow-Methods','GET,POST,PATCH,OPTIONS')}
  if(req.method==='OPTIONS')return reply.code(204).send();
  const now=Date.now();if(hits.size>15000){for(const [k,v] of hits)if(v.expires<=now)hits.delete(k)}
  const key=req.ip;let v=hits.get(key);if(!v||v.expires<=now)v={count:0,expires:now+60000};v.count++;hits.set(key,v);
@@ -231,6 +234,59 @@ app.patch('/v1/restaurant/:rid/categories/:cid',async(req)=>{
   return {category:changed.rows[0]};
  });
 });
+// A file upload is not the same as accepting an arbitrary remote photo URL.
+// The route checks MFA before receiving a 5 MB binary request body, strips
+// metadata and stores a WebP with an immutable restaurant-owned media record.
+app.post('/v1/restaurant/:rid/photos',{
+ bodyLimit:MAX_PHOTO_UPLOAD_BYTES,
+ onRequest:async req=>{await staff(req,idParam(req,'rid'),'menu')}
+},async(req,reply)=>{
+ const rid=idParam(req,'rid'),{userId}=await staff(req,rid,'menu');
+ if(req.headers['x-photo-rights-affirmed']!=='true')
+  invalid('PHOTO_RIGHTS_REQUIRED','Yalnızca paylaşma hakkınız olan restoran fotoğraflarını yükleyebilirsiniz.',400);
+ const settings=photoStorageSettings();
+ if(!settings)return invalid('PHOTO_STORAGE_NOT_READY','Fotoğraf yükleme sunucusu henüz yapılandırılmadı.',503);
+ const rawImage=req.body;
+ if(!Buffer.isBuffer(rawImage))
+  return invalid('PHOTO_TYPE','Fotoğrafı JPEG, PNG veya WebP dosyası olarak gönderin.',415);
+ const current=await pool.query(`SELECT
+   count(*)::int AS total,
+   count(*) FILTER (WHERE created_at>now()-interval '1 hour')::int AS recent
+  FROM restaurant_media WHERE restaurant_id=$1`,[rid]);
+ if(current.rows[0].total>=1000||current.rows[0].recent>=40)
+  invalid('PHOTO_LIMIT','Fotoğraf kotasına ulaşıldı; eski fotoğrafları düzenleyin.',429);
+ const photo=await prepareRestaurantPhoto(rawImage);
+ const key=photoObjectKey(rid);
+ const url=photoPublicUrl(settings,key);
+ const storage=s3MediaStorage(settings);
+ await storage.put(key,photo.bytes);
+ try{
+  const result=await transaction(pool,async db=>{
+   const r=await db.query(`INSERT INTO restaurant_media
+    (restaurant_id,uploaded_by,object_key,public_url,byte_size,width,height)
+    VALUES($1,$2,$3,$4,$5,$6,$7)
+    RETURNING id,public_url,width,height,byte_size`,
+    [rid,userId,key,url,photo.bytes.length,photo.width,photo.height]);
+   await db.query(`INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details)
+    VALUES($1,$2,$3,$4,$5::jsonb)`,
+    [userId,'restaurant_photo_upload','media',r.rows[0].id,
+     JSON.stringify({restaurantId:rid,sourceFormat:photo.sourceFormat,rightsConfirmed:true})]);
+   return r.rows[0];
+  });
+  reply.code(201);
+  return {mediaId:result.id,imageUrl:result.public_url,width:result.width,
+   height:result.height,sizeBytes:result.byte_size};
+ }catch(error){
+  try{await storage.remove(key)}catch{req.log.error('orphaned media object after failed DB write')}
+  throw error;
+ }
+});
+async function verifyRestaurantPhotoOwnership(db:{query:typeof pool.query},restaurantId:string,url:string|null){
+ if(url?.startsWith('https://')){
+  const proof=await db.query('SELECT 1 FROM restaurant_media WHERE restaurant_id=$1 AND public_url=$2',[restaurantId,url]);
+  if(!proof.rowCount)invalid('PHOTO_NOT_OWNED','Bu fotoğraf bu restorana ait değil veya yüklenmemiş.',409);
+ }
+}
 app.post('/v1/restaurant/:rid/products',async(req,reply)=>{
  const rid=idParam(req,'rid'),{userId}=await staff(req,rid,'menu');
  const input=parseProductDraft(req.body);
@@ -242,6 +298,7 @@ app.post('/v1/restaurant/:rid/products',async(req,reply)=>{
   if(count.rows[0].count>=500)invalid('PRODUCT_LIMIT','Bu restoran için 500 ürün sınırına ulaşıldı.',409);
   const cat=await db.query('SELECT id FROM categories WHERE restaurant_id=$1 AND id=$2',[rid,input.categoryId]);
   if(!cat.rowCount)invalid('CATEGORY_INVALID','Kategori bu restorana ait değil.',409);
+  await verifyRestaurantPhotoOwnership(db,rid,input.imageUrl);
   const p=await db.query(`INSERT INTO products(restaurant_id,category_id,name,description,price_kurus,image_url,available)
    VALUES($1,$2,$3,$4,$5,$6,false)
    RETURNING id,category_id,name,description,price_kurus,image_url,available,revision`,
@@ -262,6 +319,7 @@ app.patch('/v1/restaurant/:rid/products/:pid/details',async(req)=>{
  return transaction(pool,async db=>{
   const cat=await db.query('SELECT id FROM categories WHERE restaurant_id=$1 AND id=$2',[rid,input.categoryId]);
   if(!cat.rowCount)invalid('CATEGORY_INVALID','Kategori bu restorana ait değil.',409);
+  await verifyRestaurantPhotoOwnership(db,rid,input.imageUrl);
   const p=await db.query(`UPDATE products SET category_id=$1,name=$2,description=$3,price_kurus=$4,image_url=$5,
    revision=revision+1 WHERE restaurant_id=$6 AND id=$7 AND revision=$8
    RETURNING id,category_id,name,description,price_kurus,image_url,available,revision`,

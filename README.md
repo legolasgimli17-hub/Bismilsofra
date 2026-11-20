@@ -75,3 +75,11 @@ Restoran siparişleri toplu listeleme API'si artık müşteri adreslerini ve öz
 - [Menü düzenleme API ve kullanım rehberi](docs/MENU_EDITOR_v1_6.md)
 - [Bağımsız ürün ve risk değerlendirmesi](QA_REVIEW_v1_6.md)
 - Gerçek fotoğraf yükleme servisi ve Auth0 canlı hesap bağlantısı henüz yoktur; test sunucusunda imzalı JWT ve PostgreSQL ile kontrol edilmiştir.
+
+## v1.7 — Restoran telefonundan fotoğraf yükleme
+
+Yeni `/restaurant/manage` menü düzenleyicisi, işletme yetkisi/MFA doğrulanarak JPEG, PNG ve WebP fotoğraflarını **sunucudan güvenle** yükler. Kullanım hakkı onayı zorunludur. Sunucu fotoğrafı 5 MB sınırıyla kontrol eder, WebP formatına çevirir, EXIF/konum metaverisini kaldırır ve restorana özgü medya kaydıyla S3-uyumlu bir depoya yazar.
+
+Ürüne bağlanan harici görsel, aynı restoranın `restaurant_media` kaydında bulunmalıdır; salt URL göndermek yeterli değildir. İşletmenin kendi CDN alan adının yapılandırılması ve gerçek fotoğraf izinlerinin alınması gereklidir.
+
+[Fotoğraf yükleme rehberi](docs/PHOTO_UPLOAD_v1_7.md). Depolama hesabı, gerçek Auth0 ve cihaz testleri yapılmadan canlıya açılamaz.

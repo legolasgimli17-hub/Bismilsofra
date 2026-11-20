@@ -11,6 +11,7 @@ import {randomUUID} from 'node:crypto';
 import {Pool} from 'pg';
 import {exportJWK,generateKeyPair,SignJWT} from 'jose';
 import {dispatchOutbox} from '../src/notification-service.ts';
+import sharp from 'sharp';
 
 const connection=process.env.INTEGRATION_DATABASE_URL;
 if(!connection)throw Error('Only a disposable INTEGRATION_DATABASE_URL is allowed.');
@@ -52,6 +53,20 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  await new Promise<void>(resolve=>jwks.listen(0,'127.0.0.1',resolve));
  const addr=jwks.address();if(!addr||typeof addr==='string')throw Error('No JWKS bind');
  const jwksPort=addr.port;
+ const fakeObjects:Array<{method:string;url:string;bytes:Buffer;contentType:string}>=[]; 
+ const fakeStore=createServer((req,res)=>{
+  const chunks:Buffer[]=[];
+  req.on('data',(part:Buffer)=>chunks.push(part));
+  req.on('end',()=>{
+   fakeObjects.push({method:req.method||'UNKNOWN',url:req.url||'',bytes:Buffer.concat(chunks),contentType:String(req.headers['content-type']||'')});
+   res.writeHead(req.method==='DELETE'?204:200,req.method==='DELETE'?{}:{etag:'"fake-media-test"'});
+   res.end();
+  });
+ });
+ await new Promise<void>(resolve=>fakeStore.listen(0,'127.0.0.1',resolve));
+ const fakeAddress=fakeStore.address();
+ if(!fakeAddress||typeof fakeAddress==='string')throw Error('No fake S3 port');
+ const fakePort=fakeAddress.port;
  const basePort=await freePort();
  const issuer='http://127.0.0.1:'+jwksPort+'/';
  const base='http://127.0.0.1:'+basePort;
@@ -61,7 +76,11 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
   cwd:process.cwd(),stdio:['ignore','pipe','pipe'],
   env:{...process.env,DATABASE_URL:connection,CORS_ORIGIN:'http://127.0.0.1:3000',
    OIDC_ISSUER:issuer,OIDC_AUDIENCE:audience,OIDC_JWKS_URL:issuer+'.well-known/jwks.json',
-   PORT:String(basePort),NODE_ENV:'test'}
+   PORT:String(basePort),NODE_ENV:'test',
+   S3_ENDPOINT:'http://127.0.0.1:'+fakePort+'/',S3_BUCKET:'bismil-sofra-test',
+   S3_REGION:'auto',S3_ACCESS_KEY_ID:'ci-only-access',S3_SECRET_ACCESS_KEY:'ci-secret-not-production',
+   MEDIA_PUBLIC_ORIGIN:'https://assets.bismilsofra.example',
+   PUBLIC_IMAGE_CDN_HOST:'assets.bismilsofra.example'}
  });
  child.stdout?.on('data',x=>{output+=String(x).slice(-2000)});
  child.stderr?.on('data',x=>{output+=String(x).slice(-2000)});
@@ -71,6 +90,7 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
   if(child.exitCode===null)child.kill('SIGKILL');
   await pool.end();
   await new Promise<void>(resolve=>jwks.close(()=>resolve()));
+  await new Promise<void>(resolve=>fakeStore.close(()=>resolve()));
  });
  try{await waitFor(base,child)}catch(e){throw Error(String(e)+' (server output: '+output.slice(-1000)+')')}
  const nonce=randomUUID();
@@ -236,8 +256,45 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
   method:'POST',token:customer,body:{name:'Yetkisiz Kategori'}})).status,403);
  assert.equal((await request('/v1/restaurant/'+rid+'/categories/'+categoryId,{
   method:'PATCH',token:owner,body:{name:'CI Yeni Menüler'}})).status,200);
- const productDraft={categoryId,name:'CI Test Pidesi',description:'Yalnızca test ortamında kayıtlı ürün',
-  priceKurus:24000,imageUrl:'/photos/ci-onayli.webp'};
+ // Signed binary photo upload: reject non-merchant or non-consenting request
+ // BEFORE accepting customer-controlled image content.
+ const photoUpload=(jwt:string,body:Buffer,rights='true')=>fetch(base+'/v1/restaurant/'+rid+'/photos',{
+  method:'POST',headers:{Authorization:'Bearer '+jwt,
+   'Content-Type':'application/octet-stream',
+   'X-Photo-Rights-Affirmed':rights},
+  body,signal:AbortSignal.timeout(10000)
+ });
+ const jpg=await sharp({create:{width:220,height:170,channels:3,
+  background:{r:220,g:110,b:60}}}).jpeg({quality:87}).toBuffer();
+ const customerPhoto=await photoUpload(customer,jpg);
+ assert.equal(customerPhoto.status,403,'customer must never upload restaurant pictures');
+ const unverifiedPhoto=await photoUpload(noMfa,jpg);
+ assert.equal(unverifiedPhoto.status,403,'MFA required for photo upload');
+ const missingRights=await photoUpload(owner,jpg,'false');
+ assert.equal(missingRights.status,400);
+ const invalidPhoto=await photoUpload(owner,Buffer.from('<svg><script>alert(1)</script></svg>'));
+ assert.equal(invalidPhoto.status,415);
+ const validPhoto=await photoUpload(owner,jpg);
+ assert.equal(validPhoto.status,201,await validPhoto.clone().text());
+ const published=await validPhoto.json() as {mediaId:string;imageUrl:string;width:number;height:number;sizeBytes:number};
+ assert.match(published.imageUrl,/^https:\/\/assets\.bismilsofra\.example\/restaurants\//);
+ assert.ok(published.sizeBytes>0&&published.width<=1600&&published.height<=1200);
+ const stored=await pool.query('SELECT restaurant_id,uploaded_by,public_url,object_key FROM restaurant_media WHERE id=$1',[published.mediaId]);
+ assert.equal(stored.rows[0].restaurant_id,rid);
+ assert.equal(stored.rows[0].uploaded_by,ownerId);
+ assert.equal(stored.rows[0].public_url,published.imageUrl);
+ const put=fakeObjects.find(item=>item.method==='PUT');
+ assert.ok(put,'fake S3 must receive a normalized image');
+ assert.match(put!.url,/bismil-sofra-test\/restaurants\//);
+ assert.equal(put!.contentType,'image/webp');
+ const otherRestaurantAsset='https://assets.bismilsofra.example/restaurants/'+randomUUID()+'/photos/'+randomUUID()+'.webp';
+ const foreignMedia=await request('/v1/restaurant/'+rid+'/products',{method:'POST',token:owner,body:{
+  categoryId,name:'Başkasının fotoğrafı',description:'Bu yükleme reddedilmeli',priceKurus:25000,imageUrl:otherRestaurantAsset
+ }});
+ assert.equal(foreignMedia.status,409,'restaurant cannot claim an unowned CDN image');
+ assert.equal(foreignMedia.body.code,'PHOTO_NOT_OWNED');
+  const productDraft={categoryId,name:'CI Test Pidesi',description:'Yalnızca test ortamında kayıtlı ürün',
+  priceKurus:24000,imageUrl:published.imageUrl};
  assert.equal((await request('/v1/restaurant/'+rid+'/products',{method:'POST',token:customer,body:productDraft})).status,403);
  assert.equal((await request('/v1/restaurant/'+rid+'/products',{
   method:'POST',token:owner,body:{...productDraft,categoryId:randomUUID()}})).status,409);
