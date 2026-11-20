@@ -58,3 +58,12 @@ test('draft menu imports have independent strict write rate limit',()=>{
  assert.equal(denied.bucket,'import');
  assert.equal(limiter.check('127.0.0.1','POST','/v1/me/addresses',100).allowed,true);
 });
+
+test('customer address mutations have bounded account quota independent of checkout',()=>{
+ const limiter=new RequestLimiter();
+ const uri='/v1/me/addresses/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+ for(let i=0;i<30;i++)assert.equal(limiter.check('127.0.0.1','PATCH',uri,100).allowed,true);
+ assert.equal(limiter.check('127.0.0.1','POST',uri+'/archive',100).allowed,false);
+ assert.equal(limiter.check('127.0.0.1','POST','/v1/me/addresses',100).bucket,'account');
+ assert.equal(limiter.check('127.0.0.1','POST','/v1/orders',100).allowed,true);
+});

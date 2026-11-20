@@ -538,3 +538,31 @@ body{background:#fbfaf7;color:#263129}
 .pilot-import-disclaimer{display:flex;align-items:start;gap:8px;font-size:12px;line-height:1.6}
 .pilot-import-disclaimer svg{flex-shrink:0}
 @media(max-width:650px){.pilot-menu-import{padding:13px}.pilot-menu-import .btn{width:100%;justify-content:center}}
+
+/* Customer-owned address book. Mobile touch buttons and readable input fields. */
+.customer-address-book{margin-top:24px}
+.address-book-head{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:18px}
+.address-book-head h2{font-size:22px;display:flex;align-items:center;gap:8px;margin:0 0 7px}
+.address-book-head p{max-width:60ch;line-height:1.6}
+.address-book-toolbar{display:flex;align-items:center;gap:9px}
+.address-book-toolbar .btn{min-height:44px;white-space:nowrap}
+.address-book-list{display:grid;gap:12px}
+.address-book-item{display:flex;justify-content:space-between;gap:18px;border:1px solid #dfeadf;border-radius:12px;padding:16px;background:#fafcf9}
+.address-book-item>div:first-child{min-width:0}
+.address-book-item strong{font-size:15px;display:flex;gap:7px;align-items:center}
+.address-book-item span{display:block;margin-top:6px;font-size:13px;color:#40644c}
+.address-book-item p{font-size:14px;margin:7px 0 10px;overflow-wrap:anywhere;line-height:1.5}
+.address-book-item small{font-size:12px;display:block;color:#607166;margin-top:5px;overflow-wrap:anywhere}
+.address-book-actions{display:flex;align-items:start;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.address-book-actions .btn{min-height:44px}
+.address-book-delete{border-color:#d7a29b!important;color:#983f37!important}
+.address-book-form{display:flex;flex-direction:column;gap:14px;border:1px solid #ccddd1;border-radius:12px;padding:17px;background:#f8fcf8;margin-top:16px}
+.address-book-form h3{font-size:18px;margin:0}
+.address-book-form>label,.address-book-input-grid label{display:flex;flex-direction:column;gap:7px;font-size:13px;font-weight:750}
+.address-book-form textarea,.address-book-form input,.address-book-form select{border:1px solid #cbd9cf;border-radius:10px;min-height:45px;padding:10px 12px;background:#fff;font-size:14px;width:100%;resize:vertical}
+.address-book-input-grid{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:12px}
+.address-book-form .address-book-actions{justify-content:flex-start}
+.address-book-note{line-height:1.6;margin-top:17px;font-size:12px}
+.address-manage-link{display:inline-block;color:#236a43;text-decoration:underline;margin:12px 0;font-size:13px;font-weight:750}
+@media(max-width:850px){.address-book-head{flex-direction:column}.address-book-input-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:590px){.address-book-toolbar{width:100%}.address-book-toolbar .btn{flex:1;justify-content:center;min-height:49px}.address-book-item{flex-direction:column;gap:12px}.address-book-actions{justify-content:flex-start}.address-book-actions .btn{flex:1}.address-book-input-grid{grid-template-columns:1fr}.address-book-form{padding:13px}}
