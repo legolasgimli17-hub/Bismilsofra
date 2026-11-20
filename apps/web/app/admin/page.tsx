@@ -6,7 +6,23 @@ import {api} from '@/lib/api';
 import {AlertTriangle,ShieldCheck,RefreshCcw,WifiOff,BellRing,Clock3} from 'lucide-react';
 
 type AlertGroup={restaurant_id:string;count:number};
-type AdminAlerts={latePending:AlertGroup[];notificationIssues:AlertGroup[];escalationIssues:AlertGroup[]};
+type WorkerHealth={
+ name:'outbox'|'escalation'|'expiry';
+ status:'running'|'delivery_error'|'error'|'stale'|'missing';
+ lastSeenAt:string|null;lastSuccessfulCycleAt:string|null;
+ lastWorkAt:string|null;lastFailureAt:string|null
+};
+type AdminAlerts={
+ latePending:AlertGroup[];notificationIssues:AlertGroup[];escalationIssues:AlertGroup[];
+ workers:WorkerHealth[]
+};
+const workerLabels:Record<WorkerHealth['name'],string>={
+ outbox:'İlk sipariş bildirimi',escalation:'Bağımsız ikinci alarm',expiry:'Sipariş süresi takibi'
+};
+const workerStatuses:Record<WorkerHealth['status'],string>={
+ running:'İşçi çevrimi güncel',delivery_error:'İletim hatası görüldü',
+ error:'İşçi çevrimi hatalı',stale:'Kalp atışı gecikti',missing:'İşçi henüz rapor vermedi'
+};
 const count=(records:AlertGroup[]|undefined)=>records?.reduce((sum,x)=>sum+x.count,0)||0;
 
 export default function AdminPage(){return <AuthGate>{token=><Inner token={token}/>}</AuthGate>}
@@ -58,6 +74,25 @@ function Inner({token}:{token:()=>Promise<string>}){
       </p>)}
    </article>)}
   </div>
+  <section className="panel admin-worker-watchdog" aria-label="Sipariş işçileri sağlık kontrolü">
+   <h2><Clock3 size={20}/> Sipariş işçileri</h2>
+   <p className="muted">Bu kontrol arka plan süreçlerinin durumunu gösterir. Bir işçinin çalışması, bildirim sağlayıcısının veya restoran telefonunun alarmı aldığını kanıtlamaz.</p>
+   {!alerts?<p className="muted">İşçi durumu henüz alınamadı.</p>:
+    <div className="admin-worker-grid">{(alerts.workers||[]).map(worker=>{
+     const healthy=worker.status==='running';
+     return <article className={`admin-worker-card ${healthy?'admin-worker-ok':'admin-worker-fault'}`} key={worker.name}>
+      <strong>{workerLabels[worker.name]}</strong>
+      <p className="admin-worker-label" role={healthy?'status':'alert'}>
+       {healthy?<ShieldCheck size={17}/>:<AlertTriangle size={17}/>}
+       {workerStatuses[worker.status]}
+      </p>
+      <small>Son çalışma: {worker.lastSeenAt?new Date(worker.lastSeenAt).toLocaleString('tr-TR'):'Kayıt yok'}</small>
+      <small>Son tamamlanan iş: {worker.lastWorkAt?new Date(worker.lastWorkAt).toLocaleString('tr-TR'):'Henüz kayıtlı değil'}</small>
+     </article>
+    })}</div>}
+   {alerts?.workers?.some(x=>x.status!=='running')&&
+    <p className="notice error" role="alert">Bir veya daha fazla arka plan işçisi kontrol edilmeli. Süreç/DB bağlantısını ve bildirim sağlayıcısını doğrulayın; gerekirse operasyon sorumlusuna haber verin.</p>}
+  </section>
   <SupportOperations token={token}/>
   <p className="muted">Uyarı sıfır görünse bile pilot öncesi gerçek SMS/push ve bağımsız yedek kanal testleri gereklidir. Destek talebi durumları müşterinin Siparişlerim ekranında görülebilir; otomatik müşteri mesajı veya para iadesi yapılmaz.</p>
  </section>;
