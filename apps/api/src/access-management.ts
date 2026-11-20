@@ -31,7 +31,7 @@ export function parseMemberPermissions(value:unknown):MemberPermissions{
  // Manager privileges come from role, NOT from client-controlled flag values.
  if(b.role==='manager'&&(!b.canViewOrders||!b.canManageOrders||!b.canManageMenu))
   invalid('PERMISSIONS_INVALID','Restoran yöneticisi tüm yönetim izinlerine sahip olmalı.');
- return {role:b.role,can_view_orders:b.canViewOrders as boolean,
+ return {role:b.role as MemberRole,can_view_orders:b.canViewOrders as boolean,
   can_manage_orders:b.canManageOrders as boolean,can_manage_menu:b.canManageMenu as boolean};
 }
 export function parseStaffGrant(value:unknown):{email:string;access:MemberPermissions}{
@@ -46,7 +46,7 @@ export function parseStaffUpdate(value:unknown):{expected:MemberSnapshot;next:Me
  if(role!=='staff'&&role!=='manager')invalid('ROLE_INVALID','Sahip yetkisi bu ekrandan değiştirilemez.');
  if(!bool(e.canViewOrders)||!bool(e.canManageOrders)||!bool(e.canManageMenu))
   invalid('PERMISSIONS_INVALID','Önce mevcut personel yetkilerini doğrulayın.');
- return {expected:{role,can_view_orders:e.canViewOrders as boolean,
+ return {expected:{role:role as MemberRole,can_view_orders:e.canViewOrders as boolean,
   can_manage_orders:e.canManageOrders as boolean,can_manage_menu:e.canManageMenu as boolean},
   next:parseMemberPermissions(b.next)};
 }
