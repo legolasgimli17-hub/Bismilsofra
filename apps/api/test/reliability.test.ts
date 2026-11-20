@@ -78,31 +78,64 @@ test('restaurant cannot update an order if staff permission is missing',async()=
  await assert.rejects(()=>changeStatus(db,'restaurant',ids.user,ids.order,'kabul_edildi'),domainCode('ROLE_FORBIDDEN'));
  assert.equal(db.seen.some((q:any)=>q.sql.startsWith('UPDATE orders')),false);
 });
-test('outbox ack successful delivery',async()=>{
- const db=poolFor(sql=>sql.includes('FROM notification_outbox')?rows([{id:8,order_id:ids.order,restaurant_id:ids.rest,type:'new_order',payload:{orderId:ids.order},attempts:0}]):sql.startsWith('UPDATE notification_outbox')?rows(): (()=>{throw Error(sql)})());
+/** Fake query adapter models a committed claim. Delivery must NOT hold a tx. */
+function fakeOutbox(event:{id:number;order_id:string;restaurant_id:string;type:string;payload:unknown;attempts:number}|null){
+ const seen:{sql:string;params:any[]}[]=[];
+ let claimed=false;
+ const db={
+  seen,
+  query:async(sql:string,params:any[]=[])=>{
+   seen.push({sql,params});
+   if(sql.includes('WITH candidate AS')){
+    if(claimed||!event)return rows();
+    claimed=true;return rows([event]);
+   }
+   if(sql.startsWith('UPDATE notification_outbox'))return rows([{id:event?.id??0}]);
+   throw Error('Unexpected SQL '+sql);
+  }
+ };
+ return db as any;
+}
+test('outbox ack uses a committed lease and does not hold DB connection during delivery',async()=>{
+ const db=fakeOutbox({id:8,order_id:ids.order,restaurant_id:ids.rest,type:'new_order',payload:{orderId:ids.order},attempts:0});
  const observed:number[]=[];
- const output=await dispatchOutbox(db,async(event)=>{observed.push(Number(event.id));},5);
+ const output=await dispatchOutbox(db,async event=>{
+  observed.push(Number(event.id));
+  assert.equal(db.seen.length,1,'no transaction or row lock should be open across network call');
+  assert.match(db.seen[0].sql,/FOR UPDATE SKIP LOCKED/);
+ },5);
  assert.deepEqual(output,{processed:1,sent:1,failed:0,dead:0});
  assert.deepEqual(observed,[8]);
  assert.ok(db.seen.some((q:any)=>q.sql.includes('SET sent_at=now()')));
- assert.equal(db.seen.at(-1).sql,'COMMIT');
+ assert.ok(db.seen.every((q:any)=>!['BEGIN','COMMIT'].includes(q.sql)));
 });
-test('outbox retry persists backoff and eventual dead letter',async()=>{
- const db=poolFor(sql=>sql.includes('FROM notification_outbox')?rows([{id:33,order_id:ids.order,restaurant_id:ids.rest,type:'new_order',payload:{},attempts:11}]):sql.startsWith('UPDATE notification_outbox')?rows(): (()=>{throw Error(sql)})());
- const result=await dispatchOutbox(db,async()=>{throw Error('provider temporarily down')});
- assert.deepEqual(result,{processed:1,sent:0,failed:1,dead:1});
- const update=db.seen.find((q:any)=>q.sql.includes('SET attempts=attempts+1'));
+test('outbox retry persists sanitized error, backoff and eventual dead letter',async()=>{
+ const db=fakeOutbox({id:33,order_id:ids.order,restaurant_id:ids.rest,type:'new_order',payload:{},attempts:11});
+ const output=await dispatchOutbox(db,async()=>{throw Error('secret=do-not-log')});
+ assert.deepEqual(output,{processed:1,sent:0,failed:1,dead:1});
+ const update=db.seen.find((q:any)=>q.sql.includes("last_error='DELIVERY_FAILED'"));
+ assert.ok(update);
  assert.equal(update.params[2],true);assert.equal(update.params[3],3600);
- assert.equal(db.seen.at(-1).sql,'COMMIT');
+ assert.doesNotMatch(JSON.stringify(db.seen),/do-not-log/);
+});
+test('outbox refuses to acknowledge an expired, superseded delivery lease',async()=>{
+ const db=fakeOutbox({id:44,order_id:ids.order,restaurant_id:ids.rest,type:'new_order',payload:{},attempts:0});
+ const query=db.query;
+ db.query=async(sql:string,params:any[]=[])=>{
+  if(sql.includes('SET sent_at=now()'))return rows();
+  return query(sql,params);
+ };
+ const out=await dispatchOutbox(db,async()=>{},1);
+ assert.deepEqual(out,{processed:1,sent:0,failed:0,dead:0});
 });
 test('webhook configuration rejects insecure URL or weak signature secret',()=>{
  assert.throws(()=>createSignedWebhook('http://example.com','x'.repeat(64)),/HTTPS/);
  assert.throws(()=>createSignedWebhook('https://example.com','weak'),/32/);
  assert.doesNotThrow(()=>createSignedWebhook('https://example.com/ingest','x'.repeat(32)));
 });
-test('migration manifest requires 001,003,004,005,006,007 and never fictional seed 002',()=>{
+test('migration manifest requires 001–009 and never fictional seed 002',()=>{
  const source=readFileSync(new URL('../src/migrate.ts',import.meta.url),'utf8');
- assert.match(source,/001_initial\.sql/);assert.match(source,/003_reliability\.sql/);assert.match(source,/004_escalation\.sql/);assert.match(source,/005_product_revisions\.sql/);assert.match(source,/006_restaurant_media\.sql/);assert.match(source,/007_product_options_editor\.sql/);
+ assert.match(source,/001_initial\.sql/);assert.match(source,/003_reliability\.sql/);assert.match(source,/004_escalation\.sql/);assert.match(source,/005_product_revisions\.sql/);assert.match(source,/006_restaurant_media\.sql/);assert.match(source,/007_product_options_editor\.sql/);assert.match(source,/008_outbox_leases\.sql/);assert.match(source,/009_escalation_leases\.sql/);
  assert.doesNotMatch(source,/['"]002_development_example\.sql['"]/);
  assert.match(source,/schema_migrations/);assert.match(source,/sha256/);
 });

@@ -181,7 +181,7 @@ app.patch('/v1/restaurant/:rid/products/:pid',async(req)=>{
 // server-scoped and audited; client code never chooses a restaurant to impersonate.
 app.get('/v1/restaurant/:rid/management',async(req)=>{
  const rid=idParam(req,'rid');const {role}=await staff(req,rid,'menu');
- const [restaurant,products,hours,zones,categories,groups,choices]=await Promise.all([
+ const [restaurant,products,hours,zones,categories]=await Promise.all([
   pool.query('SELECT id,name,active,is_open,is_busy,accepts_orders FROM restaurants WHERE id=$1',[rid]),
   pool.query(`SELECT p.id,p.name,p.description,p.price_kurus,p.available,p.image_url,p.category_id,p.revision,
    c.name AS category_name
@@ -194,16 +194,10 @@ app.get('/v1/restaurant/:rid/management',async(req)=>{
   pool.query(`SELECT dz.zone_id,z.name,dz.enabled,dz.min_basket_kurus,dz.delivery_fee_kurus
     FROM restaurant_delivery_zones dz JOIN delivery_zones z ON z.id=dz.zone_id
     WHERE dz.restaurant_id=$1 ORDER BY z.name LIMIT 100`,[rid]),
-  pool.query('SELECT id,name,sort_order FROM categories WHERE restaurant_id=$1 ORDER BY sort_order,name LIMIT 50',[rid]),
-  pool.query(`SELECT g.id,g.product_id,g.name,g.min_select,g.max_select,g.archived,g.revision
-   FROM option_groups g JOIN products p ON p.id=g.product_id
-   WHERE p.restaurant_id=$1 ORDER BY g.id LIMIT 4000`,[rid]),
-  pool.query(`SELECT o.id,o.group_id,o.name,o.price_kurus,o.available,o.revision
-   FROM options o JOIN option_groups g ON g.id=o.group_id JOIN products p ON p.id=g.product_id
-   WHERE p.restaurant_id=$1 ORDER BY o.id LIMIT 48000`,[rid])
+  pool.query('SELECT id,name,sort_order FROM categories WHERE restaurant_id=$1 ORDER BY sort_order,name LIMIT 50',[rid])
  ]);
  if(!restaurant.rowCount)invalid('NOT_FOUND','Restoran bulunamadı.',404);
- return {restaurant:restaurant.rows[0],products:products.rows,hours:hours.rows,zones:zones.rows,categories:categories.rows,optionGroups:groups.rows,options:choices.rows,
+ return {restaurant:restaurant.rows[0],products:products.rows,hours:hours.rows,zones:zones.rows,categories:categories.rows,
   permissions:{canManageMenu:true,canManageSettings:role==='owner'||role==='manager'}};
 });
 // New menu entries start unavailable so an unfinished draft can never be
@@ -242,7 +236,6 @@ app.patch('/v1/restaurant/:rid/categories/:cid',async(req)=>{
   return {category:changed.rows[0]};
  });
 });
-
 // A file upload is not the same as accepting an arbitrary remote photo URL.
 // The route checks MFA before receiving a 5 MB binary request body, strips
 // metadata and stores a WebP with an immutable restaurant-owned media record.
