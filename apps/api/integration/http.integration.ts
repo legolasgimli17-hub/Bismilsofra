@@ -482,6 +482,45 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
   method:'POST',token:owner,body:{to:'kabul_edildi'}});
  assert.equal(accepted.status,200,JSON.stringify(accepted.body));
  assert.equal((await request('/v1/me/orders/'+orderId,{token:customer})).body.order.status,'kabul_edildi');
+
+ // V1 pilot KPI endpoints: real order data, server-side Istanbul day grouping,
+ // no customer PII and strict owner/manager/administrator boundaries.
+ assert.equal((await request('/v1/admin/reports?days=7',{token:customer})).status,403);
+ assert.equal((await request('/v1/admin/reports?days=7',{token:oldAdministrator})).status,403);
+ assert.equal((await request('/v1/admin/reports?days=99',{token:administrator})).status,400);
+ const adminReport=await request('/v1/admin/reports?days=7',{token:administrator});
+ assert.equal(adminReport.status,200,JSON.stringify(adminReport.body));
+ assert.equal(adminReport.body.daily.length,7,'zero order days must be represented');
+ assert.ok(adminReport.body.restaurants.some((x:{id:string})=>x.id===rid));
+ assert.ok(adminReport.body.summary.orders>=1);
+ assert.ok(!JSON.stringify(adminReport.body).includes('CI Test Sokak 12'),
+  'platform report cannot expose customer delivery addresses');
+ assert.ok(!JSON.stringify(adminReport.body).includes('05000000000'),
+  'platform report cannot expose phone numbers');
+ const thirty=await request('/v1/admin/reports?days=30',{token:administrator});
+ assert.equal(thirty.status,200);
+ assert.equal(thirty.body.daily.length,30);
+ assert.equal(thirty.body.daily.reduce((sum:number,x:{orders:number})=>sum+x.orders,0),
+  thirty.body.summary.orders,'every created order must contribute to exactly one day');
+ const merchantReportUrl='/v1/restaurant/'+rid+'/reports?days=7';
+ assert.equal((await request(merchantReportUrl,{token:customer})).status,403);
+ assert.equal((await request(merchantReportUrl,{token:noMfa})).status,403);
+ assert.equal((await request(merchantReportUrl,{token:pilotOwner})).status,403,
+  'different restaurant owner cannot read financial/order stats');
+ assert.equal((await request(merchantReportUrl,{token:teamStaff})).status,403,
+  'staff cannot read reports even when previously granted view access');
+ const merchantReport=await request(merchantReportUrl,{token:owner});
+ assert.equal(merchantReport.status,200,JSON.stringify(merchantReport.body));
+ assert.equal(merchantReport.body.scope,'restaurant');
+ assert.equal(merchantReport.body.summary.orders>=1,true);
+ assert.equal(merchantReport.body.summary.accepted>=1,true);
+ assert.equal(merchantReport.body.restaurants,undefined,'merchant never gets platform roster');
+ assert.equal((await request('/v1/restaurant/'+pilotId+'/reports?days=7',{token:teamManager})).status,200);
+ assert.equal((await request('/v1/restaurant/'+pilotId+'/reports?days=7',{token:owner})).status,403);
+ assert.equal((await request('/v1/restaurant/'+rid+'/reports?days=0',{token:owner})).status,400);
+ assert.ok(Number(merchantReport.body.summary.delivered_total_kurus)>=0);
+ assert.ok(!JSON.stringify(merchantReport.body).includes('CI Test Sokak 12'));
+
  // Real merchant management endpoints: staff authorization, menu, hours and
  // configured neighborhood fees. All read/write requests use signed tokens.
  const baseManagement=await request('/v1/restaurant/'+rid+'/management',{token:owner});
