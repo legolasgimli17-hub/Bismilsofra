@@ -1,4 +1,4 @@
-# Bismil Sofra — v2.2.0-beta.1 geliştirme aşaması
+# Bismil Sofra — v2.3.0-beta.1 geliştirme aşaması
 
 **Bismil'e özel, en fazla 50 aktif restoran için tasarlanan yemek sipariş PWA projesi.** Kaynak proje hâlâ geliştirme aşamasındadır; gerçek müşterilerden sipariş almaya hazır değildir.
 
@@ -120,3 +120,9 @@ Canlı aramanın ürün adına göre eşleşen restoranları kaybetmesi düzelti
 - Daha fazla bilgi: [v2.2 UX & MFA inceleme notları](docs/CART_AND_CATEGORIES_v2_2.md).
 
 Bu kod sürümü, gerçek sağlayıcı ve saha testlerinin tamamlandığı anlamına gelmez.
+
+## v2.3 — Destek taleplerinde gerçek operasyon akışı
+
+Müşteri, siparişinden destek kaydı açabilir ve `/orders` ekranından durumunu görebilir. Yönetici `/admin` alanında yalnızca doğrulanmış güncel MFA sonrası talepleri listeleyebilir; serbest metin açıklamaları ayrı ve istek üzerine alınır. Yönetici talebi inceleniyor/çözüldü/kapandı aşamalarına taşır, eski duruma dayalı çakışmalı işlemler `409` alır. Her durum değişimi `audit_logs` tablosuna müşteri adresi veya açıklama eklenmeden yazılır.
+
+[Operasyon rehberi](docs/SUPPORT_OPERATIONS_v2_3.md). Otomatik SMS/e-posta bildirimi, para iadesi, gerçek destek ekibi ve sağlayıcı bağlantıları bu kod sürümünün kapsamında değildir; pilot öncesi ayrıca kurulmalı.
