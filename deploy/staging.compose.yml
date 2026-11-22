@@ -1,0 +1,76 @@
+# LOCAL-ONLY staging scaffold, not public production hosting.
+name: bismil-sofra-staging
+services:
+  db:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_DB: bismil_sofra_staging
+      POSTGRES_USER: sofra_staging
+      POSTGRES_PASSWORD: ${STAGING_DB_PASSWORD:?Required staging DB password}
+    volumes: [sofra_staging_pg:/var/lib/postgresql/data]
+    networks: [staging_internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sofra_staging -d bismil_sofra_staging"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+  migrate:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    command: ["node", "--experimental-strip-types", "apps/api/src/migrate.ts"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${STAGING_DATABASE_URL:?Required staging database URL}
+    networks: [staging_internal]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      API_BIND_HOST: 0.0.0.0
+      DATABASE_URL: ${STAGING_DATABASE_URL:?Required staging database URL}
+      ORDER_EVENTS_LISTEN_DATABASE_URL: ${STAGING_DATABASE_URL:?Required staging database URL}
+      CORS_ORIGIN: ${STAGING_CORS_ORIGIN:?Required staging frontend HTTPS origin}
+      OIDC_ISSUER: ${STAGING_OIDC_ISSUER:?Required staging OIDC issuer}
+      OIDC_AUDIENCE: ${STAGING_OIDC_AUDIENCE:?Required staging OIDC audience}
+      OIDC_JWKS_URL: ${STAGING_OIDC_JWKS_URL:?Required staging JWKS URL}
+      PILOT_ACCEPT_ORDERS: "false"
+    ports: ["127.0.0.1:4188:4000"]
+    networks: [staging_internal]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp:size=16777216,mode=1777]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  expiry:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    command: ["node", "--experimental-strip-types", "apps/api/src/expiry-worker.ts"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${STAGING_DATABASE_URL:?Required staging database URL}
+    networks: [staging_internal]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+networks:
+  staging_internal:
+    driver: bridge
+volumes:
+  sofra_staging_pg:
