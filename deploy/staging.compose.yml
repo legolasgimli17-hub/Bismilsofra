@@ -108,6 +108,23 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
+  gateway:
+    profiles: [tls]
+    image: caddy:2.10.2-alpine
+    ports: ["127.0.0.1:8443:8443"]
+    volumes: ["./staging.Caddyfile:/etc/caddy/Caddyfile:ro"]
+    networks: [staging_internal]
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /config
+      - /data
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
 networks:
   staging_internal:
     driver: bridge
