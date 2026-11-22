@@ -225,6 +225,17 @@ jobs:
           set -euo pipefail
           docker compose --profile tls -f deploy/staging.compose.yml config --quiet
           trap 'docker compose --profile tls -f deploy/staging.compose.yml down -v --remove-orphans >/dev/null 2>&1 || true' EXIT
+          # Docker Hub's CDN sometimes resets downloads on fresh CI runners.
+          # Retry only the transport operation; never skip the staging assertions.
+          images_ok=0
+          for attempt in 1 2 3 4 5; do
+            if docker compose --profile tls -f deploy/staging.compose.yml pull db gateway; then
+              images_ok=1
+              break
+            fi
+            sleep "$((attempt * 3))"
+          done
+          test "$images_ok" = 1
           docker compose --profile tls -f deploy/staging.compose.yml up -d --build db migrate api gateway
           success=0
           for i in $(seq 1 90); do
