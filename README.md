@@ -141,6 +141,10 @@ Tarayıcı **offline** olayında butonlar anında kilitlenir; internet geri geld
 
 [Restoran bağlantı ve kurtarma rehberi](docs/RECONNECT_v2_5.md). Canlı Auth0, ayrı bildirim sağlayıcıları ve saha doğrulaması hâlâ zorunludur.
 
+## Çoklu API kopyasında imzalı HTTP sipariş testi
+
+CI, iki Fastify sunucusu ve gerçek disposable PostgreSQL üzerinde 10 ayrı RS256 ile imzalı test müşteri hesabıyla paralel HTTP siparişi, diğer API kopyasından 10 idempotent tekrar ve PostgreSQL NOTIFY/SSE fanout doğrular. Bu testler üretim Auth0, iki gerçek webhook sağlayıcısı veya 1.000 müşteri ölçeğinin doğrulandığı anlamına gelmez. [Çoklu kopya test sınırları](docs/MULTI_REPLICA_HTTP_RELIABILITY.md).
+
 ## İzole staging ve genişletilmiş otomatik kapasite testi
 
 Ayrı PostgreSQL 17, migration, API ve expiry worker içeren localhost-only staging Docker Compose kurulum dosyası, güvenli read-only HTTPS/localhost staging preflight aracı ve 50/100/200 paralel GET test profilleri eklendi. Gerçek müşteri veya canlı veritabanına yük gönderilmez. [Kurulum ve sınırlar](docs/STAGING_AND_CAPACITY_v3_0.md).
