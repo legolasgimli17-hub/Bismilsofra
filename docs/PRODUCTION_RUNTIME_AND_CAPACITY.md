@@ -15,7 +15,8 @@ Tarih: 22 Kasım 2026. Bu belge bir **yük testinin sonucu** değil, kodlanmış
 - npm run test:api: listener ve üretim sipariş koruma mantığı için testler.
 - CI gerçek PostgreSQL 17 üzerinde **kurgusal verilerle** API'yi yerel portta başlatır. GET /v1/restaurants, /v1/zones, /v1/categories ve /healthz uç noktalarına 160 istek / 40 eşzamanlı istek gönderir. Ağ/HTTP hatasında veya p95 6.000 ms'yi aşarsa CI kırmızı olur.
 - Yük aracı yalnızca yerel http://127.0.0.1:<port> ya da localhost adresini kabul eder; uzak canlı servise, HTTPS adrese veya yetki gerektiren/sipariş oluşturan endpoint'e yük göndermeyi reddeder.
-- Bu 160 istek **1.000 gerçek kullanıcının** ya da 30 eşzamanlı ödeme/siparişin doğrulandığı anlamına gelmez.
+- Ayrıca CI, 30 farklı kurgusal müşteri için 30 paralel **doğrudan PostgreSQL sipariş transaction'ı** ve 30 tekrar deneme gerçekleştirir. 30 bağımsız sipariş, 30 ilk durum kaydı, 30 birincil bildirim outbox olayı ve 30 fallback zamanlaması doğrulanır; aynı idempotency key tekrarında 2. sipariş açılmamalıdır. Bu, gerçek HTTP/JWT üzerinden 30 farklı müşterinin trafik testiyle aynı şey değildir.
+- Bu 160 GET ve 30 DB işlemi **1.000 gerçek kullanıcının** veya gerçek online ödeme/saha alarmının doğrulandığı anlamına gelmez.
 
 ## Staging test planı — gerçek müşteri gerektirmez
 
