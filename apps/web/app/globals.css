@@ -624,3 +624,6 @@ body{background:#fbfaf7;color:#263129}
 .recovery-loading-label{font-size:14px;color:#76716c;margin-top:14px}
 @media(max-width:600px){.recovery-wrap{min-height:55vh;padding-top:26px;padding-bottom:32px}.recovery-panel{padding:26px 19px}.recovery-actions{align-items:stretch;flex-direction:column}.recovery-actions .btn,.recovery-link{justify-content:center}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
+/* A checkout without items is still a real page: retain a correctly sized h1. */
+.empty-page-title{font-size:clamp(1.45rem,2.1vw,2rem);line-height:1.25;margin:0 0 12px}
