@@ -141,6 +141,10 @@ Tarayıcı **offline** olayında butonlar anında kilitlenir; internet geri geld
 
 [Restoran bağlantı ve kurtarma rehberi](docs/RECONNECT_v2_5.md). Canlı Auth0, ayrı bildirim sağlayıcıları ve saha doğrulaması hâlâ zorunludur.
 
+## İzole staging ve genişletilmiş otomatik kapasite testi
+
+Ayrı PostgreSQL 17, migration, API ve expiry worker içeren localhost-only staging Docker Compose kurulum dosyası, güvenli read-only HTTPS/localhost staging preflight aracı ve 50/100/200 paralel GET test profilleri eklendi. Gerçek müşteri veya canlı veritabanına yük gönderilmez. [Kurulum ve sınırlar](docs/STAGING_AND_CAPACITY_v3_0.md).
+
 ## Backend Docker dağıtımı (staging hazırlığı)
 
 Fastify API ve worker'ların aynı Node bağımlılıklarıyla taşınması için güvenli, root olmayan Docker imajı oluşturuldu. CI, PostgreSQL test veritabanına bağlanmış **gerçek üretim modunda konteyner** açıp HTTP readiness, keşif ve varsayılan **sipariş alımı kapalı** koşulunu test eder. Bu, üretim sunucusuna dağıtım yapıldığı anlamına gelmez.
