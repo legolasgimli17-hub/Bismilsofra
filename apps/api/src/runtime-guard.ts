@@ -21,7 +21,7 @@ function httpsEndpoint(raw:string|undefined):URL|null{
  * configuration guard, NOT a guarantee that providers will deliver alerts.
  */
 export function pilotOrderIntake(env:NodeJS.ProcessEnv):IntakeStatus{
- if(env.NODE_ENV!=='production')return {enabled:true,reason:'allowed'};
+ if(env.NODE_ENV==='development'||env.NODE_ENV==='test')return {enabled:true,reason:'allowed'};
  if(env.PILOT_ACCEPT_ORDERS!=='true')return {enabled:false,reason:'disabled'};
  const origin=httpsEndpoint(env.CORS_ORIGIN);
  if(!origin||origin.pathname!=='/'||origin.search)return {enabled:false,reason:'insecure-origin'};
