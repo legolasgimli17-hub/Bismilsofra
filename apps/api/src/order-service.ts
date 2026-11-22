@@ -1,4 +1,5 @@
 import type {Pool, PoolClient} from 'pg';
+import {FREE_PILOT_SLOT_SQL,pilotRestaurantCap} from './operations.ts';
 import {assertTransition,calculateOrder,canStaff,cleanNote,invalid,parseOrder,payloadHash,uuid, type Actor,type CatalogProduct,type OrderInput,type Status} from './domain.ts';
 
 export async function transaction<T>(pool:Pool,fn:(client:PoolClient)=>Promise<T>):Promise<T>{
@@ -110,8 +111,14 @@ export async function activateRestaurant(pool:Pool,adminUserId:string,restaurant
    const checks=readiness.rows[0];
    if(!checks.has_owner||!checks.has_menu||!checks.has_hours||!checks.has_delivery)
     invalid('RESTAURANT_NOT_READY','Restoranı etkinleştirmek için doğrulanmış sahip, satıştaki ürün, çalışma saatleri ve teslimat mahallesi gerekli.',409);
+   const pilotCap=pilotRestaurantCap(process.env);
    slot=rr.rows[0].active_slot;
-   if(slot===null){const free=await db.query('SELECT s AS slot FROM generate_series(1,50) s WHERE NOT EXISTS(SELECT 1 FROM restaurants r WHERE r.active_slot=s) ORDER BY s LIMIT 1');if(!free.rowCount)invalid('CAPACITY_FULL','50 aktif restoran kapasitesi dolu.',409);slot=free.rows[0].slot;}
+   if(slot!==null&&slot>pilotCap)invalid('CAPACITY_FULL','Bu aşamanın restoran sınırı aşılıyor.',409);
+   if(slot===null){
+    const free=await db.query(FREE_PILOT_SLOT_SQL,[pilotCap]);
+    if(!free.rowCount)invalid('CAPACITY_FULL','Pilot aşamasının '+pilotCap+' aktif restoran kapasitesi dolu.',409);
+    slot=free.rows[0].slot;
+   }
   }
   await db.query('UPDATE restaurants SET active=$1,active_slot=$2,is_open=CASE WHEN $1 THEN is_open ELSE false END,accepts_orders=CASE WHEN $1 THEN accepts_orders ELSE false END WHERE id=$3',[active,slot,restaurantId]);
   await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',[adminUserId,'restaurant_activation','restaurant',restaurantId,JSON.stringify({active,slot})]);
