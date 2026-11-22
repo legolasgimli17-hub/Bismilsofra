@@ -16,7 +16,7 @@ function bounded(name:string,fallback:number,min:number,max:number):number{
  return value;
 }
 const total=bounded('LOCAL_LOAD_REQUESTS',160,1,250);
-const concurrency=bounded('LOCAL_LOAD_CONCURRENCY',40,1,100);
+const concurrency=bounded('LOCAL_LOAD_CONCURRENCY',40,1,200);
 const p95BudgetMs=bounded('LOCAL_LOAD_P95_BUDGET_MS',6000,200,20000);
 const paths=['/v1/restaurants','/v1/zones','/v1/categories','/healthz'] as const;
 const origin=base.origin;

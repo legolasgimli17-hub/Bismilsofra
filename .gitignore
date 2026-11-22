@@ -8,3 +8,8 @@ coverage/
 .DS_Store
 __pycache__/
 *.pyc
+
+# Dedicated staging credentials, never commit these files.
+deploy/staging.env
+deploy/staging.env.*
+!deploy/staging.env.template
