@@ -255,3 +255,36 @@ jobs:
           test "$status" = 503
           grep -q 'ORDER_INTAKE_CLOSED' /tmp/sofra-staging-orders.json
           echo 'STAGING_LOCAL_HTTPS_PASS: isolated PostgreSQL migrated, HTTPS discovery healthy, real order intake CLOSED'
+
+  security-audit:
+    name: Production dependency vulnerability audit (high and critical)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Scan installed production dependency tree, fail on high or critical
+        run: |
+          set -euo pipefail
+          npm audit --omit=dev --audit-level=high --json > /tmp/sofra-npm-audit.json || true
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const report=JSON.parse(fs.readFileSync('/tmp/sofra-npm-audit.json','utf8'));
+          const v=report?.metadata?.vulnerabilities;
+          if(!v||!Number.isInteger(v.high)||!Number.isInteger(v.critical)){
+            console.error('npm registry audit unavailable or malformed; cannot mark safe.');
+            process.exit(1);
+          }
+          console.log(JSON.stringify({audit:'production dependencies',high:v.high,critical:v.critical}));
+          if(v.high>0||v.critical>0)process.exit(1);
+          NODE
+      - name: Archive security report for operator review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-dependency-audit
+          path: /tmp/sofra-npm-audit.json
+          if-no-files-found: ignore
