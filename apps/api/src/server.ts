@@ -1,6 +1,7 @@
 /** API foundation for Bismil Sofra. Not exposed to the internet until provider, DB and integration tests are configured. */
 import Fastify from 'fastify';
 import {Pool} from 'pg';
+import {apiSettings,pilotOrderIntake} from './runtime-guard.ts';
 import {isSupportStatus,parseSupportUpdate} from './support-service.ts';
 import {RequestLimiter,trustedProxyCidrs} from './rate-limit.ts';
 import {listPilotRestaurants,createPilotRestaurant,assignPilotOwner,linkPilotDeliveryZone,createPilotDeliveryZone} from './admin-onboarding.ts';
@@ -26,7 +27,9 @@ import {prepareRestaurantPhoto,photoStorageSettings,s3MediaStorage,photoObjectKe
 if(!process.env.DATABASE_URL)throw new Error('DATABASE_URL gerekli');
 const origin=process.env.CORS_ORIGIN;
 if(!origin||origin==='*')throw new Error('CORS_ORIGIN tek bir güvenilir domain olmalı');
-const port=Number(process.env.PORT||4000);
+const {port,host}=apiSettings(process.env);
+const orderIntake=pilotOrderIntake(process.env);
+let draining=false;
 const pool=new Pool({connectionString:process.env.DATABASE_URL,max:12,connectionTimeoutMillis:5000,statement_timeout:8000});
 const events=new OrderEventBroker(process.env.ORDER_EVENTS_LISTEN_DATABASE_URL||process.env.DATABASE_URL);
 const app=Fastify({logger:{level:process.env.NODE_ENV==='production'?'info':'warn',redact:['req.headers.authorization','req.body.phone','req.body.fullAddress','req.body.address','res.headers.set-cookie']},bodyLimit:65536,trustProxy:trustedProxyCidrs(process.env.TRUSTED_PROXY_CIDRS),requestTimeout:15000});
@@ -60,6 +63,7 @@ async function admin(req:{headers:{authorization?:string}}){const u=await user(r
 
 app.get('/healthz',async()=>({status:'ok',service:'bismil-sofra-api'}));
 app.get('/readyz',async(_req,reply)=>{
+ if(draining)return reply.code(503).send({status:'draining'});
  try{
   const result=await pool.query('SELECT filename FROM schema_migrations WHERE filename = ANY($1::text[])',[[...REQUIRED_MIGRATIONS]]);
   if(!hasRequiredMigrations(result.rows))return reply.code(503).send({status:'migrations-pending'});
@@ -140,6 +144,7 @@ app.post('/v1/me/addresses/:id/archive',async(req)=>{
 });
 app.post('/v1/orders/quote',async(req)=>{const {userId}=await user(req);return quoteOrder(pool,userId,req.body)});
 app.post('/v1/orders',async(req,reply)=>{
+ if(!orderIntake.enabled)return reply.code(503).send({code:'ORDER_INTAKE_CLOSED',message:'Sipariş alımı henüz açılmadı.'});
  const {userId}=await user(req);
  const result=await placeOrder(pool,userId,req.body,req.headers['idempotency-key']);
  reply.code(result.replayed?200:201);return result;
@@ -774,11 +779,25 @@ async function start(){
   const applied=await pool.query('SELECT filename FROM schema_migrations WHERE filename=ANY($1::text[])',[[...REQUIRED_MIGRATIONS]]);
   if(!hasRequiredMigrations(applied.rows))throw new Error('Required database migrations missing. Refusing to start API.');
   await events.start(); // listener failure is nonfatal: HTTP snapshots remain authoritative
-  await app.listen({port:Number.isInteger(port)?port:4000,host:'127.0.0.1'});
-  console.log('API http://127.0.0.1:'+port+' üzerinde. Canlı kullanım için yapılandırma ve testler gerekli.');
+  await app.listen({port,host});
+  console.log('API '+host+':'+port+' dinliyor; production order intake '+(orderIntake.enabled?'enabled':'CLOSED')+'.');
  }
  catch(err){console.error(err);process.exitCode=1;await app.close();await pool.end()}
 }
 await start();
-process.on('SIGINT',()=>{void app.close().then(()=>pool.end())});
-process.on('SIGTERM',()=>{void app.close().then(()=>pool.end())});
+let shutdownStarted=false;
+async function shutdown(signal:'SIGINT'|'SIGTERM'){
+ if(shutdownStarted)return;
+ shutdownStarted=true;
+ draining=true;
+ const watchdog=setTimeout(()=>{
+  console.error('Graceful shutdown exceeded 20s after '+signal);
+  process.exit(1);
+ },20_000);
+ watchdog.unref();
+ try{await app.close();await pool.end()}
+ catch{process.exitCode=1;console.error('API shutdown failed')}
+ finally{clearTimeout(watchdog)}
+}
+process.on('SIGINT',()=>{void shutdown('SIGINT')});
+process.on('SIGTERM',()=>{void shutdown('SIGTERM')});
