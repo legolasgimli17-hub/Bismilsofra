@@ -82,8 +82,31 @@ jobs:
         run: node --experimental-strip-types apps/api/integration/seed-test-db.ts
       - name: Check order lifecycle with a real PostgreSQL 17 server
         run: node --experimental-strip-types --test apps/api/integration/postgres.integration.ts
+      - name: Check 30 concurrent durable order transactions and retry safety
+        run: node --experimental-strip-types --test apps/api/integration/concurrent-orders.integration.ts
       - name: Check real HTTP API, signed JWT, isolation and notification recovery
         run: node --experimental-strip-types --test apps/api/integration/http.integration.ts
+      - name: Concurrent local-only HTTP load smoke (fictional data)
+        env:
+          NODE_ENV: test
+          API_BIND_HOST: 127.0.0.1
+          PORT: '4189'
+          CORS_ORIGIN: http://127.0.0.1:3000
+          OIDC_ISSUER: http://127.0.0.1:9999/
+          OIDC_AUDIENCE: load-smoke-fixture
+          OIDC_JWKS_URL: http://127.0.0.1:9999/.well-known/jwks.json
+          LOCAL_LOAD_BASE_URL: http://127.0.0.1:4189
+          LOCAL_LOAD_REQUESTS: '160'
+          LOCAL_LOAD_CONCURRENCY: '40'
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types apps/api/src/server.ts > /tmp/sofra-load-api.log 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true; wait "$api_pid" 2>/dev/null || true' EXIT
+          if ! npm --workspace apps/api run test:load-local; then
+            tail -n 60 /tmp/sofra-load-api.log
+            exit 1
+          fi
       - name: Dump and restore disposable PostgreSQL 17 fixture
         env:
           POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}

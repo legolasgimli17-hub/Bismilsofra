@@ -141,6 +141,14 @@ Tarayıcı **offline** olayında butonlar anında kilitlenir; internet geri geld
 
 [Restoran bağlantı ve kurtarma rehberi](docs/RECONNECT_v2_5.md). Canlı Auth0, ayrı bildirim sağlayıcıları ve saha doğrulaması hâlâ zorunludur.
 
+## Üretim emniyet kapısı ve otomatik yerel yük kontrolü
+
+Fastify API üretim ortamında yanlışlıkla gerçek sipariş kabul etmemek için varsayılan olarak **kapalı** başlar. Ancak operatör açıkça PILOT_ACCEPT_ORDERS=true ayarlar, HTTPS site/kaynak ve iki farklı HTTPS hostname üzerinde bağımsız imzalı bildirim kanalı tanımlarsa sipariş alımı açılır. Bu, gerçek bildirimlerin ulaştığını **kanıtlamaz** ve saha kontrollerini kaldırmaz.
+
+API dinleme adresi varsayılan 127.0.0.1'dir. Konteynerde API_BIND_HOST=0.0.0.0 yalnızca güvenli reverse proxy arkasında ayarlanır. Geçersiz portlar reddedilir ve SIGTERM sırasında readiness kapatılıp kaynaklar sonlandırılır.
+
+CI, kurgusal PostgreSQL verileriyle 40 eşzamanlı istek / 160 GET yük kontrolünü ve p95 sınırını çalıştırır. Bu **binlerce kullanıcı kapasitesinin ispatı değildir.** [Ölçüm sınırları, staging yük planı ve üretim öncesi kontrol listesi](docs/PRODUCTION_RUNTIME_AND_CAPACITY.md).
+
 ## Şartnameyle uyum ve 5 restoran pilot yol haritası
 
 **Kodda bulunması, gerçek sahada çalıştığının kanıtı değildir.** v0.1/v0.2 şartnamelerinden ve sonradan kabul edilen üst sınırdan türetilen güncel kabul listesi: [Pilot kapsamı ve eksiklerin dürüst takibi](docs/PILOT_SPEC_PROGRESS.md).
