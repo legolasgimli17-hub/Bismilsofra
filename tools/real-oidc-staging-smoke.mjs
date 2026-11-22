@@ -5,6 +5,7 @@
  */
 import {jwtVerify,createRemoteJWKSet} from 'jose';
 import {validateStagingTarget} from './staging-target.mjs';
+import {pathToFileURL} from 'node:url';
 
 export function validateExternalOidcConfig(env){
  const api=validateStagingTarget(env.STAGING_API_URL||'');
@@ -77,7 +78,7 @@ export async function probeRealOidc(config,fetchImpl=fetch){
   testCategory:'provider-issued-tokens-read-only'};
 }
 
-if(process.argv[1]&&new URL('file://'+process.argv[1]).href===import.meta.url){
+if(process.argv[1]&&pathToFileURL(process.argv[1]).href===import.meta.url){
  try{
   const config=validateExternalOidcConfig(process.env);
   console.log(JSON.stringify(await probeRealOidc(config)));
