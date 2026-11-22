@@ -66,7 +66,7 @@ function Inner({token}:{token:()=>Promise<string>}){
     <span>Bu ekran açıkken 20 saniyede bir güncellenir. Kapalı sekmede gerçek zamanlı bildirim garantisi yoktur.</span></div>
   </div>
   {error&&<div role="alert" className="notice error"><WifiOff size={18}/> {error} Son görüntülenen veriler güncel olmayabilir.</div>}
-  <div className="admin-grid">
+  <div className="admin-grid portal-anchor" id="admin-alerts">
    {boxes.map(box=><article className="panel" key={box.icon}>
     <h2><AlertTriangle size={20}/> {box.label}</h2>
     <div className="admin-alert-count">{alerts?count(box.data):'—'}</div>
@@ -78,10 +78,10 @@ function Inner({token}:{token:()=>Promise<string>}){
       </p>)}
    </article>)}
   </div>
-  <PilotOnboarding token={token}/>
-  <PilotReports token={token}/>
-  <UserAccessOperations token={token}/>
-  <section className="panel admin-worker-watchdog" aria-label="Sipariş işçileri sağlık kontrolü">
+  <div id="admin-onboarding" className="portal-anchor"><PilotOnboarding token={token}/></div>
+  <div id="admin-reports" className="portal-anchor"><PilotReports token={token}/></div>
+  <div id="admin-users" className="portal-anchor"><UserAccessOperations token={token}/></div>
+  <section id="admin-workers" className="panel admin-worker-watchdog portal-anchor" aria-label="Sipariş işçileri sağlık kontrolü">
    <h2><Clock3 size={20}/> Sipariş işçileri</h2>
    <p className="muted">Bu kontrol arka plan süreçlerinin durumunu gösterir. Bir işçinin çalışması, bildirim sağlayıcısının veya restoran telefonunun alarmı aldığını kanıtlamaz.</p>
    {!alerts?<p className="muted">İşçi durumu henüz alınamadı.</p>:
@@ -100,8 +100,8 @@ function Inner({token}:{token:()=>Promise<string>}){
    {alerts?.workers?.some(x=>x.status!=='running')&&
     <p className="notice error" role="alert">Bir veya daha fazla arka plan işçisi kontrol edilmeli. Süreç/DB bağlantısını ve bildirim sağlayıcısını doğrulayın; gerekirse operasyon sorumlusuna haber verin.</p>}
   </section>
-  <AdminOrderInvestigation token={token}/>
-  <SupportOperations token={token}/>
+  <div id="admin-orders" className="portal-anchor"><AdminOrderInvestigation token={token}/></div>
+  <div id="admin-support" className="portal-anchor"><SupportOperations token={token}/></div>
   <p className="muted">Uyarı sıfır görünse bile pilot öncesi gerçek SMS/push ve bağımsız yedek kanal testleri gereklidir. Destek talebi durumları müşterinin Siparişlerim ekranında görülebilir; otomatik müşteri mesajı veya para iadesi yapılmaz.</p>
  </section>;
 }
