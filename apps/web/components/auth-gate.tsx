@@ -13,7 +13,7 @@ function Inner({children}:{children:(token:()=>Promise<string>)=>ReactNode}){
   return accessToken;
  },[getAccessTokenSilently]);
  if(isLoading)return <div className="empty">Oturum kontrol ediliyor…</div>;
- if(!isAuthenticated)return <section className="empty"><h2>Devam etmek için giriş yap</h2><p>E-posta doğrulaması ve güvenli giriş sağlayıcısı üzerinden oturum açılır.</p><button className="btn primary" onClick={()=>void loginWithRedirect()}>Giriş yap / kayıt ol</button></section>;
+ if(!isAuthenticated)return <section className="empty"><h2>Devam etmek için giriş yap</h2><p>E-posta doğrulaması ve güvenli giriş sağlayıcısı üzerinden oturum açılır.</p><button className="btn primary" onClick={()=>void loginWithRedirect({appState:{returnTo:window.location.pathname+window.location.search}})}>Giriş yap / kayıt ol</button></section>;
  return <>{children(token)}</>;
 }
 export default function AuthGate({children}:{children:(token:()=>Promise<string>)=>ReactNode}){if(!authReady)return <section className="empty"><h2>Giriş sistemi henüz bağlanmadı</h2><p>Geliştirme ortamında Auth0 yapılandırması yapılana kadar gerçek hesap/sipariş işlemleri kapalıdır.</p></section>;return <Inner>{children}</Inner>}

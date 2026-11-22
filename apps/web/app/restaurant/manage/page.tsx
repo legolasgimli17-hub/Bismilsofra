@@ -7,6 +7,7 @@ import MenuEditor,{type EditorCategory,type EditorProduct} from '@/components/me
 import TeamManagement from '@/components/team-management';
 import PilotReports from '@/components/pilot-reports';
 import {api} from '@/lib/api';
+import {readSelectedMerchantId,saveSelectedMerchantId} from '@/lib/merchant-selection';
 import {money} from '@/lib/types';
 import {inputToKurus,kurusToInput,newTimeSlot,WEEKDAY_NAMES,type MerchantScheduleSlot} from '@/lib/merchant-settings';
 import {Settings2,Clock3,MapPin,RefreshCcw,ShieldCheck,CheckCircle2,AlertTriangle,ArrowLeft,Save} from 'lucide-react';
@@ -40,7 +41,7 @@ function ManagementScreen({token}:{token:()=>Promise<string>}){
  useEffect(()=>{
   let active=true;
   token().then(t=>api<{restaurants:Merchant[]}>('/v1/me/staff-restaurants',t))
-   .then(result=>{if(!active)return;setMerchants(result.restaurants);setRid(result.restaurants[0]?.id||'');setLoading(false)})
+   .then(result=>{if(!active)return;setMerchants(result.restaurants);setRid(readSelectedMerchantId(result.restaurants));setLoading(false)})
    .catch(e=>{if(active){setError(e instanceof Error?e.message:'Yetkili işletmeler yüklenemedi.');setLoading(false)}});
   return()=>{active=false};
  },[token]);
@@ -68,6 +69,15 @@ function ManagementScreen({token}:{token:()=>Promise<string>}){
   if(rid)void load();
   return()=>{requests.current++};
  },[rid,load]);
+ // Sections are loaded from the API; a cross-page #menu link can be clicked
+ // before the editor is mounted, so honor the fragment after data arrives.
+ useEffect(()=>{
+  if(!model)return;
+  const target=window.location.hash.slice(1);
+  if(!['merchant-menu','merchant-hours','merchant-zones','merchant-reports','merchant-team'].includes(target))return;
+  const frame=requestAnimationFrame(()=>document.getElementById(target)?.scrollIntoView({block:'start'}));
+  return()=>cancelAnimationFrame(frame);
+ },[model]);
 
  async function save(label:string,task:()=>Promise<unknown>){
   if(busy||!model)return;
@@ -117,7 +127,7 @@ function ManagementScreen({token}:{token:()=>Promise<string>}){
 
   <section className="panel merchant-settings-selector">
    <label htmlFor="merchant-settings-select">Yönettiğiniz restoran</label>
-   <select id="merchant-settings-select" value={rid} onChange={e=>setRid(e.target.value)} disabled={disabled}>
+   <select id="merchant-settings-select" value={rid} onChange={e=>{saveSelectedMerchantId(e.target.value);setRid(e.target.value)}} disabled={disabled}>
     {merchants.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}
    </select>
    {model&&!model.restaurant.active&&<span className="merchant-settings-warning">Bu restoran henüz platformda aktif değil. Sipariş alamaz.</span>}
@@ -145,7 +155,7 @@ function ManagementScreen({token}:{token:()=>Promise<string>}){
      {!editable&&<p className="muted">Bu bölüm yalnızca restoran sahibi veya yöneticisi tarafından değiştirilebilir.</p>}
     </section>
 
-    <section className="panel merchant-settings-card">
+    <section id="merchant-hours" className="panel merchant-settings-card portal-anchor">
      <div className="merchant-settings-title"><Clock3 size={20}/><div><h2>Haftalık çalışma saatleri</h2><p>Gece yarısını aşan saatleri destekler. En fazla üç aralık/gün.</p></div></div>
      <div className="merchant-hours-list">
       {WEEKDAY_NAMES.map((day,index)=>{
@@ -173,10 +183,10 @@ function ManagementScreen({token}:{token:()=>Promise<string>}){
     </section>
    </div>
 
-   <MenuEditor key={rid} restaurantId={rid} products={model.products} categories={model.categories}
-    token={token} onRefresh={()=>load(true)} disabled={disabled} canEdit={model.permissions.canManageMenu}/>
+   <div id="merchant-menu" className="portal-anchor"><MenuEditor key={rid} restaurantId={rid} products={model.products} categories={model.categories}
+    token={token} onRefresh={()=>load(true)} disabled={disabled} canEdit={model.permissions.canManageMenu}/></div>
 
-   <section className="panel merchant-settings-section">
+   <section id="merchant-zones" className="panel merchant-settings-section portal-anchor">
     <div className="merchant-settings-title"><MapPin size={21}/><div><h2>Teslimat mahalleleri</h2><p>Yalnızca restorana daha önce tanımlanmış bölgeler yönetilebilir.</p></div></div>
     <div className="merchant-zone-grid">
      {model.zones.map(z=>{
@@ -204,8 +214,8 @@ function ManagementScreen({token}:{token:()=>Promise<string>}){
     <p className="muted">Ücretler kuruş olarak kaydedilir. Müşteri siparişi son onay sırasında sunucudan tekrar hesaplanır; fiyat değişmişse yeniden onay istenir.</p>
    </section>
    {model.permissions.canManageSettings&&<>
-    <PilotReports key={'report-'+rid} restaurantId={rid} token={token}/>
-    <TeamManagement key={'team-'+rid} restaurantId={rid} token={token}/>
+    <div id="merchant-reports" className="portal-anchor"><PilotReports key={'report-'+rid} restaurantId={rid} token={token}/></div>
+    <div id="merchant-team" className="portal-anchor"><TeamManagement key={'team-'+rid} restaurantId={rid} token={token}/></div>
    </>}
   </>}
  </main>;

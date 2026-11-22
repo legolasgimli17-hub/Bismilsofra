@@ -36,6 +36,8 @@ jobs:
         run: npm run test:recent-orders
       - name: Merchant workflow tests
         run: npm run test:merchant
+      - name: Separate merchant and admin workspaces and selector tests
+        run: npm run test:portals
       - name: Merchant operations form and currency tests
         run: npm run test:merchant-settings
       - name: Staging URL guard tests (cannot probe production)

@@ -3,6 +3,7 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import Link from 'next/link';
 import AuthGate from '@/components/auth-gate';
 import {api,ApiError} from '@/lib/api';
+import {readSelectedMerchantId,saveSelectedMerchantId} from '@/lib/merchant-selection';
 import {money,statusText} from '@/lib/types';
 import {canActOnInbox,currentInboxRequest,inboxLabel,unseenPendingIds,type InboxHealth} from '@/lib/inbox-health';
 import {canSubmitMerchantAction,merchantNextActions} from '@/lib/merchant-workflow';
@@ -127,7 +128,7 @@ function Inner({token}:{token:()=>Promise<string>}){
  const realtime=useOrderEventStream(rid?'/v1/restaurant/'+rid+'/events':null,
   token,()=>{void load(true)});
  useEffect(()=>{let running=true;token().then(t=>api<{restaurants:Merchant[]}>('/v1/me/staff-restaurants',t)).then(r=>{
-  if(running){setList(r.restaurants);setRid(r.restaurants[0]?.id||'')}
+  if(running){setList(r.restaurants);setRid(readSelectedMerchantId(r.restaurants))}
  }).catch(e=>{if(running){setState('offline');setError(e instanceof Error?e.message:'Restoran listesi yüklenemedi')}});
   return()=>{running=false}},[token]);
  useEffect(()=>{
@@ -236,7 +237,7 @@ function Inner({token}:{token:()=>Promise<string>}){
   {error&&<div role="alert" className="notice error">{error}</div>}
   {truncated&&<div role="alert" className="notice error"><AlertTriangle size={18}/> Sipariş limiti aşıldı. Operasyon müdahalesi gerekli; listede tüm kayıtlar görünmeyebilir.</div>}
   <div className="panel merchant-control-bar"><label htmlFor="merchant-restaurant-select">Restoran
-   <select id="merchant-restaurant-select" value={rid} onChange={e=>setRid(e.target.value)}>{list.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+   <select id="merchant-restaurant-select" value={rid} onChange={e=>{saveSelectedMerchantId(e.target.value);setRid(e.target.value)}}>{list.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
    <div className="merchant-role-info">{canManage?'Sipariş yönetme yetkin var.':'Yalnızca görüntüleme yetkisi; işlem yapılamaz.'}</div></div>
   {!rid?<div className="empty">Bu hesap için restoran yetkisi tanımlı değil.</div>:<div className="merchant-columns">
    <section className="panel merchant-column"><div className="merchant-column-title"><h2><Bell size={19}/> Yeni siparişler</h2><span className="merchant-count">{pending.length}</span></div>
@@ -245,6 +246,6 @@ function Inner({token}:{token:()=>Promise<string>}){
     {active.length===0?<div className="empty"><h3>{connected?'Devam eden sipariş yok':'Veriler eşitlenemedi'}</h3></div>:active.map(orderCard)}</section>
   </div>}
   <div className="notice">Bu operasyon paneli bir geliştirme sürümüdür. Üretim için güvenilir push/ikincil alarm, gerçek PostgreSQL ve kimlik sağlayıcısı entegrasyonu test edilmelidir.</div>
-  <div className="merchant-settings-links">{(selectedMerchant?.role==='owner'||selectedMerchant?.role==='manager'||selectedMerchant?.can_manage_menu===true)&&<Link href="/restaurant/manage" className="btn primary">Restoranı ve menüyü yönet</Link>}<Link href="/">Müşteri görünümüne dön</Link></div>
+  <div className="merchant-settings-links"><Link href="/restaurant/overview" className="btn outline">Genel bakış</Link>{(selectedMerchant?.role==='owner'||selectedMerchant?.role==='manager'||selectedMerchant?.can_manage_menu===true)&&<Link href="/restaurant/manage" className="btn primary">Restoranı ve menüyü yönet</Link>}<Link href="/">Müşteri görünümüne dön</Link></div>
  </section>;
 }
