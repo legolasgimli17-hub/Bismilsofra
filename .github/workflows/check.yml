@@ -64,8 +64,11 @@ jobs:
         run: |
           set -euo pipefail
           docker compose --profile notifications -f deploy/staging.compose.yml config --quiet
-          docker compose --profile notifications -f deploy/staging.compose.yml config --services | grep -qx outbox
-          docker compose --profile notifications -f deploy/staging.compose.yml config --services | grep -qx escalation
+          # With pipefail, grep -q may close the pipe before Compose finishes,
+          # making a valid config fail spuriously with SIGPIPE / exit 255.
+          services="$(docker compose --profile notifications -f deploy/staging.compose.yml config --services)"
+          grep -qx outbox <<< "$services"
+          grep -qx escalation <<< "$services"
       - name: Authenticated backup encryption, corruption and key safety tests
         run: node --test tools/backup-crypto.test.mjs
       - name: Offline privacy and accessible recovery smoke
