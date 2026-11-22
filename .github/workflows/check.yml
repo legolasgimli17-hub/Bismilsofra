@@ -81,6 +81,9 @@ jobs:
           status="$(curl -sS -o /tmp/sofra-404.html -w '%{http_code}' http://127.0.0.1:3180/not-an-existing-route)"
           test "$status" = 404
           grep -q 'SAYFA BULUNAMADI' /tmp/sofra-404.html
+          CHROME_PATH="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -n "$CHROME_PATH"
+          MOBILE_SMOKE_BASE_URL=http://127.0.0.1:3180 CHROME_PATH="$CHROME_PATH" node tools/mobile-browser-smoke.mjs
 
   integration-postgres:
     name: PostgreSQL integration — real order, tenant isolation, availability
