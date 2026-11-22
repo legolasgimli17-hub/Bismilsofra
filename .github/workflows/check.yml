@@ -138,6 +138,8 @@ jobs:
         run: node --experimental-strip-types --test apps/api/integration/http.integration.ts
       - name: Two signed JWT HTTP replicas, cross-replica retries and database SSE
         run: node --experimental-strip-types --test apps/api/integration/multi-replica.integration.ts
+      - name: Authenticated 50, 100, 200 simultaneous HTTP checkouts plus SSE disconnect recovery
+        run: node --experimental-strip-types --test apps/api/integration/authenticated-capacity.integration.ts
       - name: Build and smoke-test production API Docker image (intake must stay closed)
         run: |
           set -euo pipefail
