@@ -49,6 +49,23 @@ jobs:
           STAGING_OIDC_AUDIENCE: staging-ci-only
           STAGING_OIDC_JWKS_URL: https://oidc-staging.example.invalid/.well-known/jwks.json
         run: docker compose -f deploy/staging.compose.yml config --quiet
+      - name: Validate optional notification worker staging topology
+        env:
+          STAGING_DB_PASSWORD: ci-test-only
+          STAGING_DATABASE_URL: postgresql://sofra_staging:ci-test-only@db:5432/bismil_sofra_staging
+          STAGING_CORS_ORIGIN: https://app-staging.example.invalid
+          STAGING_OIDC_ISSUER: https://oidc-staging.example.invalid/
+          STAGING_OIDC_AUDIENCE: staging-ci-only
+          STAGING_OIDC_JWKS_URL: https://oidc-staging.example.invalid/.well-known/jwks.json
+          STAGING_ALERT_WEBHOOK_URL: https://primary-ci.example.invalid/webhook
+          STAGING_ALERT_WEBHOOK_SECRET: ci-placeholder-not-for-use
+          STAGING_ESCALATION_WEBHOOK_URL: https://fallback-ci.example.invalid/webhook
+          STAGING_ESCALATION_WEBHOOK_SECRET: ci-placeholder-not-for-use
+        run: |
+          set -euo pipefail
+          docker compose --profile notifications -f deploy/staging.compose.yml config --quiet
+          docker compose --profile notifications -f deploy/staging.compose.yml config --services | grep -qx outbox
+          docker compose --profile notifications -f deploy/staging.compose.yml config --services | grep -qx escalation
       - name: Authenticated backup encryption, corruption and key safety tests
         run: node --test tools/backup-crypto.test.mjs
       - name: Offline privacy and accessible recovery smoke
