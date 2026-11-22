@@ -32,6 +32,8 @@ jobs:
         run: npm run test:menu-import
       - name: Restaurant menu search and category tests
         run: npm run test:menu-discovery
+      - name: Recent completed order selector tests
+        run: npm run test:recent-orders
       - name: Merchant workflow tests
         run: npm run test:merchant
       - name: Merchant operations form and currency tests
