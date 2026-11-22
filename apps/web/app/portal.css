@@ -120,3 +120,17 @@
 @media(max-width:1250px){.portal-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.portal-dashboard-panels{grid-template-columns:1fr}}
 @media(max-width:850px){.portal-root{display:flex;flex-direction:column}.portal-sidebar{position:relative;top:auto;min-height:0;height:auto;padding:14px 15px 11px;overflow:visible;box-shadow:none}.portal-brand{padding:0 4px 13px;font-size:18px}.portal-brand-symbol{width:35px;height:35px}.portal-sidebar-caption,.portal-sidebar-bottom{display:none}.portal-sidebar-nav{display:flex;flex-direction:row;gap:7px;overflow-x:auto;scrollbar-width:thin;padding-bottom:6px}.portal-nav-link{white-space:nowrap;flex:none;min-height:39px;padding:9px 12px;font-size:12px;gap:7px}.portal-nav-link svg{width:16px}.portal-nav-chevron{display:none}.portal-topbar{min-height:52px;padding:11px 20px;position:relative}.portal-main .main-section{padding-top:23px}.portal-footer{padding-bottom:25px}}
 @media(max-width:610px){.portal-topbar-side{gap:8px}.portal-topbar-label{font-size:12px}.portal-topbar-label svg{display:none}.portal-stage-indicator{font-size:10px}.portal-topbar-switch{display:none}.portal-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.portal-metric{min-height:138px;padding:14px}.portal-metric strong{font-size:26px}.portal-dash-intro{align-items:flex-start;flex-direction:column}.portal-dash-toolbar{width:100%}.portal-dash-toolbar select{max-width:100%;width:100%}.portal-shortcuts{grid-template-columns:1fr}.portal-dashboard-block{padding:17px}.portal-gateway{padding-top:28px}.portal-gateway-grid{grid-template-columns:1fr}.portal-gateway-card p{min-height:0}.portal-access-card{margin:18px;padding:38px 20px}}
+
+/* Explicit role colors and narrow-screen session controls. */
+.portal-merchant .btn.primary{background:#1d7353;border-color:#1d7353;color:#fff}
+.portal-merchant .btn.primary:hover:not(:disabled){background:#155c42}
+.portal-admin .btn.primary{background:#354d8b;border-color:#354d8b;color:#fff}
+.portal-admin .btn.primary:hover:not(:disabled){background:#273c71}
+.portal-mobile-session{display:none}
+.portal-main .portal-dashboard .empty{background:#fff}
+@media(max-width:850px){
+ .portal-mobile-session{display:flex;margin:0;padding:0}
+ .portal-mobile-session .portal-user-meta,.portal-mobile-session .portal-user-avatar{display:none}
+ .portal-mobile-session .portal-logout{background:#eef3ee;color:#1e4d3b}
+ .portal-admin .portal-mobile-session .portal-logout{background:#edf0f8;color:#304b86}
+}
