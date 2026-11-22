@@ -46,7 +46,11 @@ app.addHook('onRequest',async(req,reply)=>{
  if(sentOrigin){reply.header('Access-Control-Allow-Origin',origin).header('Vary','Origin').header('Access-Control-Allow-Headers','Authorization,Content-Type,Idempotency-Key,X-Photo-Rights-Affirmed').header('Access-Control-Allow-Methods','GET,POST,PATCH,OPTIONS')}
  if(req.method==='OPTIONS')return reply.code(204).send();
  // Only peers trusted through the explicitly configured proxy list affect req.ip.
- const decision=limiter.check(req.ip,req.method,req.url);
+ // The mere presence of a Bearer header is NOT trusted identity. It only
+ // selects the coarse shared-NAT IP budget; JWT and per-account PostgreSQL
+ // quotas are separately verified before any order is accepted.
+ const bearerPresent=typeof req.headers.authorization==='string'&&req.headers.authorization.startsWith('Bearer ');
+ const decision=limiter.check(req.ip,req.method,req.url,Date.now(),bearerPresent);
  if(!decision.allowed){
   reply.header('Retry-After',String(decision.retryAfter));
   return reply.code(429).send({code:'RATE_LIMIT',message:'Çok fazla istek. Biraz sonra yeniden deneyin.'});
