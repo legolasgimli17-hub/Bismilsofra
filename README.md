@@ -141,6 +141,12 @@ Tarayıcı **offline** olayında butonlar anında kilitlenir; internet geri geld
 
 [Restoran bağlantı ve kurtarma rehberi](docs/RECONNECT_v2_5.md). Canlı Auth0, ayrı bildirim sağlayıcıları ve saha doğrulaması hâlâ zorunludur.
 
+## Backend Docker dağıtımı (staging hazırlığı)
+
+Fastify API ve worker'ların aynı Node bağımlılıklarıyla taşınması için güvenli, root olmayan Docker imajı oluşturuldu. CI, PostgreSQL test veritabanına bağlanmış **gerçek üretim modunda konteyner** açıp HTTP readiness, keşif ve varsayılan **sipariş alımı kapalı** koşulunu test eder. Bu, üretim sunucusuna dağıtım yapıldığı anlamına gelmez.
+
+[Docker/staging rehberi](docs/BACKEND_CONTAINER_STAGING.md).
+
 ## Üretim emniyet kapısı ve otomatik yerel yük kontrolü
 
 Fastify API üretim ortamında yanlışlıkla gerçek sipariş kabul etmemek için varsayılan olarak **kapalı** başlar. Ancak operatör açıkça PILOT_ACCEPT_ORDERS=true ayarlar, HTTPS site/kaynak ve iki farklı HTTPS hostname üzerinde bağımsız imzalı bildirim kanalı tanımlarsa sipariş alımı açılır. Bu, gerçek bildirimlerin ulaştığını **kanıtlamaz** ve saha kontrollerini kaldırmaz.
