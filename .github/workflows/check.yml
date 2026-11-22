@@ -74,6 +74,8 @@ jobs:
         run: node --test tools/pilot-release-gate.test.mjs
       - name: Report pilot launch status without authorizing release
         run: node tools/pilot-release-gate.mjs
+      - name: Security posture regression guard
+        run: node --test tools/security-posture.test.mjs
       - name: TypeScript checks
         run: npm run typecheck
       - name: Build Next.js UI
