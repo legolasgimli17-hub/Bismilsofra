@@ -32,7 +32,7 @@ function PortalSession({compact=false}:{compact?:boolean}){
   <div className="portal-user-avatar" aria-hidden="true">{(user?.name||user?.email||'H').slice(0,1).toUpperCase()}</div>
   <div className="portal-user-meta"><strong>{user?.name||'Yetkili hesap'}</strong><small>Doğrulanmış oturum</small></div>
   <button className="portal-logout" type="button" aria-label="Oturumu kapat" title="Oturumu kapat"
-    onClick={()=>logout({logoutParams:{returnTo:window.location.origin+'/panel'}})}><LogOut size={18}/></button>
+    onClick={()=>logout({logoutParams:{returnTo:window.location.origin}})}><LogOut size={18}/></button>
  </div>;
 }
 export default function OperationsShell({role,children}:{role:Exclude<Workspace,'customer'>;children:React.ReactNode}){
