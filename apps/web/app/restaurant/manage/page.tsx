@@ -69,6 +69,15 @@ function ManagementScreen({token}:{token:()=>Promise<string>}){
   if(rid)void load();
   return()=>{requests.current++};
  },[rid,load]);
+ // Sections are loaded from the API; a cross-page #menu link can be clicked
+ // before the editor is mounted, so honor the fragment after data arrives.
+ useEffect(()=>{
+  if(!model)return;
+  const target=window.location.hash.slice(1);
+  if(!['merchant-menu','merchant-hours','merchant-zones','merchant-reports','merchant-team'].includes(target))return;
+  const frame=requestAnimationFrame(()=>document.getElementById(target)?.scrollIntoView({block:'start'}));
+  return()=>cancelAnimationFrame(frame);
+ },[model]);
 
  async function save(label:string,task:()=>Promise<unknown>){
   if(busy||!model)return;
