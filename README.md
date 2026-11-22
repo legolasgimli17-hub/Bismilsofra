@@ -151,6 +151,10 @@ Fastify API ve worker'ların aynı Node bağımlılıklarıyla taşınması içi
 
 [Docker/staging rehberi](docs/BACKEND_CONTAINER_STAGING.md).
 
+## Şifreli veritabanı yedekleme kalite kontrolü
+
+CI içinde pg_dump -> AES-256-GCM authenticated archive -> doğrulanmış açma -> ayrı PostgreSQL restore zinciri ve bozuk anahtar/veri negatif testleri eklendi. Üretim verisi ya da offsite storage henüz yok; gerçek uzak yedekleme ve anahtar yönetimi ayrıca kurulmalı. [Şifreli yedekleme ve restore talimatı](docs/ENCRYPTED_BACKUP_RESTORE.md).
+
 ## Üretim emniyet kapısı ve otomatik yerel yük kontrolü
 
 Fastify API üretim ortamında yanlışlıkla gerçek sipariş kabul etmemek için varsayılan olarak **kapalı** başlar. Ancak operatör açıkça PILOT_ACCEPT_ORDERS=true ayarlar, HTTPS site/kaynak ve iki farklı HTTPS hostname üzerinde bağımsız imzalı bildirim kanalı tanımlarsa sipariş alımı açılır. Bu, gerçek bildirimlerin ulaştığını **kanıtlamaz** ve saha kontrollerini kaldırmaz.

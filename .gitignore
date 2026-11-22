@@ -13,3 +13,9 @@ __pycache__/
 deploy/staging.env
 deploy/staging.env.*
 !deploy/staging.env.template
+
+# Database backup artifacts must never be versioned.
+*.sofraenc
+*.dump
+*.backup
+*.pg.enc
