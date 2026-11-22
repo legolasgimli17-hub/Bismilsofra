@@ -7,9 +7,9 @@ test('untrusted forwarded header is disabled unless narrow CIDRs configured',()=
  for(const cidr of ['0.0.0.0/0','::/0','192.0.2.0/8','bad','1.2.3.4,,5.6.7.8'])
   assert.throws(()=>trustedProxyCidrs(cidr));
 });
-test('order quota resets after minute; read quota is independent',()=>{
+test('shared-NAT checkout budget resets after minute; read quota independent',()=>{
  const limiter=new RequestLimiter();
- for(let i=0;i<12;i++)assert.equal(limiter.check('127.0.0.1','POST','/v1/orders',1000).allowed,true);
+ for(let i=0;i<600;i++)assert.equal(limiter.check('127.0.0.1','POST','/v1/orders',1000).allowed,true);
  assert.deepEqual(limiter.check('127.0.0.1','POST','/v1/orders',1000),
   {allowed:false,retryAfter:60,bucket:'order'});
  assert.equal(limiter.check('127.0.0.1','GET','/healthz',1000).allowed,true);
@@ -17,8 +17,8 @@ test('order quota resets after minute; read quota is independent',()=>{
 });
 test('query parameters do not bypass quota; IPs independent',()=>{
  const limiter=new RequestLimiter();
- for(let i=0;i<12;i++)limiter.check('one','POST','/v1/orders?random='+i,10);
- assert.equal(limiter.check('one','POST','/v1/orders?random=13',10).allowed,false);
+ for(let i=0;i<600;i++)limiter.check('one','POST','/v1/orders?random='+i,10);
+ assert.equal(limiter.check('one','POST','/v1/orders?random=601',10).allowed,false);
  assert.equal(limiter.check('two','POST','/v1/orders',10).allowed,true);
  assert.equal(limiter.check('one','POST','/v1/orders/quote',10).allowed,true);
 });
