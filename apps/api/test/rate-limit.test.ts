@@ -9,16 +9,16 @@ test('untrusted forwarded header is disabled unless narrow CIDRs configured',()=
 });
 test('shared-NAT checkout budget resets after minute; read quota independent',()=>{
  const limiter=new RequestLimiter();
- for(let i=0;i<600;i++)assert.equal(limiter.check('127.0.0.1','POST','/v1/orders',1000).allowed,true);
+ for(let i=0;i<12;i++)assert.equal(limiter.check('127.0.0.1','POST','/v1/orders',1000).allowed,true);
  assert.deepEqual(limiter.check('127.0.0.1','POST','/v1/orders',1000),
-  {allowed:false,retryAfter:60,bucket:'order'});
+  {allowed:false,retryAfter:60,bucket:'unauth-order'});
  assert.equal(limiter.check('127.0.0.1','GET','/healthz',1000).allowed,true);
  assert.equal(limiter.check('127.0.0.1','POST','/v1/orders',61000).allowed,true);
 });
 test('query parameters do not bypass quota; IPs independent',()=>{
  const limiter=new RequestLimiter();
- for(let i=0;i<600;i++)limiter.check('one','POST','/v1/orders?random='+i,10);
- assert.equal(limiter.check('one','POST','/v1/orders?random=601',10).allowed,false);
+ for(let i=0;i<12;i++)limiter.check('one','POST','/v1/orders?random='+i,10);
+ assert.equal(limiter.check('one','POST','/v1/orders?random=13',10).allowed,false);
  assert.equal(limiter.check('two','POST','/v1/orders',10).allowed,true);
  assert.equal(limiter.check('one','POST','/v1/orders/quote',10).allowed,true);
 });
@@ -66,4 +66,18 @@ test('customer address mutations have bounded account quota independent of check
  assert.equal(limiter.check('127.0.0.1','POST',uri+'/archive',100).allowed,false);
  assert.equal(limiter.check('127.0.0.1','POST','/v1/me/addresses',100).bucket,'account');
  assert.equal(limiter.check('127.0.0.1','POST','/v1/orders',100).allowed,true);
+});
+
+
+test('200 independent signed customers behind one NAT may reach checkout while unsigned calls retain 12/min cap',()=>{
+ const guard=new RequestLimiter();
+ for(let i=0;i<200;i++)
+  assert.equal(guard.check('shared-nat','POST','/v1/orders',100,true).allowed,true);
+ for(let i=0;i<12;i++)
+  assert.equal(guard.check('shared-nat','POST','/v1/orders',100,false).allowed,true);
+ const blocked=guard.check('shared-nat','POST','/v1/orders',100,false);
+ assert.deepEqual(blocked,{allowed:false,retryAfter:60,bucket:'unauth-order'});
+ assert.equal(guard.check('shared-nat','POST','/v1/orders',100,true).allowed,true);
+ for(let i=201;i<=600;i++)guard.check('shared-nat','POST','/v1/orders',100,true);
+ assert.equal(guard.check('shared-nat','POST','/v1/orders',100,true).allowed,false);
 });
