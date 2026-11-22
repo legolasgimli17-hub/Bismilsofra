@@ -1,0 +1,9 @@
+# Loopback-only HTTPS test ingress with a Caddy internal CA.
+# Do NOT expose this self-signed endpoint to customers or the public internet.
+https://localhost:8443 {
+    tls internal
+    encode gzip
+    header X-Content-Type-Options "nosniff"
+    header Referrer-Policy "no-referrer"
+    reverse_proxy api:4000
+}
