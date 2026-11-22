@@ -30,6 +30,8 @@ jobs:
         run: npm run test:realtime
       - name: Spreadsheet menu import preview tests
         run: npm run test:menu-import
+      - name: Restaurant menu search and category tests
+        run: npm run test:menu-discovery
       - name: Merchant workflow tests
         run: npm run test:merchant
       - name: Merchant operations form and currency tests

@@ -566,3 +566,31 @@ body{background:#fbfaf7;color:#263129}
 .address-manage-link{display:inline-block;color:#236a43;text-decoration:underline;margin:12px 0;font-size:13px;font-weight:750}
 @media(max-width:850px){.address-book-head{flex-direction:column}.address-book-input-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:590px){.address-book-toolbar{width:100%}.address-book-toolbar .btn{flex:1;justify-content:center;min-height:49px}.address-book-item{flex-direction:column;gap:12px}.address-book-actions{justify-content:flex-start}.address-book-actions .btn{flex:1}.address-book-input-grid{grid-template-columns:1fr}.address-book-form{padding:13px}}
+
+/* Restaurant menu discovery: category navigation, accessible mobile search and feedback. */
+.menu-total-count{display:inline-flex;align-items:center;white-space:nowrap;color:#648073;background:#f0f6f1;border:1px solid #dae9dd;border-radius:999px;padding:9px 15px;font-size:13px;font-weight:800}
+.menu-added-banner{display:flex;align-items:center;gap:10px;background:#effaf3;border:1px solid #cae6d2;color:#175d40;border-radius:14px;padding:14px 16px;margin:0 0 18px;font-size:13px;font-weight:750}
+.menu-added-banner>a{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-weight:850;text-decoration:underline;white-space:nowrap}
+.menu-discovery-panel{background:#fff;border:1px solid #ece7df;border-radius:20px;padding:16px 17px 12px;box-shadow:0 8px 32px rgba(26,35,24,.035)}
+.menu-discovery-toolbar{display:flex;align-items:center;gap:16px;justify-content:space-between}
+.menu-search-field{flex:1;min-width:0;max-width:650px;display:flex;align-items:center;gap:12px;background:#faf9f5;border:1px solid #e8e5dc;border-radius:13px;padding:0 14px;color:#cf5737;transition:border-color .2s,box-shadow .2s}
+.menu-search-field:focus-within{border-color:#c95038;box-shadow:0 0 0 3px rgba(201,80,56,.10)}
+.menu-search-field input{border:0;outline:none;background:transparent;min-width:0;flex:1;height:51px;color:#252126;font-size:14px}
+.menu-search-field input::placeholder{color:#9a948e}
+.menu-search-field button{background:transparent;border:0;display:grid;place-items:center;padding:7px;color:#6e6966}
+.menu-available-check{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;color:#494d47;font-size:13px;font-weight:750;cursor:pointer}
+.menu-available-check input{height:18px;width:18px;accent-color:#166847}
+.menu-category-tabs{display:flex;align-items:center;gap:9px;overflow-x:auto;scrollbar-width:thin;padding:15px 1px 5px}
+.menu-category-tabs button{display:inline-flex;align-items:center;gap:9px;white-space:nowrap;border:1px solid #eae8df;color:#514f49;background:#fff;border-radius:999px;padding:11px 14px;font-size:13px;font-weight:780;transition:background .16s,color .16s,border-color .16s}
+.menu-category-tabs button>span{font-size:11px;color:#8b8b83;font-weight:700}
+.menu-category-tabs button:hover{border-color:#d79d8a}
+.menu-category-tabs button.active{color:#fff;border-color:#143c2e;background:#143c2e}
+.menu-category-tabs button.active>span{color:#e6e9e2}
+.menu-match-count{color:#777973;font-size:12px;font-weight:750;margin:17px 0 15px}
+.menu-product-category{font-size:10px;font-weight:850;letter-spacing:.095em;text-transform:uppercase;color:#51816e;margin:0 0 8px}
+.menu-unavailable-product{background:#faf9f6}
+.menu-unavailable-product .product-visual .food-photo{filter:grayscale(.35);opacity:.73}
+.menu-unavailable-label{font-size:11px;font-weight:760;color:#9b533f;margin:0 0 10px}
+.menu-no-results{background:#fffaf5;border:1px dashed #e4d9cb;border-radius:16px;display:flex;align-items:center;text-align:center;flex-direction:column;gap:12px;padding:55px 18px}
+.menu-no-results svg{color:#ae917e}.menu-no-results h3{margin:0;font-size:18px}.menu-no-results p{font-size:13px;color:#77736d;margin:0;max-width:390px}.menu-no-results button{margin-top:7px}
+@media(max-width:720px){.menu-total-count{font-size:11px;padding:7px 10px}.menu-discovery-panel{padding:12px;border-radius:15px}.menu-discovery-toolbar{align-items:stretch;flex-direction:column;gap:12px}.menu-search-field{max-width:none}.menu-search-field input{height:45px;font-size:13px}.menu-available-check{font-size:12px}.menu-category-tabs{margin-right:-12px;padding-right:12px}.menu-category-tabs button{padding:10px 13px;font-size:12px}.menu-added-banner{flex-wrap:wrap;font-size:12px}.menu-added-banner>a{margin-left:0}.menu-product-category{font-size:9px}}
