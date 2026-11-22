@@ -25,10 +25,10 @@ const adminLinks=[
  {href:'/admin#admin-support',label:'Destek talepleri',Icon:LifeBuoy},
  {href:'/admin#admin-workers',label:'Sistem ve bildirim',Icon:AlertTriangle}
 ];
-function PortalSession(){
+function PortalSession({compact=false}:{compact?:boolean}){
  const {isAuthenticated,logout,user}=useAuth0();
  if(!isAuthenticated)return null;
- return <div className="portal-user-panel">
+ return <div className={'portal-user-panel '+(compact?'portal-mobile-session':'')}>
   <div className="portal-user-avatar" aria-hidden="true">{(user?.name||user?.email||'H').slice(0,1).toUpperCase()}</div>
   <div className="portal-user-meta"><strong>{user?.name||'Yetkili hesap'}</strong><small>Doğrulanmış oturum</small></div>
   <button className="portal-logout" type="button" aria-label="Oturumu kapat" title="Oturumu kapat"
@@ -64,7 +64,7 @@ export default function OperationsShell({role,children}:{role:Exclude<Workspace,
   <div className="portal-main-column">
    <header className="portal-topbar">
     <div className="portal-topbar-label"><Store size={18}/><span>{merchant?'Restoran iş ortağı paneli':'Platform yönetici paneli'}</span></div>
-    <div className="portal-topbar-side"><span className="portal-stage-indicator"><span/> Pilot hazırlık</span><Link href="/panel" className="portal-topbar-switch">Panel seçimi</Link></div>
+    <div className="portal-topbar-side"><span className="portal-stage-indicator"><span/> Pilot hazırlık</span><Link href="/panel" className="portal-topbar-switch">Panel seçimi</Link>{authReady&&<PortalSession compact/>}</div>
    </header>
    <main id="main-content" className="portal-main" tabIndex={-1}>{children}</main>
    <footer className="portal-footer">© Bismil Sofra · {merchant?'Restoran iş ortağı':'Platform yönetimi'} · Üretim siparişleri henüz açılmadı</footer>
