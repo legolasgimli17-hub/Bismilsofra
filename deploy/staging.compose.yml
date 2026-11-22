@@ -124,6 +124,9 @@ services:
       - /config
       - /data
     cap_drop: [ALL]
+    # The official Caddy binary has file CAP_NET_BIND_SERVICE metadata.
+    # Keep only that single capability or Linux rejects exec with EPERM.
+    cap_add: [NET_BIND_SERVICE]
     security_opt: [no-new-privileges:true]
 networks:
   staging_internal:
