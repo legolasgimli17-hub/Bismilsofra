@@ -44,3 +44,17 @@ export const CURRENTLY_ACCEPTING_SQL = `
   SELECT 1 FROM restaurant_closures c
   WHERE c.restaurant_id=r.id AND c.starts_at<=now() AND c.ends_at>now()
  )`;
+
+/** Controlled roll-out phases. The database itself still enforces 50 slots.
+ * Production defaults to only FIVE active merchants; widening is explicit.
+ */
+export function pilotRestaurantCap(env:NodeJS.ProcessEnv):5|20|50{
+ const raw=env.PILOT_ACTIVE_RESTAURANTS_MAX??(env.NODE_ENV==='production'?'5':'50');
+ if(raw!=='5'&&raw!=='20'&&raw!=='50')
+  throw Error('PILOT_ACTIVE_RESTAURANTS_MAX must be exactly 5, 20 or 50.');
+ return Number(raw) as 5|20|50;
+}
+/** Called under the transaction-scoped global activation advisory lock. */
+export const FREE_PILOT_SLOT_SQL=String.raw`SELECT s AS slot FROM generate_series(1,$1::int) s
+ WHERE NOT EXISTS(SELECT 1 FROM restaurants r WHERE r.active_slot=s)
+ ORDER BY s LIMIT 1`;
