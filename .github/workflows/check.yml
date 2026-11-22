@@ -51,6 +51,8 @@ jobs:
         run: docker compose -f deploy/staging.compose.yml config --quiet
       - name: Authenticated backup encryption, corruption and key safety tests
         run: node --test tools/backup-crypto.test.mjs
+      - name: Offline privacy and accessible recovery smoke
+        run: node --test tools/web-recovery.test.mjs
       - name: TypeScript checks
         run: npm run typecheck
       - name: Build Next.js UI
@@ -61,6 +63,20 @@ jobs:
           NEXT_PUBLIC_AUTH0_DOMAIN: ''
           NEXT_PUBLIC_AUTH0_CLIENT_ID: ''
           NEXT_PUBLIC_AUTH0_AUDIENCE: ''
+      - name: Serve production web build and verify 404/offline fallback
+        run: |
+          set -euo pipefail
+          (cd apps/web && ../../node_modules/.bin/next start --hostname 127.0.0.1 --port 3180) > /tmp/sofra-web-smoke.log 2>&1 &
+          web_pid=$!
+          trap 'kill "$web_pid" 2>/dev/null || true; wait "$web_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS -o /dev/null http://127.0.0.1:3180/; then break; fi
+            sleep 0.25
+          done
+          curl -fsS http://127.0.0.1:3180/offline.html | grep -q 'İnternet bağlantısı kurulamadı'
+          status="$(curl -sS -o /tmp/sofra-404.html -w '%{http_code}' http://127.0.0.1:3180/not-an-existing-route)"
+          test "$status" = 404
+          grep -q 'SAYFA BULUNAMADI' /tmp/sofra-404.html
 
   integration-postgres:
     name: PostgreSQL integration — real order, tenant isolation, availability
