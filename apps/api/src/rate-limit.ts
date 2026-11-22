@@ -6,8 +6,10 @@ export type RateDecision={allowed:boolean;retryAfter:number;bucket:RateBucket|nu
 function rateGroup(method:string,url:string):{bucket:RateBucket;limit:number}|null{
  if(method==='OPTIONS')return null;
  const path=url.split('?',1)[0];
- if(method==='POST'&&path==='/v1/orders')return {bucket:'order',limit:12};
- if(method==='POST'&&path==='/v1/orders/quote')return {bucket:'quote',limit:48};
+ // Shared mobile ISP / campus NAT must not exhaust the quota of 12 independent
+ // customers. PostgreSQL checks the 12/min quota for each verified user.
+ if(method==='POST'&&path==='/v1/orders')return {bucket:'order',limit:600};
+ if(method==='POST'&&path==='/v1/orders/quote')return {bucket:'quote',limit:600};
  if(method==='POST'&&/^\/v1\/restaurant\/[^/]+\/photos$/.test(path))
   return {bucket:'upload',limit:8};
  // Separate management writes from ordinary checkout mutations, while still
