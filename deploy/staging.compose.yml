@@ -69,6 +69,45 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
+  outbox:
+    profiles: [notifications]
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    command: ["node", "--experimental-strip-types", "apps/api/src/outbox-worker.ts"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${STAGING_DATABASE_URL:?Required staging database URL}
+      ALERT_WEBHOOK_URL: ${STAGING_ALERT_WEBHOOK_URL:-}
+      ALERT_WEBHOOK_SECRET: ${STAGING_ALERT_WEBHOOK_SECRET:-}
+    networks: [staging_internal]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  escalation:
+    profiles: [notifications]
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    command: ["node", "--experimental-strip-types", "apps/api/src/escalation-worker.ts"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${STAGING_DATABASE_URL:?Required staging database URL}
+      ALERT_WEBHOOK_URL: ${STAGING_ALERT_WEBHOOK_URL:-}
+      ESCALATION_WEBHOOK_URL: ${STAGING_ESCALATION_WEBHOOK_URL:-}
+      ESCALATION_WEBHOOK_SECRET: ${STAGING_ESCALATION_WEBHOOK_SECRET:-}
+    networks: [staging_internal]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
 networks:
   staging_internal:
     driver: bridge
