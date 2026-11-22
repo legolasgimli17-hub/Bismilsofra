@@ -4,6 +4,7 @@ import {Pool} from 'pg';
 import {apiSettings,pilotOrderIntake} from './runtime-guard.ts';
 import {isSupportStatus,parseSupportUpdate} from './support-service.ts';
 import {RequestLimiter,trustedProxyCidrs} from './rate-limit.ts';
+import {checkSharedOrderQuota} from './shared-order-limiter.ts';
 import {listPilotRestaurants,createPilotRestaurant,assignPilotOwner,linkPilotDeliveryZone,createPilotDeliveryZone} from './admin-onboarding.ts';
 import {readWorkerHealth} from './worker-health.ts';
 import {OrderEventBroker} from './order-event-broker.ts';
@@ -45,7 +46,11 @@ app.addHook('onRequest',async(req,reply)=>{
  if(sentOrigin){reply.header('Access-Control-Allow-Origin',origin).header('Vary','Origin').header('Access-Control-Allow-Headers','Authorization,Content-Type,Idempotency-Key,X-Photo-Rights-Affirmed').header('Access-Control-Allow-Methods','GET,POST,PATCH,OPTIONS')}
  if(req.method==='OPTIONS')return reply.code(204).send();
  // Only peers trusted through the explicitly configured proxy list affect req.ip.
- const decision=limiter.check(req.ip,req.method,req.url);
+ // The mere presence of a Bearer header is NOT trusted identity. It only
+ // selects the coarse shared-NAT IP budget; JWT and per-account PostgreSQL
+ // quotas are separately verified before any order is accepted.
+ const bearerPresent=typeof req.headers.authorization==='string'&&req.headers.authorization.startsWith('Bearer ');
+ const decision=limiter.check(req.ip,req.method,req.url,Date.now(),bearerPresent);
  if(!decision.allowed){
   reply.header('Retry-After',String(decision.retryAfter));
   return reply.code(429).send({code:'RATE_LIMIT',message:'Çok fazla istek. Biraz sonra yeniden deneyin.'});
@@ -147,6 +152,9 @@ app.post('/v1/orders/quote',async(req)=>{const {userId}=await user(req);return q
 app.post('/v1/orders',async(req,reply)=>{
  if(!orderIntake.enabled)return reply.code(503).send({code:'ORDER_INTAKE_CLOSED',message:'Sipariş alımı henüz açılmadı.'});
  const {userId}=await user(req);
+ // PostgreSQL enforces a single shared quota even for a shared NAT or API replica.
+ const quota=await checkSharedOrderQuota(pool,userId);
+ if(!quota.allowed){reply.header('Retry-After',String(quota.retryAfter));return reply.code(429).send({code:'RATE_LIMIT',message:'Çok fazla sipariş isteği. Biraz sonra yeniden deneyin.'})}
  const result=await placeOrder(pool,userId,req.body,req.headers['idempotency-key']);
  reply.code(result.replayed?200:201);return result;
 });
