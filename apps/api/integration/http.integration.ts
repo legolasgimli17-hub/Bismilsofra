@@ -938,6 +938,10 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  // Failed delivery stays durable and is delivered on the next attempt.
  const event=(await pool.query("SELECT id FROM notification_outbox WHERE order_id=$1 AND type='new_order'",[orderId])).rows[0];
  const eventId=String(event.id);
+ // Isolate this retry scenario from earlier concurrency fixtures: a fixed
+ // worker batch may otherwise process 30 unrelated events first.
+ await pool.query("UPDATE notification_outbox SET next_attempt_at=now()+interval '1 hour' WHERE id<>$1 AND sent_at IS NULL",[eventId]);
+ await pool.query("UPDATE notification_outbox SET next_attempt_at=now()-interval '1 second' WHERE id=$1",[eventId]);
  let failOnce=true;
  const first=await dispatchOutbox(pool,async e=>{
   if(String(e.id)===eventId&&failOnce){failOnce=false;throw Error('CI simulated offline webhook')}
