@@ -1,5 +1,5 @@
 # Bismil Sofra — Şartnameye göre gerçek pilot ilerleme tablosu
-Tarih: 20 Kasım 2026. Kaynak: 17.11.2026 tarihli `spec.md v0.1` ve `Bismil_Yemek_Platformu_Sartname_v0_2` taslakları, sonradan kararlaştırılan kapsam.
+Tarih: 22 Kasım 2026. Kaynak: 17.11.2026 tarihli `spec.md v0.1` ve `Bismil_Yemek_Platformu_Sartname_v0_2` taslakları, sonradan kararlaştırılan kapsam.
 
 ## Çelişen taslaklar için bağlayıcı son karar
 - **Bismil içinde, önce 5 restoran, sonra 20, en fazla 50 aktif restoran.** v0.2'nin daha eski `100 restoran` büyüme taslağı sonradan kabul edilen 50 üst sınırıyla değiştirilmiştir; veritabanı 50 aktif slotu zorunlu kılar.
@@ -15,7 +15,7 @@ Tarih: 20 Kasım 2026. Kaynak: 17.11.2026 tarihli `spec.md v0.1` ve `Bismil_Yeme
 | Güvenli müşteri hesabı ve esnaf MFA | İmzalı OIDC token, yetki, test senaryoları var | **Gerçek Auth0 tenant**, doğrulama e-postası, şifre sıfırlama, MFA ve hesap kurtarma uçtan uca |
 | Sepet / mahalle / kapıda ödeme | Sunucu fiyat/uygunluk doğrulaması, idempotency, teslimat ücreti, geçmiş sipariş; **bu PR:** müşteri adres defteri, ekleme/düzenleme/arşivleme, eski sipariş snapshot'ını koruma | Gerçek ilk müşteri akışı, adres formu ve kapıda ödeme cihaz testleri |
 | Restoran sipariş ve menü paneli | Sipariş kabul/red, durum, saat/mahalle/ürün/seçenek/ekstra, reconnect, foto yükleme kodu var | Gerçek tablet/telefon, bildirim sesi ve kayıp bağlantı saha testi |
-| **Restoran pilot kurulumu** | Admin kapalı taslak, doğrulanmış owner, mahalle/ücret, menü/saat kontrolü, aktivasyon/kapatma | 5 gerçek işletme onayı, doğrulanmış hesaplar, izinli görseller, eğitim |
+| **Restoran pilot kurulumu** | Admin kapalı taslak, doğrulanmış owner, mahalle/ücret, menü/saat kontrolü, aktivasyon/kapatma; üretimde varsayılan 5 restoran, sonradan açık 20/50 faz limiti ve transaction slot koruması | 5 gerçek işletme onayı, doğrulanmış hesaplar, izinli görseller, eğitim ve hukuk onayı |
 | Admin toplu menü kurulumu | **Bu PR:** Excel/Sheets'den 4 sütun yapıştırma; 1–50 ürün önizlemesi, veritabanı transaction/tekrar deneme koruması; ürünler satışa kapalı | 5 gerçek işletmenin menü/fiyat onayı, fotoğraf telifi ve ürün/opsiyon kontrolü |
 | Admin kullanıcı kısıtlama ve personel yönetimi | **Bu PR:** yönetici tam e-posta eşleşmesiyle hesap durumu değiştirir; restoran sahibi/yöneticisi personel ekler, yetki verir, çıkarır; audit ve tenant izolasyonu testleri | Gerçek Auth0 hesapları, provider session iptali, pilot personel eğitimi |
 | Admin raporları / pilot metrikleri | 7/30 gün Türkiye saati günlük sipariş, kabul süresi, iptal/red, süre aşımı, teslim ve tekrarlı müşteri agregaları; işletme ve platform rapor ekranları | 2–4 hafta gerçek siparişle KPI doğrulama; ziyaret→sipariş analitiği ve ticari mutabakat hâlâ eksik |
@@ -23,7 +23,7 @@ Tarih: 20 Kasım 2026. Kaynak: 17.11.2026 tarihli `spec.md v0.1` ve `Bismil_Yeme
 | Gerçek zamanlı restoran uyarısı | **Bu PR:** REST üstüne kimliği doğrulanmış SSE olay sinyali, PostgreSQL transaction-sonrası NOTIFY, restoran/müşteri canlı yenileme, 11 sn tekrarlayan isteğe bağlı ses, 7 sn HTTP kurtarma | **İki gerçek bağımsız bildirim sağlayıcısı**, test edilmiş direkt/sabit PostgreSQL LISTEN oturumu, fiziksel cihaz ve uzun ağ kesintisi testleri |
 | Müşteri destek talepleri | Admin inceleme/kapama, müşteri durum takibi, audit mevcut | Destek çalışanı/iletişim kanalı ve anlaşmazlık süreci |
 | Mobil PWA | `manifest.webmanifest`, service worker, responsive düzen mevcut | Gerçek Android/iPhone kurulum, offline/error akışı ve 360px kullanılabilirlik kanıtı |
-| DevOps ve yasal | Checksum migration, otomatik test, rate limits, audit, production sipariş-alım güvenlik kilidi, kontrollü API bind ve graceful shutdown, CI içinde 40 eşzamanlı/160 GET izole yük duman testi; CI PostgreSQL dump/restore doğrulaması | **Canlı ortamda şifreli otomatik yedek, uzak saklama ve gerçek restore tatbikatı**, HTTPS staging, bağımsız güvenlik incelemesi, KVKK ve sözleşmeler |
+| DevOps ve yasal | Checksum migration, otomatik test, rate limits, audit, fail-closed üretim sipariş kilidi, API Docker, 50/100/200 paralel localhost GET, 30 concurrent PostgreSQL order, AES-256-GCM CI yedek şifreleme ve ayrı test veritabanına restore; 12 maddelik NO_GO kanıt manifesti, imzasız hukuki/operasyon taslakları | **Canlı ortamda şifreli otomatik yedek, uzak saklama ve gerçek restore tatbikatı**, HTTPS staging, bağımsız güvenlik incelemesi, KVKK ve sözleşmeler |
 
 ## Şartnamedeki faz sıralaması: kalan öncelikler
 **Faz 2–3 — Geliştirme ortamında eksiksiz dikey akış:** Gerçek Auth0 konfigürasyonu ve 1 gerçek restoranın menü/mahalle/owner/checkout/teslimat denemesi; iki taraflı rol ve ağ hataları. Kod ve CI bu deneyimi hazırlıyor ama saha geçmedi.

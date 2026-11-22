@@ -1,0 +1,79 @@
+{
+  "project": "Bismil Sofra",
+  "pilot": "5 restaurants max",
+  "date": "2026-11-22",
+  "checks": [
+    {
+      "id": "isolated_https_staging",
+      "status": "open",
+      "owner": "",
+      "evidence": ""
+    },
+    {
+      "id": "real_oidc_mfa_accounts",
+      "status": "open",
+      "owner": "",
+      "evidence": ""
+    },
+    {
+      "id": "dual_independent_alerts",
+      "status": "open",
+      "owner": "",
+      "evidence": ""
+    },
+    {
+      "id": "encrypted_offsite_backup_restore",
+      "status": "open",
+      "owner": "",
+      "evidence": ""
+    },
+    {
+      "id": "authenticated_multi_replica_load",
+      "status": "open",
+      "owner": "",
+      "evidence": ""
+    },
+    {
+      "id": "mobile_accessibility_devices",
+      "status": "open",
+      "owner": "",
+      "evidence": ""
+    },
+    {
+      "id": "licensed_food_media",
+      "status": "open",
+      "owner": "",
+      "evidence": ""
+    },
+    {
+      "id": "security_independent_review",
+      "status": "open",
+      "owner": "",
+      "evidence": ""
+    },
+    {
+      "id": "real_restaurant_consent",
+      "status": "open",
+      "owner": "",
+      "evidence": ""
+    },
+    {
+      "id": "customer_support_staffed",
+      "status": "open",
+      "owner": "",
+      "evidence": ""
+    },
+    {
+      "id": "kvkk_etbis_legal_approval",
+      "status": "open",
+      "owner": "",
+      "evidence": ""
+    },
+    {
+      "id": "ops_incident_oncall",
+      "status": "open",
+      "owner": "",
+      "evidence": ""
+    }
+  ]
+}

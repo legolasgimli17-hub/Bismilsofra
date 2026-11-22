@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {Pool} from 'pg';
 import {placeOrder,quoteOrder,changeStatus,expirePending} from '../src/order-service.ts';
-import {CURRENTLY_ACCEPTING_SQL} from '../src/operations.ts';
+import {CURRENTLY_ACCEPTING_SQL,FREE_PILOT_SLOT_SQL} from '../src/operations.ts';
 import {dispatchEscalations} from '../src/escalation-service.ts';
 import {dispatchOutbox} from '../src/notification-service.ts';
 import {DomainError} from '../src/domain.ts';
@@ -25,6 +25,13 @@ test('PostgreSQL order / tenant / idempotency / expiry / history vertical slice'
  if(!required.rows[0].orders||!required.rows[0].settings)throw Error('Run npm run migrate against this test DB first.');
  const rest=await pool.query('SELECT id FROM restaurants WHERE id=$1 AND active=true',[r]);
  if(!rest.rowCount)throw Error('Load sql/002_development_example.sql ONLY into the disposable test DB.');
+ // The seeded active restaurant holds slot 1; a five-merchant phase has
+ // slots 2..5, whereas a one-slot test cap is already full.
+ const freeOne=await pool.query(FREE_PILOT_SLOT_SQL,[1]);
+ assert.equal(freeOne.rowCount,0);
+ const freeFive=await pool.query(FREE_PILOT_SLOT_SQL,[5]);
+ assert.equal(freeFive.rows[0]?.slot,2);
+
  const nonce=randomUUID();
  const first=(await pool.query('INSERT INTO users(oidc_subject,verified_email) VALUES($1,$2) RETURNING id',[`integration-${nonce}-customer`,'test@example.invalid'])).rows[0].id;
  const second=(await pool.query('INSERT INTO users(oidc_subject,verified_email) VALUES($1,$2) RETURNING id',[`integration-${nonce}-other`,'test@example.invalid'])).rows[0].id;
