@@ -45,7 +45,7 @@ test('merchant without staff membership cannot alter order',async()=>{
  assert.equal(db.seen.some((q:any)=>q.sql.startsWith('UPDATE orders')),false);
 });
 test('capacity full cannot activate 51st restaurant',async()=>{
- const db=fakePool((s)=>s.includes('FROM platform_admins')?result([{}]):s.includes('pg_advisory_xact_lock')?result([{}]):s.includes('FROM restaurants WHERE id')?result([{id:ids.rest,active:false,active_slot:null}]):s.includes('AS has_owner')?result([{has_owner:true,has_menu:true,has_hours:true,has_delivery:true}]):s.includes('FROM generate_series(1,50)')?result():(()=>{throw new Error('Unexpected '+s)})());
+ const db=fakePool((s)=>s.includes('FROM platform_admins')?result([{}]):s.includes('pg_advisory_xact_lock')?result([{}]):s.includes('FROM restaurants WHERE id')?result([{id:ids.rest,active:false,active_slot:null}]):s.includes('AS has_owner')?result([{has_owner:true,has_menu:true,has_hours:true,has_delivery:true}]):s.includes('FROM generate_series(1,$1::int)')?result():(()=>{throw new Error('Unexpected '+s)})());
  await assert.rejects(()=>activateRestaurant(db,ids.user,ids.rest,true),(e)=>code(e,'CAPACITY_FULL'));
  assert.equal(db.seen.some((q:any)=>q.sql.startsWith('UPDATE restaurants')),false);
 });
