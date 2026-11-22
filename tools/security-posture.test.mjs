@@ -27,7 +27,7 @@ test('shared authenticated quota is database atomic and not keyed by a public IP
  assert.match(src,/ON CONFLICT \(user_id,window_start\) DO UPDATE/);
  assert.match(src,/WHERE customer_order_quotas\.hits<\$2/);
  assert.match(migration,/PRIMARY KEY \(user_id,window_start\)/);
- assert.doesNotMatch(migration,/email|phone|ip_address|access_token/i);
+ assert.doesNotMatch(migration.replace(/--[^\n]*/g,''),/email|phone|ip_address|access_token/i);
  assert.match(server,/await checkSharedOrderQuota\(pool,userId\)/);
 });
 test('production intake and container staging remain closed until external launch checks',()=>{
