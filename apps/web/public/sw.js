@@ -1,5 +1,30 @@
-/* Cache only known static shell assets; NEVER cache API, user, order or auth requests. */
-const CACHE='bismil-sofra-static-v08';
-self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['/icon.svg','/icon-192.png','/icon-512.png','/manifest.webmanifest'])).then(()=>self.skipWaiting()))});
-self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(names=>Promise.all(names.filter(n=>n!==CACHE).map(n=>caches.delete(n)))).then(()=>self.clients.claim()))});
-self.addEventListener('fetch',e=>{const u=new URL(e.request.url);if(e.request.method!=='GET'||u.origin!==self.location.origin||!['/icon.svg','/icon-192.png','/icon-512.png','/manifest.webmanifest'].includes(u.pathname))return;e.respondWith(caches.match(e.request).then(hit=>hit||fetch(e.request)))});
+/* Never cache API, customer pages, orders, tokens, authentication or dynamic HTML.
+ * Cache only the approved static assets and one impersonal offline fallback.
+ */
+const CACHE='bismil-sofra-static-v09';
+const OFFLINE='/offline.html';
+const STATIC=['/icon.svg','/icon-192.png','/icon-512.png','/manifest.webmanifest',OFFLINE];
+self.addEventListener('install',event=>{
+ event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(STATIC)).then(()=>self.skipWaiting()));
+});
+self.addEventListener('activate',event=>{
+ event.waitUntil(caches.keys()
+  .then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key))))
+  .then(()=>self.clients.claim()));
+});
+self.addEventListener('fetch',event=>{
+ const request=event.request;
+ const url=new URL(request.url);
+ if(request.method!=='GET'||url.origin!==self.location.origin)return;
+ if(request.mode==='navigate'){
+  // Network-first. Never cache a user's restaurant, order or account HTML.
+  // A failed navigation receives a static, non-personalized offline page.
+  event.respondWith(fetch(request).catch(async()=>{
+   const offline=await caches.match(OFFLINE);
+   return offline||Response.error();
+  }));
+  return;
+ }
+ if(STATIC.includes(url.pathname))
+  event.respondWith(caches.match(request).then(hit=>hit||fetch(request)));
+});

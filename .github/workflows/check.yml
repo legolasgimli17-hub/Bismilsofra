@@ -49,6 +49,8 @@ jobs:
           STAGING_OIDC_AUDIENCE: staging-ci-only
           STAGING_OIDC_JWKS_URL: https://oidc-staging.example.invalid/.well-known/jwks.json
         run: docker compose -f deploy/staging.compose.yml config --quiet
+      - name: Offline privacy and accessible recovery smoke
+        run: node --test tools/web-recovery.test.mjs
       - name: TypeScript checks
         run: npm run typecheck
       - name: Build Next.js UI

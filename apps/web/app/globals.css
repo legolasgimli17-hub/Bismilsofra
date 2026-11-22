@@ -610,3 +610,17 @@ body{background:#fbfaf7;color:#263129}
 .home-reorder-preview h3{margin:0 0 6px;display:flex;align-items:center;gap:8px;font-size:16px;color:#18583b}
 .home-reorder-preview .btn{white-space:nowrap;flex-shrink:0}
 @media(max-width:720px){.home-reorder{margin-top:17px}.home-reorder-shell{flex-direction:column;align-items:stretch;padding:18px}.home-reorder h2{font-size:21px}.home-reorder-actions{align-items:stretch}.home-reorder-history{justify-content:center}.home-reorder-preview{flex-direction:column;align-items:stretch;padding:15px}.home-reorder-preview .btn{width:100%}}
+
+/* Keyboard, recovery and accessible motion safety. */
+.skip-link{position:fixed;top:-70px;left:14px;background:#1a674b;color:#fff;border-radius:9px;padding:12px 18px;font-size:14px;font-weight:800;z-index:999;transition:top .12s}
+.skip-link:focus{top:10px;outline:3px solid #ffa56f;outline-offset:3px}
+.recovery-wrap{display:flex;align-items:center;justify-content:center;min-height:55vh}
+.recovery-panel{max-width:610px;width:100%;border:1px solid #e9e6de;border-radius:22px;background:#fff;padding:clamp(25px,5vw,46px);box-shadow:0 14px 37px rgba(20,25,20,.045)}
+.recovery-panel h1{font-size:clamp(27px,4vw,38px);margin:12px 0 14px}
+.recovery-panel p{font-size:15px;line-height:1.85;color:#686865;max-width:520px}
+.recovery-icon{color:#b96b3e;margin-bottom:13px}
+.recovery-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:25px}
+.recovery-link{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:750;color:#225b44}
+.recovery-loading-label{font-size:14px;color:#76716c;margin-top:14px}
+@media(max-width:600px){.recovery-wrap{min-height:55vh;padding-top:26px;padding-bottom:32px}.recovery-panel{padding:26px 19px}.recovery-actions{align-items:stretch;flex-direction:column}.recovery-actions .btn,.recovery-link{justify-content:center}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
