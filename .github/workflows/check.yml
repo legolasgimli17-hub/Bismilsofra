@@ -53,6 +53,10 @@ jobs:
         run: node --test tools/backup-crypto.test.mjs
       - name: Offline privacy and accessible recovery smoke
         run: node --test tools/web-recovery.test.mjs
+      - name: Pilot release NO_GO regression and reviewer evidence tests
+        run: node --test tools/pilot-release-gate.test.mjs
+      - name: Report pilot launch status without authorizing release
+        run: node tools/pilot-release-gate.mjs
       - name: TypeScript checks
         run: npm run typecheck
       - name: Build Next.js UI
