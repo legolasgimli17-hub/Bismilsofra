@@ -17,6 +17,7 @@ const valid={NODE_ENV:'production',PILOT_ACCEPT_ORDERS:'true',CORS_ORIGIN:'https
 test('production intake defaults closed while test fixtures remain usable',()=>{
  assert.equal(pilotOrderIntake({...valid,PILOT_ACCEPT_ORDERS:undefined}).reason,'disabled');
  assert.equal(pilotOrderIntake({NODE_ENV:'production'}).enabled,false);
+ assert.equal(pilotOrderIntake({}).enabled,false,'a missing NODE_ENV must never open live orders');
  assert.equal(pilotOrderIntake({NODE_ENV:'test'}).enabled,true);
  assert.equal(pilotOrderIntake({NODE_ENV:'development'}).enabled,true);
 });
