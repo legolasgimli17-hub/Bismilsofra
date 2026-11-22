@@ -114,7 +114,7 @@ app.get('/v1/restaurants/:id/menu',async(req)=>{
  const id=idParam(req,'id');
  const rest=await pool.query(`SELECT r.id,r.name,r.cover_url,r.is_open,r.is_busy,r.accepts_orders, (${CURRENTLY_ACCEPTING_SQL}) AS is_orderable FROM restaurants r WHERE r.id=$1 AND r.active=true`,[id]);
  if(!rest.rowCount)invalid('NOT_FOUND','Restoran bulunamadı.',404);
- const ps=await pool.query('SELECT id,category_id,name,description,price_kurus,image_url,available FROM products WHERE restaurant_id=$1 ORDER BY sort_order,name LIMIT 500',[id]);
+ const ps=await pool.query('SELECT p.id,p.category_id,p.name,p.description,p.price_kurus,p.image_url,p.available,c.name AS category_name FROM products p JOIN categories c ON c.restaurant_id=p.restaurant_id AND c.id=p.category_id WHERE p.restaurant_id=$1 ORDER BY c.sort_order,c.name,p.sort_order,p.name LIMIT 500',[id]);
  const ids=ps.rows.map(p=>p.id);
  const gs=ids.length?await pool.query('SELECT id,product_id,name,min_select,max_select FROM option_groups WHERE product_id=ANY($1::uuid[]) AND archived=false',[ids]):{rows:[]};
  const gids=gs.rows.map(g=>g.id);
