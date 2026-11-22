@@ -98,6 +98,14 @@ jobs:
           status="$(curl -sS -o /tmp/sofra-404.html -w '%{http_code}' http://127.0.0.1:3180/not-an-existing-route)"
           test "$status" = 404
           grep -q 'SAYFA BULUNAMADI' /tmp/sofra-404.html
+          MOBILE_TEST_BASE_URL=http://127.0.0.1:3180 node tools/mobile-browser-smoke.mjs
+      - name: Upload mobile/tablet/desktop rendered screenshots (QA evidence)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-rendering-qa
+          path: /tmp/sofra-mobile-shots/*.png
+          if-no-files-found: ignore
 
   integration-postgres:
     name: PostgreSQL integration — real order, tenant isolation, availability
