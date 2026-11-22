@@ -23,6 +23,8 @@
     "test:realtime": "node --experimental-strip-types --test apps/web/lib/order-stream-client.test.ts",
     "test:menu-import": "node --experimental-strip-types --test apps/web/lib/menu-import-preview.test.ts",
     "test:menu-discovery": "node --experimental-strip-types --test apps/web/lib/menu-discovery.test.ts",
-    "test:recent-orders": "node --experimental-strip-types --test apps/web/lib/recent-orders.test.ts"
+    "test:recent-orders": "node --experimental-strip-types --test apps/web/lib/recent-orders.test.ts",
+    "test:provider-contracts-local": "node --test tools/real-oidc-staging-smoke.test.mjs tools/notification-https-contract.test.mjs",
+    "test:real-oidc-staging": "node tools/real-oidc-staging-smoke.mjs"
   }
 }
