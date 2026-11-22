@@ -60,7 +60,12 @@ app.addHook('onClose',async()=>{await events.stop()});
 app.setErrorHandler((error,req,reply)=>{
  if(error instanceof DomainError)return reply.code(error.statusCode).send({code:error.code,message:error.message});
  if((error as {validation?:unknown}).validation)return reply.code(400).send({code:'INVALID_REQUEST',message:'Gönderilen alanlar hatalı.'});
- req.log.error({err:error},'API failure');return reply.code(500).send({code:'INTERNAL_ERROR',message:'İşlem tamamlanamadı.'});
+ // Raw PostgreSQL errors may include a unique-constraint detail containing
+ // email/telephone or customer data. Log only bounded diagnostic categories.
+ const pgCode=(error as {code?:unknown})?.code;
+ const safeCode=typeof pgCode==='string'&&/^[0-9A-Z]{5}$/.test(pgCode)?pgCode:undefined;
+ req.log.error({requestId:req.id,errorType:error instanceof Error?error.name:'Unknown',sqlState:safeCode},'API failure');
+ return reply.code(500).send({code:'INTERNAL_ERROR',message:'İşlem tamamlanamadı.'});
 });
 const idParam=(req:{params:unknown},key:string)=>{const x=req.params as Record<string,unknown>;if(!uuid(x[key]))invalid('INVALID_ID','Numara geçersiz.');return x[key] as string};
 async function user(req:{headers:{authorization?:string}}){const identity=await verifyBearer(req.headers.authorization);const userId=await provisionVerifiedUser(pool,identity);return {identity,userId}}
