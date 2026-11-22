@@ -35,7 +35,10 @@ function send(method,params={}){
 }
 async function run(){
  let wsUrl;
- for(let i=0;i<100;i++){
+ // GitHub's shared runner can spend >10s starting Chromium while Docker
+ // integration jobs compete for CPU. Keep failing closed, but avoid a flaky
+ // false negative before Chrome has had reasonable startup opportunity.
+ for(let i=0;i<400;i++){
   if(chrome.exitCode!==null)throw Error('Chrome exited: '+errors);
   const filename=join(profile,'DevToolsActivePort');
   if(existsSync(filename)){
@@ -46,9 +49,9 @@ async function run(){
     if(wsUrl)break;
    }catch{}
   }
-  await delay(100);
+  await delay(150);
  }
- if(!wsUrl)throw Error('Chromium remote debugging unavailable: '+errors);
+ if(!wsUrl)throw Error('Chromium remote debugging unavailable after bounded startup checks: '+errors);
  socket=new WebSocket(wsUrl);
  socket.addEventListener('message',event=>{
   const m=JSON.parse(String(event.data));
