@@ -17,7 +17,7 @@ import {getRestaurantTeam,addRestaurantMember,updateRestaurantMember,removeResta
 import {DomainError,invalid,uuid,STATUSES,type Status,cleanNote} from './domain.ts';
 import {verifyBearer,provisionVerifiedUser,requireMfa,requireStaff,requireAdmin} from './auth.ts';
 import {placeOrder,quoteOrder,changeStatus,activateRestaurant,transaction} from './order-service.ts';
-import {MERCHANT_SUMMARY_QUERY,hasRequiredMigrations,CURRENTLY_ACCEPTING_SQL,REQUIRED_MIGRATIONS} from './operations.ts';
+import {MERCHANT_SUMMARY_QUERY,hasRequiredMigrations,CURRENTLY_ACCEPTING_SQL,REQUIRED_MIGRATIONS,pilotRestaurantCap} from './operations.ts';
 import {parseWeeklyHours,parseZonePolicy} from './merchant-management.ts';
 import {parseProductDraft,parseCategoryDraft} from './merchant-menu.ts';
 import {MAX_OPTION_GROUPS_PER_PRODUCT,MAX_CHOICES_PER_GROUP,parseNewGroup,parseGroupUpdate,
@@ -29,6 +29,7 @@ const origin=process.env.CORS_ORIGIN;
 if(!origin||origin==='*')throw new Error('CORS_ORIGIN tek bir güvenilir domain olmalı');
 const {port,host}=apiSettings(process.env);
 const orderIntake=pilotOrderIntake(process.env);
+const pilotSlotCap=pilotRestaurantCap(process.env); // Invalid rollout phase fails startup.
 let draining=false;
 const pool=new Pool({connectionString:process.env.DATABASE_URL,max:12,connectionTimeoutMillis:5000,statement_timeout:8000});
 const events=new OrderEventBroker(process.env.ORDER_EVENTS_LISTEN_DATABASE_URL||process.env.DATABASE_URL);
@@ -780,7 +781,7 @@ async function start(){
   if(!hasRequiredMigrations(applied.rows))throw new Error('Required database migrations missing. Refusing to start API.');
   await events.start(); // listener failure is nonfatal: HTTP snapshots remain authoritative
   await app.listen({port,host});
-  console.log('API '+host+':'+port+' dinliyor; production order intake '+(orderIntake.enabled?'enabled':'CLOSED')+'.');
+  console.log('API '+host+':'+port+' dinliyor; production order intake '+(orderIntake.enabled?'enabled':'CLOSED')+'; active merchant phase cap='+pilotSlotCap+'.');
  }
  catch(err){console.error(err);process.exitCode=1;await app.close();await pool.end()}
 }
