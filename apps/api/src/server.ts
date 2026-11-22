@@ -795,9 +795,11 @@ async function shutdown(signal:'SIGINT'|'SIGTERM'){
   process.exit(1);
  },20_000);
  watchdog.unref();
- try{await app.close();await pool.end()}
- catch{process.exitCode=1;console.error('API shutdown failed')}
- finally{clearTimeout(watchdog)}
+ try{await app.close()}
+ catch{process.exitCode=1;console.error('API HTTP shutdown failed')}
+ try{await pool.end()}
+ catch{process.exitCode=1;console.error('API database pool shutdown failed')}
+ clearTimeout(watchdog);
 }
 process.on('SIGINT',()=>{void shutdown('SIGINT')});
 process.on('SIGTERM',()=>{void shutdown('SIGTERM')});
