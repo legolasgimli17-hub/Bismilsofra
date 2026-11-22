@@ -90,10 +90,15 @@ if(process.env.SOFRA_LOCAL_WEBHOOK_CHILD==='yes'){
   let stdout='',stderr='';
   child.stdout.on('data',chunk=>stdout=(stdout+String(chunk)).slice(-1500));
   child.stderr.on('data',chunk=>stderr=(stderr+String(chunk)).slice(-1500));
-  const exit=await Promise.race([
-   new Promise(resolve=>child.once('close',(code,signal)=>resolve({code,signal}))),
-   new Promise((_,reject)=>setTimeout(()=>{child.kill('SIGKILL');reject(Error('Fixture child timed out'))},25000))
-  ]);
+  let watchdog;
+  let exit;
+  try{
+   exit=await Promise.race([
+    new Promise(resolve=>child.once('close',(code,signal)=>resolve({code,signal}))),
+    new Promise((_,reject)=>{watchdog=setTimeout(()=>{child.kill('SIGKILL');reject(Error('Fixture child timed out'))},25000)})
+   ]);
+  }finally{clearTimeout(watchdog)}
+
   assert.equal(exit.code,0,'HTTPS worker subprocess failed '+stderr);
   assert.match(stdout,/SIGNED_HTTPS_PROVIDER_CONTRACT_OK/);
   assert.equal(primary.state.requests,4,'duplicate + failed delivery + bad signature');
