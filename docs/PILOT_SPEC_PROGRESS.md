@@ -11,7 +11,7 @@ Tarih: 20 Kasım 2026. Kaynak: 17.11.2026 tarihli `spec.md v0.1` ve `Bismil_Yeme
 
 | Alan | Kod ve otomasyon düzeyi | Pilotta ayrıca gerekli |
 | --- | --- | --- |
-| Profesyonel müşteri vitrini / kategori / menü | Next.js restoran listesi, mahalle filtresi, ürün seçenekleri, arama, demo ve gerçek API ayrımı var | Gerçek restoran fotoğrafları, cihaz erişilebilirlik testi, sayfa hızı ve kullanıcı denemesi |
+| Profesyonel müşteri vitrini / kategori / menü | Next.js restoran listesi, mahalle filtresi, ürün seçenekleri, restoran içi kategori/ürün araması; giriş yapmış müşteriye ana sayfadan son tamamlanan siparişi güncel fiyat ve opsiyonlarla yeniden hazırlama; demo ve gerçek API ayrımı var | Gerçek restoran fotoğrafları, cihaz erişilebilirlik testi, sayfa hızı ve kullanıcı denemesi |
 | Güvenli müşteri hesabı ve esnaf MFA | İmzalı OIDC token, yetki, test senaryoları var | **Gerçek Auth0 tenant**, doğrulama e-postası, şifre sıfırlama, MFA ve hesap kurtarma uçtan uca |
 | Sepet / mahalle / kapıda ödeme | Sunucu fiyat/uygunluk doğrulaması, idempotency, teslimat ücreti, geçmiş sipariş; **bu PR:** müşteri adres defteri, ekleme/düzenleme/arşivleme, eski sipariş snapshot'ını koruma | Gerçek ilk müşteri akışı, adres formu ve kapıda ödeme cihaz testleri |
 | Restoran sipariş ve menü paneli | Sipariş kabul/red, durum, saat/mahalle/ürün/seçenek/ekstra, reconnect, foto yükleme kodu var | Gerçek tablet/telefon, bildirim sesi ve kayıp bağlantı saha testi |
