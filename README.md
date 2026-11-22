@@ -163,6 +163,14 @@ API dinleme adresi varsayılan 127.0.0.1'dir. Konteynerde API_BIND_HOST=0.0.0.0 
 
 CI, kurgusal PostgreSQL verileriyle 40 eşzamanlı istek / 160 GET yük kontrolünü ve p95 sınırını çalıştırır. Bu **binlerce kullanıcı kapasitesinin ispatı değildir.** [Ölçüm sınırları, staging yük planı ve üretim öncesi kontrol listesi](docs/PRODUCTION_RUNTIME_AND_CAPACITY.md).
 
+## Kontrollü 5 restoran pilotu ve GO/NO_GO operasyon kapısı
+
+Üretimde yeni restoran etkinleştirme **varsayılan 5 aktif işletme** ile sınırlandı. `PILOT_ACTIVE_RESTAURANTS_MAX` yalnızca 5, 20 veya 50 olabilir; limit artışı otomatik değil, aşama kabulü gerektirir. Veritabanı her zaman en fazla 50 aktif restoranı destekler.
+
+Gerçek çalışan/RESTORAN onayları, HTTPS staging, Auth0 MFA, iki bağımsız bildirim kanalı, şifreli uzak backup, yasal ve mobil kabul olmadan pilotun açıldığını iddia etmemek için 12 maddelik GO/NO_GO manifesti ve manuel GitHub kontrolü eklendi. `node tools/pilot-release-gate.mjs --require-go` henüz **NO_GO** ile sonlanmalıdır; geliştirme CI'sının başarılı olması tek başına yayın izni vermez.
+
+[Operasyon ve olay müdahale kılavuzu](docs/PILOT_OPERATIONS_RUNBOOK.md) · [Restoran sözleşmesi, KVKK ve tüketici metni için HUKUK TASLAĞI](docs/LEGAL_AND_RESTAURANT_CONTRACT_DRAFT.md) · [Fotoğraf izin envanteri](docs/MEDIA_RIGHTS_REGISTER.md) · [Yayın kanıt manifesti](docs/pilot-release-evidence.json).
+
 ## Şartnameyle uyum ve 5 restoran pilot yol haritası
 
 **Kodda bulunması, gerçek sahada çalıştığının kanıtı değildir.** v0.1/v0.2 şartnamelerinden ve sonradan kabul edilen üst sınırdan türetilen güncel kabul listesi: [Pilot kapsamı ve eksiklerin dürüst takibi](docs/PILOT_SPEC_PROGRESS.md).
