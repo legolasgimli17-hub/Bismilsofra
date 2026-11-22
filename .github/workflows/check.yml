@@ -49,6 +49,8 @@ jobs:
           STAGING_OIDC_AUDIENCE: staging-ci-only
           STAGING_OIDC_JWKS_URL: https://oidc-staging.example.invalid/.well-known/jwks.json
         run: docker compose -f deploy/staging.compose.yml config --quiet
+      - name: Authenticated backup encryption, corruption and key safety tests
+        run: node --test tools/backup-crypto.test.mjs
       - name: TypeScript checks
         run: npm run typecheck
       - name: Build Next.js UI
@@ -145,8 +147,14 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$POSTGRES_CONTAINER_ID"
-          docker exec "$POSTGRES_CONTAINER_ID" pg_dump -U sofra -d bismil_sofra_test -Fc -f /tmp/bismil_sofra_ci.dump
+          backup_dir="$(mktemp -d)"
+          trap 'rm -rf "$backup_dir"; docker exec "$POSTGRES_CONTAINER_ID" rm -f /tmp/bismil_sofra_ci.dump >/dev/null 2>&1 || true' EXIT
+          export SOFRA_BACKUP_KEY_B64="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("base64"))')"
+          docker exec "$POSTGRES_CONTAINER_ID" pg_dump -U sofra -d bismil_sofra_test -Fc | node tools/backup-crypto.mjs seal-stdin "$backup_dir/bismil.enc"
+          test -s "$backup_dir/bismil.enc"
+          test ! -e "$backup_dir/bismil.dump"
+          node tools/backup-crypto.mjs open "$backup_dir/bismil.enc" "$backup_dir/bismil.dump"
+          docker cp "$backup_dir/bismil.dump" "$POSTGRES_CONTAINER_ID":/tmp/bismil_sofra_ci.dump
           docker exec "$POSTGRES_CONTAINER_ID" createdb -U sofra -T template0 bismil_sofra_restore_test
           docker exec "$POSTGRES_CONTAINER_ID" pg_restore --exit-on-error --no-owner --no-privileges -U sofra -d bismil_sofra_restore_test /tmp/bismil_sofra_ci.dump
           node --experimental-strip-types apps/api/integration/restore-check.ts
-          docker exec "$POSTGRES_CONTAINER_ID" rm -f /tmp/bismil_sofra_ci.dump
