@@ -86,6 +86,24 @@ jobs:
         run: node --experimental-strip-types --test apps/api/integration/concurrent-orders.integration.ts
       - name: Check real HTTP API, signed JWT, isolation and notification recovery
         run: node --experimental-strip-types --test apps/api/integration/http.integration.ts
+      - name: Build and smoke-test production API Docker image (intake must stay closed)
+        run: |
+          set -euo pipefail
+          docker build -f apps/api/Dockerfile -t bismil-sofra-api:ci .
+          docker run -d --rm --network host --read-only --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            --cap-drop=ALL --security-opt=no-new-privileges --name sofra-api-ci \
+            -e NODE_ENV=production -e API_BIND_HOST=0.0.0.0 -e PORT=4188 \
+            -e "DATABASE_URL=$DATABASE_URL" \
+            -e CORS_ORIGIN=https://sofra-ci.example.invalid \
+            -e OIDC_ISSUER=https://issuer-ci.example.invalid/ \
+            -e OIDC_AUDIENCE=sofra-ci \
+            -e OIDC_JWKS_URL=https://issuer-ci.example.invalid/.well-known/jwks.json \
+            bismil-sofra-api:ci
+          trap 'docker stop --time 25 sofra-api-ci >/dev/null 2>&1 || true' EXIT
+          if ! node tools/docker-smoke.mjs; then
+            docker logs --tail 80 sofra-api-ci || true
+            exit 1
+          fi
       - name: Concurrent local-only HTTP load smoke (fictional data)
         env:
           NODE_ENV: test
