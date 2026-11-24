@@ -164,7 +164,22 @@ app.post('/v1/orders',async(req,reply)=>{
  reply.code(result.replayed?200:201);return result;
 });
 app.get('/v1/me/orders',async(req)=>{
- const {userId}=await user(req);const r=await pool.query('SELECT id,restaurant_id,status,total_kurus,payment_method,created_at,updated_at FROM orders WHERE customer_id=$1 ORDER BY created_at DESC LIMIT 40',[userId]);return {orders:r.rows};
+ const {userId}=await user(req);
+ const {view,page:requestedPage}=req.query as Record<string,unknown>;
+ if(view!==undefined&&view!=='active'&&view!=='history')
+  invalid('ORDER_VIEW_INVALID','Sipariş filtresi geçersiz.');
+ if(requestedPage!==undefined&&(typeof requestedPage!=='string'||!/^[1-9][0-9]{0,2}$/.test(requestedPage)))
+  invalid('ORDER_PAGE_INVALID','Sipariş sayfası geçersiz.');
+ const page=requestedPage===undefined?1:Number(requestedPage);
+ const pageSize=40;
+ const result=await pool.query(`SELECT o.id,o.restaurant_id,r.name AS restaurant_name,o.status,
+  o.total_kurus,o.payment_method,o.created_at,o.updated_at
+  FROM orders o JOIN restaurants r ON r.id=o.restaurant_id
+  WHERE o.customer_id=$1 AND ($2::text IS NULL OR
+   (o.status IN ('beklemede','kabul_edildi','hazirlaniyor','hazir','yolda'))=($2='active'))
+  ORDER BY o.created_at DESC,o.id DESC LIMIT $3 OFFSET $4`,
+  [userId,view??null,pageSize+1,(page-1)*pageSize]);
+ return {orders:result.rows.slice(0,pageSize),hasNext:page<999&&result.rows.length>pageSize};
 });
 // A network timeout must not cause blind duplicate order submission.
 // Client checks the same Idempotency-Key then safely retries the original POST if absent.
