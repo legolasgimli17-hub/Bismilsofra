@@ -8,6 +8,12 @@ export function normalizeSearch(value:string){return tr(value.trim()).replace(/\
 export function isRestaurantOrderable(r:Restaurant):boolean{
  return r.is_open && !r.is_busy && r.accepts_orders && r.is_orderable !== false;
 }
+export function restaurantOrderStatus(r:Restaurant):string{
+ if(!r.is_open)return 'Şu an kapalı';
+ if(!r.accepts_orders)return 'Sipariş alımına ara verdi';
+ if(r.is_busy)return 'Şu an yoğun';
+ return isRestaurantOrderable(r)?'Sipariş alıyor':'Şu an sipariş almıyor';
+}
 /**
  * When an API already filtered by its own product-name/search index, do not
  * apply an incomplete client-side restaurant-name filter again.
