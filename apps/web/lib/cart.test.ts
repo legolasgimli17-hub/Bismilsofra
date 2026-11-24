@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {addCartLine,cartTotal,cartCount,EMPTY_CART,updateLine,orderBody,readStoredCart,restoreCartSnapshot} from './cart.ts';
+import {clearOrderedCart,addCartLine,cartTotal,cartCount,EMPTY_CART,updateLine,orderBody,readStoredCart,restoreCartSnapshot} from './cart.ts';
 const line={productId:'1',name:'Döner',imageUrl:null,priceKurus:10000,quantity:1,optionIds:[],optionLabels:[],optionExtraKurus:2000};
 test('adds item and sums price using integer kurus',()=>{const c=addCartLine(EMPTY_CART,'r1','Restoran',line,false);assert.equal(cartTotal(c),12000);assert.equal(cartCount(c),1)});
 test('same item combines quantity',()=>{const c=addCartLine(addCartLine(EMPTY_CART,'r1','R',line,false),'r1','R',line,false);assert.equal(c.lines.length,1);assert.equal(c.lines[0].quantity,2)});
@@ -43,4 +43,13 @@ test('cart migrates from the tab session only when new shared snapshot is absent
  assert.deepEqual(restoreCartSnapshot(JSON.stringify(EMPTY_CART),JSON.stringify(saved)),EMPTY_CART,
   'intentional clear in shared storage must not resurrect an old tab cart');
  assert.deepEqual(restoreCartSnapshot('{bad',JSON.stringify(saved)),EMPTY_CART);
+});
+
+test('finishing checkout preserves cart changes made by another tab',()=>{
+ const submitted=addCartLine(EMPTY_CART,'r1','Restoran',line,false);
+ assert.equal(clearOrderedCart(JSON.parse(JSON.stringify(submitted)),submitted),EMPTY_CART);
+ const changed=updateLine(submitted,0,1);
+ assert.equal(clearOrderedCart(changed,submitted),changed);
+ const another=addCartLine(EMPTY_CART,'r2','Başka restoran',line,false);
+ assert.equal(clearOrderedCart(another,submitted),another);
 });
