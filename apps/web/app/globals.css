@@ -627,3 +627,6 @@ body{background:#fbfaf7;color:#263129}
 
 /* A checkout without items is still a real page: retain a correctly sized h1. */
 .empty-page-title{font-size:clamp(1.45rem,2.1vw,2rem);line-height:1.25;margin:0 0 12px}
+
+/* 360px pilot touch-ergonomics gate: interactive filters need 44px hit areas. */
+@media(max-width:610px){.filter-chip,.sort-select select{min-height:44px}.new-search button{min-height:44px;min-width:44px}}
