@@ -26,7 +26,23 @@ function CheckoutInner({token}:{token:()=>Promise<string>}){const {cart,change,c
    setError('Sepetindeki bir ürünün seçenekleri değişmiş veya ürün satıştan kaldırılmış. Eski ürünü sepetten çıkarıp güncel menüden yeniden seçmelisin.');
   }else setError(e instanceof Error?e.message:'Teklif alınamadı.');
  }finally{operation.current=false;setBusy(false)}}
- async function saveAddress(){if(operation.current)return;operation.current=true;setError('');setBusy(true);try{const t=await token();await api('/v1/me/addresses',t,{method:'POST',body:JSON.stringify({zoneId:newZone,label:newLabel,phone:newPhone,fullAddress:newFull,directions:newDirections})});await fetchAddresses();setAddAddress(false)}catch(e){setError(e instanceof Error?e.message:'Adres eklenemedi.')}finally{operation.current=false;setBusy(false)}}
+ async function saveAddress(){
+  if(operation.current)return;
+  operation.current=true;setError('');setBusy(true);
+  try{
+   const result=await api<{id:string;address?:Address}>('/v1/me/addresses',await token(),{
+    method:'POST',body:JSON.stringify({zoneId:newZone,label:newLabel,phone:newPhone,fullAddress:newFull,directions:newDirections})
+   });
+   const address=result.address??{
+    id:result.id,label:newLabel.trim().replace(/\s+/g,' ')||'Ev',zone_id:newZone,
+    full_address:newFull.trim(),directions:newDirections.trim()||null,phone:newPhone.trim()
+   };
+   setAddresses(list=>[address,...list.filter(item=>item.id!==address.id)]);
+   setAddressId(address.id);setAddAddress(false);
+   setNewLabel('Ev');setNewPhone('');setNewFull('');setNewDirections('');
+  }catch(e){setError(e instanceof Error?e.message:'Adres eklenemedi.')}
+  finally{operation.current=false;setBusy(false)}
+ }
  async function submit(){
   if(!quote||!approved||operation.current)return;
   const payload=JSON.stringify({...orderBody(cart,addressId,payment,note),confirmedTotalKurus:quote.totals.totalKurus});
