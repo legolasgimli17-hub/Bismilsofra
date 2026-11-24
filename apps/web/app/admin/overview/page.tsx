@@ -20,12 +20,21 @@ function Content({token}:{token:()=>Promise<string>}){
   setLoading(true);
   try{
    const jwt=await token();
-   const [r,a,s]=await Promise.all([
+   const [r,a,s]=await Promise.allSettled([
     api<{restaurants:Restaurant[]}>('/v1/admin/restaurants',jwt),
     api<Alerts>('/v1/admin/alerts',jwt),
     api<Report>('/v1/admin/reports?days=7',jwt)
    ]);
-   setRestaurants(r.restaurants);setAlerts(a);setReport(s);setLastSync(new Date().toLocaleTimeString('tr-TR'));setError('');
+   if(r.status==='fulfilled')setRestaurants(r.value.restaurants);
+   if(a.status==='fulfilled')setAlerts(a.value);
+   if(s.status==='fulfilled')setReport(s.value);
+   const failed=[
+    r.status==='rejected'?'restoranlar':null,
+    a.status==='rejected'?'operasyon uyarıları':null,
+    s.status==='rejected'?'sipariş raporu':null
+   ].filter(Boolean);
+   setError(failed.length?'Güncellenemeyen veriler: '+failed.join(', ')+'.':'');
+   if(!failed.length)setLastSync(new Date().toLocaleTimeString('tr-TR'));
   }catch(e){setError(e instanceof Error?e.message:'Platform verileri alınamadı.')}
   finally{setLoading(false)}
  },[token]);
@@ -35,7 +44,8 @@ function Content({token}:{token:()=>Promise<string>}){
   return()=>clearInterval(timer);
  },[load]);
  const active=restaurants?.filter(r=>r.active).length;
- const setup=restaurants?.filter(r=>!r.active||!r.has_owner||!r.has_menu||!r.has_hours||!r.has_delivery)||[];
+ const setup=restaurants?.filter(r=>!r.has_owner||!r.has_menu||!r.has_hours||!r.has_delivery)||[];
+ const orderedRestaurants=restaurants&&[...restaurants].sort((a,b)=>Number(a.active)-Number(b.active));
  const alertsTotal=alerts?total(alerts.latePending)+total(alerts.notificationIssues)+total(alerts.escalationIssues):null;
  const unhealthy=alerts?.workers?.filter(x=>x.status!=='running')||[];
  const metrics=[
@@ -69,11 +79,11 @@ function Content({token}:{token:()=>Promise<string>}){
     <header className="portal-block-heading"><div><h2>Pilot restoranların durumu</h2><p>Gerçek kurulum kayıtları; restoranı otomatik yayına almaz.</p></div><Link href="/admin#admin-onboarding">Yönet</Link></header>
     {!restaurants?<div className="portal-dashboard-empty">Sunucudan restoran listesi henüz gelmedi.</div>:
      restaurants.length===0?<div className="portal-dashboard-empty">Henüz restoran kaydı bulunmuyor.</div>:
-     <div className="portal-dashboard-list">{restaurants.slice(0,7).map(r=>{
+     <div className="portal-dashboard-list">{orderedRestaurants?.slice(0,7).map(r=>{
       const ready=r.has_owner&&r.has_menu&&r.has_hours&&r.has_delivery;
       const label=r.active?'Aktif':ready?'Kurulum hazır':'Kurulum eksik';
       return <div className="portal-dashboard-row" key={r.id}><div><strong>{r.name}</strong>
-       <small>{r.has_owner?'Sahip ✓':'Sahip eksik'} · {r.has_menu?'Menü ✓':'Menü eksik'} · {r.has_delivery?'Bölge ✓':'Bölge eksik'}</small></div><span>{label}</span></div>
+       <small>{r.has_owner?'Sahip ✓':'Sahip eksik'} · {r.has_menu?'Menü ✓':'Menü eksik'} · {r.has_hours?'Saatler ✓':'Saatler eksik'} · {r.has_delivery?'Bölge ✓':'Bölge eksik'}</small></div><span>{label}</span></div>
      })}</div>}
    </section>
   </div>
@@ -95,7 +105,7 @@ function Content({token}:{token:()=>Promise<string>}){
      <div className="portal-dashboard-row"><div><strong>Teslim edildi</strong></div><span>{report.summary.delivered}</span></div>
      <div className="portal-dashboard-row"><div><strong>Teslim edildi sipariş değeri</strong></div><span>{money(Number(report.summary.delivered_total_kurus))}</span></div>
     </div>}
-    <p className="muted" style={{fontSize:11,marginTop:15}}>Son kontrol: {lastSync||'Başarılı kontrol yok'}. Bu ekran gerçek müşteri tahsilatı veya platform kazancı olarak yorumlanamaz.</p>
+    <p className="muted" style={{fontSize:11,marginTop:15}}>Son tam güncelleme: {lastSync||'Başarılı kontrol yok'}. Bu ekran gerçek müşteri tahsilatı veya platform kazancı olarak yorumlanamaz.</p>
    </section>
   </div>
   <p className="portal-dashboard-note"><LockKeyhole size={18}/> Erişim için kimlik sağlayıcısından gerçek MFA + platform yöneticisi yetkisi gerekir. <ShieldCheck size={18}/> Yeni sipariş kabulü, bağımsız uyarı ve dış kontroller tamamlanmadan kapalı tutulur.</p>
