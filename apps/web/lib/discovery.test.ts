@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {visibleRestaurants,safeFavorites,normalizeSearch,photoUrl,isRestaurantOrderable} from './discovery.ts';
+import {visibleRestaurants,safeFavorites,normalizeSearch,photoUrl,isRestaurantOrderable,restaurantOrderStatus} from './discovery.ts';
 import type {Restaurant} from './types.ts';
 const a:Restaurant={id:'a',name:'Örnek Ocakbaşı',slug:'a',cover_url:null,is_open:true,is_busy:false,accepts_orders:true,min_basket_kurus:20000,delivery_fee_kurus:1000};
 const b:Restaurant={...a,id:'b',name:'Örnek Burger',is_open:false,delivery_fee_kurus:0,min_basket_kurus:10000};
@@ -48,4 +48,12 @@ test('live server product matches are retained even if restaurant name does not 
 test('server-filtered searches still apply open status and favorites',()=>{
  const results=visibleRestaurants([a,b],{...basics,search:'lahmacun',onlyOpen:true,favoritesOnly:true,favorites:['a']},()=> 'Tümü',true);
  assert.deepEqual(results.map(r=>r.id),['a']);
+});
+
+test('distinguishes a paused restaurant from a busy or closed one',()=>{
+ assert.equal(restaurantOrderStatus({...a,accepts_orders:false,is_orderable:false}),'Sipariş alımına ara verdi');
+ assert.equal(restaurantOrderStatus({...a,is_busy:true}),'Şu an yoğun');
+ assert.equal(restaurantOrderStatus(b),'Şu an kapalı');
+ assert.equal(restaurantOrderStatus({...a,is_orderable:false}),'Şu an sipariş almıyor');
+ assert.equal(restaurantOrderStatus(a),'Sipariş alıyor');
 });
