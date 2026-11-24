@@ -14,32 +14,8 @@ jobs:
           node-version: '22'
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
-      - name: Core backend tests
-        run: npm run test:api
-      - name: Frontend cart tests
-        run: npm run test:cart
-      - name: Product customization selection and editor draft tests
-        run: npm run test:product-options
-      - name: Historical order replay safety tests
-        run: npm run test:reorder
-      - name: Discovery and favorites tests
-        run: npm run test:discovery
-      - name: Merchant connection health tests
-        run: npm run test:inbox
-      - name: Browser real-time stream parser tests
-        run: npm run test:realtime
-      - name: Spreadsheet menu import preview tests
-        run: npm run test:menu-import
-      - name: Restaurant menu search and category tests
-        run: npm run test:menu-discovery
-      - name: Recent completed order selector tests
-        run: npm run test:recent-orders
-      - name: Merchant workflow tests
-        run: npm run test:merchant
-      - name: Separate merchant and admin workspaces and selector tests
-        run: npm run test:portals
-      - name: Merchant operations form and currency tests
-        run: npm run test:merchant-settings
+      - name: Mandatory complete API + frontend unit test suite
+        run: npm run test:all
       - name: Staging URL guard tests (cannot probe production)
         run: node --test tools/staging-target.test.mjs
       - name: Validate isolated staging compose topology
@@ -258,6 +234,9 @@ jobs:
           fi
           grep -q '"ready"' /tmp/sofra-ready.json
           curl --insecure --fail --silent --show-error https://localhost:8443/v1/zones -o /tmp/sofra-staging-zones.json
+          # Actual repository script executes against the ephemeral Docker API;
+          # it is NOT a check of the undeployed Railway environment.
+          STAGING_API_URL=http://127.0.0.1:4188 node tools/staging-preflight.mjs
           status="$(curl --insecure --silent --show-error --output /tmp/sofra-staging-orders.json --write-out '%{http_code}' --request POST https://localhost:8443/v1/orders --header 'Content-Type: application/json' --data '{}')"
           test "$status" = 503
           grep -q 'ORDER_INTAKE_CLOSED' /tmp/sofra-staging-orders.json

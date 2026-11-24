@@ -17,13 +17,14 @@
     "test:discovery": "node --experimental-strip-types --test apps/web/lib/discovery.test.ts",
     "test:inbox": "node --experimental-strip-types --test apps/web/lib/inbox-health.test.ts",
     "test:merchant": "node --experimental-strip-types --test apps/web/lib/merchant-workflow.test.ts",
-    "test:all": "npm run test:api && npm run test:cart && npm run test:discovery && npm run test:inbox && npm run test:merchant && npm run test:merchant-settings && npm run test:product-options && npm run test:reorder && npm run test:realtime && npm run test:menu-import && npm run test:menu-discovery && npm run test:recent-orders && npm run test:portals",
+    "test:all": "npm run test:api && npm run test:cart && npm run test:discovery && npm run test:inbox && npm run test:merchant && npm run test:merchant-settings && npm run test:product-options && npm run test:reorder && npm run test:realtime && npm run test:menu-import && npm run test:menu-discovery && npm run test:recent-orders && npm run test:portals && npm run test:auth-redirect",
     "typecheck": "npm --workspace apps/api run typecheck && npm --workspace apps/web run typecheck",
     "test:merchant-settings": "node --experimental-strip-types --test apps/web/lib/merchant-settings.test.ts",
     "test:realtime": "node --experimental-strip-types --test apps/web/lib/order-stream-client.test.ts",
     "test:menu-import": "node --experimental-strip-types --test apps/web/lib/menu-import-preview.test.ts",
     "test:menu-discovery": "node --experimental-strip-types --test apps/web/lib/menu-discovery.test.ts",
     "test:recent-orders": "node --experimental-strip-types --test apps/web/lib/recent-orders.test.ts",
-    "test:portals": "node --experimental-strip-types --test apps/web/lib/workspace-access.test.ts"
+    "test:portals": "node --experimental-strip-types --test apps/web/lib/workspace-access.test.ts",
+    "test:auth-redirect": "node --experimental-strip-types --test apps/web/lib/auth-redirect.test.ts"
   }
 }

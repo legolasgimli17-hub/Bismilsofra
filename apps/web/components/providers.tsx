@@ -1,8 +1,10 @@
 'use client';
 import {createContext,useContext,useEffect,useRef,useState,type ReactNode} from 'react';
+import {useRouter} from 'next/navigation';
 import {Auth0Provider,useAuth0} from '@auth0/auth0-react';
 import {addCartLine,EMPTY_CART,updateLine,readStoredCart,restoreCartSnapshot} from '@/lib/cart';
 import type {Cart,CartLine} from '@/lib/types';
+import {safeAuthReturnTo} from '@/lib/auth-redirect';
 type CartActions={
  cart:Cart;ready:boolean;
  add:(id:string,name:string,line:CartLine,replace:boolean)=>void;
@@ -14,7 +16,7 @@ const CartCtx=createContext<CartActions>({
 export const useCart=()=>useContext(CartCtx);
 const auth={domain:process.env.NEXT_PUBLIC_AUTH0_DOMAIN||'',clientId:process.env.NEXT_PUBLIC_AUTH0_CLIENT_ID||'',audience:process.env.NEXT_PUBLIC_AUTH0_AUDIENCE||''};
 export const authReady=Boolean(auth.domain&&auth.clientId&&auth.audience);
-export function useUserAccess(){const a=useAuth0();return { ...a, async token(){if(!a.isAuthenticated)throw Error('Giriş gerekli');return a.getAccessTokenSilently()},login(){void a.loginWithRedirect()},logoutUser(){a.logout({logoutParams:{returnTo:window.location.origin}})} }}
+export function useUserAccess(){const a=useAuth0();return { ...a, async token(){if(!a.isAuthenticated)throw Error('Giriş gerekli');return a.getAccessTokenSilently()},login(){void a.loginWithRedirect({authorizationParams:{redirect_uri:window.location.origin},appState:{returnTo:window.location.pathname+window.location.search+window.location.hash}})},logoutUser(){a.logout({logoutParams:{returnTo:window.location.origin}})} }}
 
 const CART_STORAGE_KEY='sofra-cart-v22';
 const LEGACY_SESSION_KEY='sofra-cart-v07';
@@ -71,7 +73,12 @@ function CartProvider({children}:{children:ReactNode}){
  }}>{children}</CartCtx.Provider>;
 }
 export default function Providers({children}:{children:ReactNode}){
+ const router=useRouter();
  const [origin,setOrigin]=useState('http://127.0.0.1:3000');useEffect(()=>{setOrigin(window.location.origin);if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{})},[]);
- const sdk=authReady?<Auth0Provider domain={auth.domain} clientId={auth.clientId} authorizationParams={{redirect_uri:origin,audience:auth.audience,scope:'openid profile email'}} cacheLocation="memory" useRefreshTokens>{children}</Auth0Provider>:<>{children}</>;
+ const sdk=authReady?<Auth0Provider domain={auth.domain} clientId={auth.clientId} authorizationParams={{redirect_uri:origin,audience:auth.audience,scope:'openid profile email'}} cacheLocation="memory" useRefreshTokens
+  onRedirectCallback={appState=>{
+   // Keep the provider mounted so the SDK retains its in-memory session.
+   router.replace(safeAuthReturnTo(appState?.returnTo));
+  }}>{children}</Auth0Provider>:<>{children}</>;
  return <CartProvider>{sdk}</CartProvider>;
 }

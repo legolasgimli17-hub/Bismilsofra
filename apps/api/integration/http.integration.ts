@@ -126,11 +126,11 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  const {privateKey:wrongKey}=await generateKeyPair('RS256');
  const forgery=await sign('forgery',{},wrongKey);
  type HttpResult={status:number;body:Record<string,any>};
- async function request(route:string,opts:{method?:string;token?:string;body?:unknown;headers?:Record<string,string>}={},target=base):Promise<HttpResult>{
+ async function request(route:string,opts:{method?:string;token?:string;body?:unknown;headers?:Record<string,string>}={},targetBase=base):Promise<HttpResult>{
   const headers:Record<string,string>={...(opts.headers||{})};
   if(opts.token)headers.Authorization='Bearer '+opts.token;
   if(opts.body!==undefined)headers['Content-Type']='application/json';
-  const res=await fetch(target+route,{method:opts.method||'GET',headers,
+  const res=await fetch(targetBase+route,{method:opts.method||'GET',headers,
    body:opts.body===undefined?undefined:JSON.stringify(opts.body),signal:AbortSignal.timeout(4000)});
   return {status:res.status,body:await res.json() as Record<string,any>};
  }
@@ -1061,6 +1061,78 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
   ['customer_address_add','customer_address_update','customer_address_archive']);
  assert.ok(!JSON.stringify(addressAudit.rows).includes('CI Yeni Sokak'));
  assert.ok(!JSON.stringify(addressAudit.rows).includes('05009999999'));
+
+ // Isolated second Fastify HTTP process protects the earlier test's
+ // intentional per-IP rate limiting test without changing production limits.
+ const lifecyclePort=await freePort();
+ const lifecycleBase='http://127.0.0.1:'+lifecyclePort;
+ let lifecycleLog='';
+ const lifecycleChild=spawn(process.execPath,['--experimental-strip-types','apps/api/src/server.ts'],{
+  cwd:process.cwd(),stdio:['ignore','pipe','pipe'],
+  env:{...process.env,DATABASE_URL:connection,CORS_ORIGIN:'http://127.0.0.1:3000',
+   OIDC_ISSUER:issuer,OIDC_AUDIENCE:audience,OIDC_JWKS_URL:issuer+'.well-known/jwks.json',
+   PORT:String(lifecyclePort),NODE_ENV:'test'}
+ });
+ lifecycleChild.stderr?.on('data',chunk=>lifecycleLog=(lifecycleLog+String(chunk)).slice(-900));
+ t.after(async()=>{
+  lifecycleChild.kill('SIGTERM');
+  await Promise.race([
+   new Promise(resolve=>lifecycleChild.once('exit',resolve)),
+   new Promise(resolve=>setTimeout(resolve,1000))
+  ]);
+  if(lifecycleChild.exitCode===null)lifecycleChild.kill('SIGKILL');
+ });
+ try{await waitFor(lifecycleBase,lifecycleChild)}
+ catch(e){throw Error(String(e)+' (isolated lifecycle API: '+lifecycleLog+')')}
+ const lifecycleRequest=(route:string,opts:Parameters<typeof request>[1]={})=>request(route,opts,lifecycleBase);
+ // Complete the customer -> restaurant -> delivered lifecycle over REAL HTTP,
+ // not only by directly invoking the database service. Test account identity is
+ // a local signed-JWKS fixture; it is NOT a genuine Auth0 registration.
+ assert.equal((await lifecycleRequest('/v1/restaurant/'+rid+'/orders/'+orderId+'/status',{
+  method:'POST',token:customer,body:{to:'hazirlaniyor'}})).status,403,
+  'a customer may never send restaurant status changes');
+ assert.equal((await lifecycleRequest('/v1/restaurant/'+rid+'/orders/'+orderId+'/status',{
+  method:'POST',token:noMfa,body:{to:'hazirlaniyor'}})).status,403,
+  'restaurant status writes require genuine issuer-signed MFA');
+ assert.equal((await lifecycleRequest('/v1/restaurant/'+rid+'/orders/'+orderId+'/status',{
+  method:'POST',token:pilotOwner,body:{to:'hazirlaniyor'}})).status,403,
+  'a different restaurant owner may not touch this order');
+ const stages=['hazirlaniyor','hazir','yolda','teslim_edildi'] as const;
+ for(const to of stages){
+  const update=await lifecycleRequest('/v1/restaurant/'+rid+'/orders/'+orderId+'/status',{
+   method:'POST',token:owner,body:{to}});
+  assert.equal(update.status,200,JSON.stringify(update.body));
+  assert.equal(update.body.status,to,'merchant HTTP transition must be persisted');
+  const visible=await lifecycleRequest('/v1/me/orders/'+orderId,{token:customer});
+  assert.equal(visible.status,200);
+  assert.equal(visible.body.order.status,to,'the buyer must see the same status as the merchant');
+ }
+ const completed=await lifecycleRequest('/v1/me/orders/'+orderId,{token:customer});
+ assert.equal(completed.body.order.total_kurus,21500,'delivered order retains the original price');
+ const immutableHistory=await pool.query(
+  'SELECT previous_status,new_status FROM order_events WHERE order_id=$1 ORDER BY id',[orderId]);
+ assert.deepEqual(immutableHistory.rows.map(x=>x.new_status),
+  ['beklemede','kabul_edildi','hazirlaniyor','hazir','yolda','teslim_edildi']);
+ const deliveredStore=await pool.query('SELECT delivered_at,total_kurus,payment_method FROM orders WHERE id=$1',[orderId]);
+ assert.ok(deliveredStore.rows[0].delivered_at,'delivery time must be durable');
+ assert.equal(deliveredStore.rows[0].total_kurus,21500);
+ assert.equal(deliveredStore.rows[0].payment_method,'cash');
+ assert.equal((await lifecycleRequest('/v1/restaurant/'+rid+'/inbox',{token:owner})).body.active
+  .some((x:{id:string})=>x.id===orderId),false,'delivered orders leave the active queue');
+ const postDeliveryRetry=await lifecycleRequest('/v1/orders',{
+  method:'POST',token:customer,headers:{'Idempotency-Key':orderKey},body:correct});
+ assert.equal(postDeliveryRetry.status,200,'a checkout retry after delivery must replay');
+ assert.equal(postDeliveryRetry.body.id,orderId,'retry must never create a second order');
+ assert.equal((await lifecycleRequest('/v1/restaurant/'+rid+'/orders/'+orderId+'/status',{
+  method:'POST',token:owner,body:{to:'teslim_edildi'}})).status,409,
+  'a terminal order can never be delivered twice');
+ const deliveredMerchantReport=await lifecycleRequest('/v1/restaurant/'+rid+'/reports?days=7',{token:owner});
+ assert.equal(deliveredMerchantReport.status,200);
+ assert.ok(deliveredMerchantReport.body.summary.delivered>=1);
+ assert.ok(Number(deliveredMerchantReport.body.summary.delivered_total_kurus)>=21500,
+  'delivered value is a reported order amount, not verified cash collection');
+ assert.equal((await lifecycleRequest('/v1/me/orders/'+orderId,{token:stranger})).status,404,
+  'a completed order still belongs only to its buyer');
 
  // Deliberately run last: spoofing a different client IP in X-Forwarded-For
  // must NOT bypass the per-origin order limiter when no peer is trusted.
