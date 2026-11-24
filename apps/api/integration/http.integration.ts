@@ -126,11 +126,11 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  const {privateKey:wrongKey}=await generateKeyPair('RS256');
  const forgery=await sign('forgery',{},wrongKey);
  type HttpResult={status:number;body:Record<string,any>};
- async function request(route:string,opts:{method?:string;token?:string;body?:unknown;headers?:Record<string,string>}={}):Promise<HttpResult>{
+ async function request(route:string,opts:{method?:string;token?:string;body?:unknown;headers?:Record<string,string>}={},target=base):Promise<HttpResult>{
   const headers:Record<string,string>={...(opts.headers||{})};
   if(opts.token)headers.Authorization='Bearer '+opts.token;
   if(opts.body!==undefined)headers['Content-Type']='application/json';
-  const res=await fetch(base+route,{method:opts.method||'GET',headers,
+  const res=await fetch(target+route,{method:opts.method||'GET',headers,
    body:opts.body===undefined?undefined:JSON.stringify(opts.body),signal:AbortSignal.timeout(4000)});
   return {status:res.status,body:await res.json() as Record<string,any>};
  }
@@ -531,8 +531,27 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal((await request(supportPath,{method:'POST',token:administrator,
   body:{expectedStatus:'acik',to:'cozuldu'}})).status,409,
   'stale concurrent support edits must be rejected');
+ // Extra pilot scenarios use a separate loopback process so the main fixture
+ // still reaches its genuine per-IP limit only in the final rate-limit test.
+ const pilotApiPort=await freePort();
+ const pilotApiBase='http://127.0.0.1:'+pilotApiPort;
+ const pilotApi=spawn(process.execPath,['--experimental-strip-types','apps/api/src/server.ts'],{
+  cwd:process.cwd(),stdio:['ignore','ignore','inherit'],
+  env:{...process.env,DATABASE_URL:connection,CORS_ORIGIN:'http://127.0.0.1:3000',
+   OIDC_ISSUER:issuer,OIDC_AUDIENCE:audience,OIDC_JWKS_URL:issuer+'.well-known/jwks.json',
+   PORT:String(pilotApiPort),NODE_ENV:'test'}
+ });
+ t.after(async()=>{
+  if(pilotApi.exitCode!==null)return;
+  pilotApi.kill('SIGTERM');
+  await Promise.race([new Promise(resolve=>pilotApi.once('exit',resolve)),
+   new Promise(resolve=>setTimeout(resolve,1000))]);
+  if(pilotApi.exitCode===null)pilotApi.kill('SIGKILL');
+ });
+ await waitFor(pilotApiBase,pilotApi);
+ const pilotRequest=(route:string,opts:Parameters<typeof request>[1]={})=>request(route,opts,pilotApiBase);
  const unresolvedPath='/v1/admin/support-cases?status=unresolved';
- const queued=await request(unresolvedPath,{token:administrator});
+ const queued=await pilotRequest(unresolvedPath,{token:administrator});
  assert.equal(queued.status,200);
  assert.equal(queued.body.cases.find((record:{id:string})=>record.id===caseId)?.status,'incelemede');
  assert.equal(typeof queued.body.truncated,'boolean');
@@ -543,7 +562,7 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
   body:{expectedStatus:'cozuldu',to:'kapandi'}})).status,200);
  assert.equal((await request(supportPath,{method:'POST',token:administrator,
   body:{expectedStatus:'kapandi',to:'incelemede'}})).status,409);
- const clearedQueue=await request(unresolvedPath,{token:administrator});
+ const clearedQueue=await pilotRequest(unresolvedPath,{token:administrator});
  assert.equal(clearedQueue.body.cases.some((record:{id:string})=>record.id===caseId),false);
  const customerCases=await request('/v1/me/support-cases',{token:customer});
  assert.equal(customerCases.body.cases.find((c:{id:string})=>c.id===caseId).status,'kapandi');
@@ -709,25 +728,30 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
   body:{isOpen:originallyOpen.is_open,isBusy:originallyOpen.is_busy,acceptsOrders:originallyOpen.accepts_orders}})).status,200);
 
  const intakePath='/v1/restaurant/'+rid+'/order-intake';
- const intake=await request(intakePath,{token:owner});
+ const intake=await pilotRequest(intakePath,{token:owner});
  assert.equal(intake.status,200);
  assert.equal(intake.body.accepts_orders,true);
  const pauseBody={acceptsOrders:false,expectedAcceptsOrders:true};
- assert.equal((await request(intakePath,{token:customer})).status,403);
- assert.equal((await request(intakePath,{method:'PATCH',token:customer,body:pauseBody})).status,403);
- const pauses=await Promise.all([1,2].map(()=>request(intakePath,{method:'PATCH',token:owner,body:pauseBody})));
+ assert.equal((await pilotRequest(intakePath,{token:customer})).status,403);
+ assert.equal((await pilotRequest(intakePath,{method:'PATCH',token:customer,body:pauseBody})).status,403);
+ const pauses=await Promise.all([1,2].map(()=>pilotRequest(intakePath,{method:'PATCH',token:owner,body:pauseBody})));
  assert.deepEqual(pauses.map(res=>res.status).sort(),[200,409]);
- const pausedMenu=await request('/v1/restaurants/'+rid+'/menu');
+ const pausedMenu=await pilotRequest('/v1/restaurants/'+rid+'/menu');
  assert.equal(pausedMenu.body.restaurant.is_orderable,false);
  const previousAvailability={isOpen:originallyOpen.is_open,isBusy:originallyOpen.is_busy,acceptsOrders:true};
- const staleSettings=await request('/v1/restaurant/'+rid+'/availability',{method:'PATCH',token:owner,
+ const staleSettings=await pilotRequest('/v1/restaurant/'+rid+'/availability',{method:'PATCH',token:owner,
   body:{...previousAvailability,expected:previousAvailability}});
  assert.equal(staleSettings.status,409);
  assert.equal(staleSettings.body.code,'AVAILABILITY_STALE');
- const pausedSettings=await request('/v1/restaurant/'+rid+'/management',{token:owner});
+ const pausedQuote=await pilotRequest('/v1/orders/quote',{method:'POST',token:customer,body:payload});
+ assert.equal(pausedQuote.status,409);
+ const pausedInbox=await pilotRequest('/v1/restaurant/'+rid+'/inbox',{token:owner});
+ assert.equal(pausedInbox.status,200);
+ assert.ok(pausedInbox.body.pending.some((order:{id:string})=>order.id===orderId));
+ const pausedSettings=await pilotRequest('/v1/restaurant/'+rid+'/management',{token:owner});
  assert.equal(pausedSettings.body.restaurant.is_open,originallyOpen.is_open);
  assert.equal(pausedSettings.body.restaurant.is_busy,originallyOpen.is_busy);
- assert.equal((await request(intakePath,{method:'PATCH',token:owner,
+ assert.equal((await pilotRequest(intakePath,{method:'PATCH',token:owner,
   body:{acceptsOrders:true,expectedAcceptsOrders:false}})).status,200);
 
  const badHours=await request('/v1/restaurant/'+rid+'/hours',{method:'PUT',token:owner,body:{slots:[
