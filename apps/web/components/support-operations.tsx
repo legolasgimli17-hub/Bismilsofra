@@ -4,6 +4,7 @@ import {api} from '@/lib/api';
 import {AlertCircle,CheckCircle2,ClipboardList,RefreshCw} from 'lucide-react';
 
 type Status='acik'|'incelemede'|'cozuldu'|'kapandi';
+type QueueFilter=Status|'unresolved'|'all';
 type CaseSummary={
  id:string;order_id:string;issue_type:string;status:Status;
  restaurant_name:string;created_at:string;updated_at:string
@@ -20,8 +21,9 @@ const actions:Record<Status,readonly Status[]>={
  cozuldu:['incelemede','kapandi'],kapandi:[]
 };
 export default function SupportOperations({token}:{token:()=>Promise<string>}){
- const [filter,setFilter]=useState<Status|'all'>('acik');
+ const [filter,setFilter]=useState<QueueFilter>('unresolved');
  const [cases,setCases]=useState<CaseSummary[]>([]);
+ const [truncated,setTruncated]=useState(false);
  const [loaded,setLoaded]=useState(false);
  const [loading,setLoading]=useState(true);
  const [busy,setBusy]=useState(false);
@@ -35,8 +37,8 @@ export default function SupportOperations({token}:{token:()=>Promise<string>}){
   try{
    const access=await token();
    const suffix=filter==='all'?'':'?status='+encodeURIComponent(filter);
-   const result=await api<{cases:CaseSummary[]}>(`/v1/admin/support-cases${suffix}`,access);
-   setCases(result.cases);setLoaded(true);setExpanded(null);setDetail(null);
+   const result=await api<{cases:CaseSummary[];truncated?:boolean}>(`/v1/admin/support-cases${suffix}`,access);
+   setCases(result.cases);setTruncated(Boolean(result.truncated));setLoaded(true);setExpanded(null);setDetail(null);
   }catch(e){setError(e instanceof Error?e.message:'Destek talepleri yüklenemedi.')}
   finally{setLoading(false)}
  },[filter,token]);
@@ -68,7 +70,8 @@ export default function SupportOperations({token}:{token:()=>Promise<string>}){
    <h2><ClipboardList size={22}/> Müşteri destek talepleri</h2>
    <p className="muted">Açıklamalar yalnızca yetkili yönetici talebi açınca getirilir. Adres veya telefon burada gösterilmez.</p>
   </div><div className="support-console-filters">
-   <label>Durum <select disabled={loading||busy} value={filter} onChange={event=>{setFilter(event.target.value as Status|'all');setLoading(true);setLoaded(false);setSuccess('');setCases([]);setExpanded(null);setDetail(null)}}>
+   <label>Durum <select disabled={loading||busy} value={filter} onChange={event=>{setFilter(event.target.value as QueueFilter);setLoading(true);setLoaded(false);setTruncated(false);setSuccess('');setCases([]);setExpanded(null);setDetail(null)}}>
+    <option value="unresolved">Yanıt bekleyenler</option>
     <option value="acik">Açık</option><option value="incelemede">İnceleniyor</option>
     <option value="cozuldu">Çözüldü</option><option value="kapandi">Kapandı</option>
     <option value="all">Tümü</option></select></label>
@@ -78,6 +81,7 @@ export default function SupportOperations({token}:{token:()=>Promise<string>}){
   {error&&<p className="notice error" role="alert"><AlertCircle size={17}/> {error}</p>}
   {success&&<p className="notice" role="status"><CheckCircle2 size={17}/> {success}</p>}
   {loading&&<p className="muted" role="status">Destek talepleri yükleniyor…</p>}
+  {loaded&&truncated&&<p className="notice" role="status">İlk 100 talep gösteriliyor. Diğer talepleri görmek için durum filtresini daraltın.</p>}
   {loaded&&cases.length===0&&<p className="muted">Bu durumda destek talebi bulunmuyor.</p>}
   {loaded&&<div className="support-case-list">{cases.map(record=><article className="support-case" key={record.id}>
    <div className="support-case-top"><div>
