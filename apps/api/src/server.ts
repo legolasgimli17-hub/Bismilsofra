@@ -253,14 +253,48 @@ app.post('/v1/restaurant/:rid/orders/:id/status',async(req)=>{
  if(typeof body.to!=='string'||!STATUSES.includes(body.to as Status))invalid('STATUS_INVALID','Geçersiz sipariş durumu.');
  return changeStatus(pool,'restaurant',userId,id,body.to as Status,cleanNote(body.reason,400));
 });
+app.get('/v1/restaurant/:rid/order-intake',async(req)=>{
+ const rid=idParam(req,'rid'),{role}=await staff(req,rid,null);
+ if(role==='staff')invalid('ROLE_FORBIDDEN','Sipariş alımını yalnızca restoran sahibi veya yöneticisi yönetebilir.',403);
+ const result=await pool.query('SELECT active,accepts_orders FROM restaurants WHERE id=$1',[rid]);
+ if(!result.rowCount)invalid('NOT_FOUND','Restoran bulunamadı.',404);
+ return result.rows[0];
+});
+app.patch('/v1/restaurant/:rid/order-intake',async(req)=>{
+ const rid=idParam(req,'rid'),{role,userId}=await staff(req,rid,null);
+ if(role==='staff')invalid('ROLE_FORBIDDEN','Sipariş alımını yalnızca restoran sahibi veya yöneticisi yönetebilir.',403);
+ const body=(req.body??{}) as Record<string,unknown>;
+ if(typeof body.acceptsOrders!=='boolean'||typeof body.expectedAcceptsOrders!=='boolean'||
+    body.acceptsOrders===body.expectedAcceptsOrders)
+  invalid('INVALID_REQUEST','Mevcut ve istenen sipariş alım durumu gerekli.');
+ return transaction(pool,async db=>{
+  const result=await db.query(`UPDATE restaurants SET accepts_orders=$1
+   WHERE id=$2 AND active=true AND accepts_orders=$3 RETURNING active,accepts_orders`,
+   [body.acceptsOrders,rid,body.expectedAcceptsOrders]);
+  if(!result.rowCount)invalid('ORDER_INTAKE_STALE','Restoran durumu değişti veya restoran aktif değil. Güncel durumu kontrol edin.',409);
+  await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',
+   [userId,'order_intake_update','restaurant',rid,JSON.stringify({from:body.expectedAcceptsOrders,to:body.acceptsOrders})]);
+  return result.rows[0];
+ });
+});
 app.patch('/v1/restaurant/:rid/availability',async(req)=>{
  const rid=idParam(req,'rid'),{userId,role}=await staff(req,rid,null);
  if(role==='staff')invalid('ROLE_FORBIDDEN','Restoranın açılış/kapanış ayarını yalnızca yönetici değiştirebilir.',403);
  const b=(req.body??{}) as Record<string,unknown>;
  if(typeof b.isOpen!=='boolean'||typeof b.isBusy!=='boolean'||typeof b.acceptsOrders!=='boolean')invalid('INVALID_REQUEST','Restoran durumu için üç boolean alan gereklidir.');
+ const expected=b.expected as Record<string,unknown>|undefined;
+ if(expected!==undefined&&(!expected||typeof expected.isOpen!=='boolean'||
+    typeof expected.isBusy!=='boolean'||typeof expected.acceptsOrders!=='boolean'))
+  invalid('INVALID_REQUEST','Önceki restoran durumu geçersiz.');
  return transaction(pool,async db=>{
-  const res=await db.query(`UPDATE restaurants SET is_open=$1,is_busy=$2,accepts_orders=$3 WHERE id=$4 AND active=true RETURNING id,is_open,is_busy,accepts_orders`,[b.isOpen,b.isBusy,b.acceptsOrders,rid]);
-  if(!res.rowCount)invalid('NOT_FOUND','Restoran aktif değil veya bulunamadı.',404);
+  const res=await db.query(`UPDATE restaurants SET is_open=$1,is_busy=$2,accepts_orders=$3
+   WHERE id=$4 AND active=true AND ($5::boolean IS NULL OR (is_open=$5 AND is_busy=$6 AND accepts_orders=$7))
+   RETURNING id,is_open,is_busy,accepts_orders`,
+   [b.isOpen,b.isBusy,b.acceptsOrders,rid,expected?.isOpen??null,expected?.isBusy??null,expected?.acceptsOrders??null]);
+  if(!res.rowCount){
+   if(expected)invalid('AVAILABILITY_STALE','Restoran durumu değişti veya restoran aktif değil. Ayarları yenileyin.',409);
+   invalid('NOT_FOUND','Restoran aktif değil veya bulunamadı.',404);
+  }
   await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',[userId,'availability_update','restaurant',rid,JSON.stringify({isOpen:b.isOpen,isBusy:b.isBusy,acceptsOrders:b.acceptsOrders})]);
   return res.rows[0];
  });
