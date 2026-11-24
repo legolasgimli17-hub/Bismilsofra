@@ -2,16 +2,16 @@
 import {createContext,useContext,useEffect,useRef,useState,type ReactNode} from 'react';
 import {useRouter} from 'next/navigation';
 import {Auth0Provider,useAuth0} from '@auth0/auth0-react';
-import {addCartLine,EMPTY_CART,updateLine,readStoredCart,restoreCartSnapshot} from '@/lib/cart';
+import {addCartLine,clearOrderedCart,EMPTY_CART,updateLine,readStoredCart,restoreCartSnapshot} from '@/lib/cart';
 import type {Cart,CartLine} from '@/lib/types';
 import {safeAuthReturnTo} from '@/lib/auth-redirect';
 type CartActions={
  cart:Cart;ready:boolean;
  add:(id:string,name:string,line:CartLine,replace:boolean)=>void;
- change:(index:number,delta:number)=>void;replaceCart:(next:Cart)=>void;clear:()=>void
+ change:(index:number,delta:number)=>void;replaceCart:(next:Cart)=>void;clear:()=>void;clearSubmitted:(submitted:Cart)=>void
 };
 const CartCtx=createContext<CartActions>({
- cart:EMPTY_CART,ready:false,add:()=>{},change:()=>{},replaceCart:()=>{},clear:()=>{}
+ cart:EMPTY_CART,ready:false,add:()=>{},change:()=>{},replaceCart:()=>{},clear:()=>{},clearSubmitted:()=>{}
 });
 export const useCart=()=>useContext(CartCtx);
 const auth={domain:process.env.NEXT_PUBLIC_AUTH0_DOMAIN||'',clientId:process.env.NEXT_PUBLIC_AUTH0_CLIENT_ID||'',audience:process.env.NEXT_PUBLIC_AUTH0_AUDIENCE||''};
@@ -69,7 +69,8 @@ function CartProvider({children}:{children:ReactNode}){
   add:(id,name,line,replace)=>apply(current=>addCartLine(current,id,name,line,replace)),
   change:(index,delta)=>apply(current=>updateLine(current,index,delta)),
   replaceCart:(next)=>apply(()=>next),
-  clear:()=>apply(()=>EMPTY_CART)
+  clear:()=>apply(()=>EMPTY_CART),
+  clearSubmitted:submitted=>apply(current=>clearOrderedCart(current,submitted))
  }}>{children}</CartCtx.Provider>;
 }
 export default function Providers({children}:{children:ReactNode}){
