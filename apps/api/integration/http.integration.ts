@@ -701,6 +701,28 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal((await request('/v1/restaurant/'+rid+'/availability',{method:'PATCH',token:owner,
   body:{isOpen:originallyOpen.is_open,isBusy:originallyOpen.is_busy,acceptsOrders:originallyOpen.accepts_orders}})).status,200);
 
+ const intakePath='/v1/restaurant/'+rid+'/order-intake';
+ const intake=await request(intakePath,{token:owner});
+ assert.equal(intake.status,200);
+ assert.equal(intake.body.accepts_orders,true);
+ const pauseBody={acceptsOrders:false,expectedAcceptsOrders:true};
+ assert.equal((await request(intakePath,{token:customer})).status,403);
+ assert.equal((await request(intakePath,{method:'PATCH',token:customer,body:pauseBody})).status,403);
+ const pauses=await Promise.all([1,2].map(()=>request(intakePath,{method:'PATCH',token:owner,body:pauseBody})));
+ assert.deepEqual(pauses.map(res=>res.status).sort(),[200,409]);
+ const pausedMenu=await request('/v1/restaurants/'+rid+'/menu');
+ assert.equal(pausedMenu.body.restaurant.is_orderable,false);
+ const previousAvailability={isOpen:originallyOpen.is_open,isBusy:originallyOpen.is_busy,acceptsOrders:true};
+ const staleSettings=await request('/v1/restaurant/'+rid+'/availability',{method:'PATCH',token:owner,
+  body:{...previousAvailability,expected:previousAvailability}});
+ assert.equal(staleSettings.status,409);
+ assert.equal(staleSettings.body.code,'AVAILABILITY_STALE');
+ const pausedSettings=await request('/v1/restaurant/'+rid+'/management',{token:owner});
+ assert.equal(pausedSettings.body.restaurant.is_open,originallyOpen.is_open);
+ assert.equal(pausedSettings.body.restaurant.is_busy,originallyOpen.is_busy);
+ assert.equal((await request(intakePath,{method:'PATCH',token:owner,
+  body:{acceptsOrders:true,expectedAcceptsOrders:false}})).status,200);
+
  const badHours=await request('/v1/restaurant/'+rid+'/hours',{method:'PUT',token:owner,body:{slots:[
   {dayOfWeek:1,openTime:'10:00',closeTime:'16:00'},
   {dayOfWeek:1,openTime:'15:00',closeTime:'18:00'}]}});
