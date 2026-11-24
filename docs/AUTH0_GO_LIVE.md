@@ -52,7 +52,7 @@ Backend varsayılan adları:
 
 - Gerçek müşteri hesabı: doğrulanmamış e-posta reddi, doğrulanmış giriş, çıkış, süresi dolan token, şifre sıfırlama.
 - Restoran sahibi: MFA'sız erişim reddi, MFA sonrası kendi restoranının siparişleri, başka restoranın verisine erişememe.
-- Yönetici: MFA, kritik işlemlerde **10 dakika içinde** yeniden doğrulama ve işlem kaydı.
+- Yönetici: MFA ile paneli aç, 10 dakikalık süre dolduktan sonra panelde yeniden doğrulama uyarısını gör. **Yeniden kimlik doğrula** düğmesiyle Auth0 girişini aç, sağlayıcıda MFA'yı tamamla ve aynı panel bölümüne döndüğünü doğrula. API'nin yeni imzalı doğrulama zamanını kabul ettiğini ve işlemin denetim kaydına işlendiğini kontrol et.
 - Bağlantı koparsa yeni siparişin `Idempotency-Key` ile güvenle sorgulanması.
 - Kimlik sağlayıcısı hizmet dışıysa mevcut siparişlerin kaybolmaması ve sistemin güvenli şekilde başarısız olması.
 
