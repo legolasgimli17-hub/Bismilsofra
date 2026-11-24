@@ -555,6 +555,13 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal(queued.status,200);
  assert.equal(queued.body.cases.find((record:{id:string})=>record.id===caseId)?.status,'incelemede');
  assert.equal(typeof queued.body.truncated,'boolean');
+ assert.equal(queued.body.page,1);
+ assert.equal(typeof queued.body.hasNext,'boolean');
+ assert.equal((await pilotRequest(unresolvedPath+'&page=0',{token:administrator})).status,400);
+ const nextPage=await pilotRequest(unresolvedPath+'&page=2',{token:administrator});
+ assert.equal(nextPage.status,200);
+ assert.equal(nextPage.body.page,2);
+ assert.equal(nextPage.body.cases.some((record:{id:string})=>record.id===caseId),false);
  const supportAlerts=await pilotRequest('/v1/admin/alerts',{token:administrator});
  assert.equal(supportAlerts.status,200);
  assert.ok(supportAlerts.body.supportQueue.unresolved>=1);
