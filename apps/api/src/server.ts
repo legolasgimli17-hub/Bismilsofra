@@ -711,8 +711,14 @@ app.get('/v1/admin/alerts',async(req)=>{
   WHERE sent_at IS NULL AND cancelled_at IS NULL
    AND (dead_at IS NOT NULL OR (next_attempt_at<=now() AND due_at<now()-interval '20 seconds'))
   GROUP BY restaurant_id ORDER BY count DESC LIMIT 50`);
- const workers=await readWorkerHealth(pool);
- return {latePending:pending.rows,notificationIssues:delivery.rows,escalationIssues:escalations.rows,workers};
+ const [workers,support]=await Promise.all([
+  readWorkerHealth(pool),
+  pool.query(`SELECT count(*)::int AS unresolved,min(created_at) AS "oldestAt"
+   FROM support_cases WHERE status IN ('acik','incelemede')`)
+ ]);
+ return {latePending:pending.rows,notificationIssues:delivery.rows,escalationIssues:escalations.rows,
+  workers,supportQueue:support.rows[0]};
+
 });
 // MFA-protected diagnostic list: never returns customer PII.
 app.get('/v1/admin/escalations',async(req)=>{
