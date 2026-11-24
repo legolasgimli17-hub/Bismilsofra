@@ -1,6 +1,7 @@
 /** Chromium CDP viewport and accessibility smoke with screenshots. Local-only.
  * Browser emulation != physical phone validation. No external target accepted.
  */
+import {createServer} from 'node:http';
 import assert from 'node:assert/strict';
 import {mkdtempSync,readFileSync,writeFileSync,existsSync,mkdirSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -32,6 +33,70 @@ function send(method,params={}){
   callbacks.set(id,{ok:value=>{clearTimeout(timer);resolve(value)},fail:e=>{clearTimeout(timer);reject(e)}});
   socket.send(JSON.stringify({id,method,params}));
  });
+}
+// Exercise the shipped worker in a disposable same-origin fixture. Closing
+// individual HTTP connections lets the worker see a real network failure.
+async function checkOfflineRecovery() {
+ const worker = readFileSync(new URL('../apps/web/public/sw.js', import.meta.url));
+ const offline = readFileSync(new URL('../apps/web/public/offline.html', import.meta.url));
+ let connected = true;
+ const server = createServer((request, response) => {
+  if (!connected) { request.socket.destroy(); return; }
+  response.setHeader('Cache-Control', 'no-store');
+  if (request.url === '/sw.js') {
+   response.setHeader('Content-Type', 'text/javascript');
+   response.end(worker);
+  } else if (request.url === '/offline.html') {
+   response.setHeader('Content-Type', 'text/html; charset=utf-8');
+   response.end(offline);
+  } else {
+   response.setHeader('Content-Type', 'text/html');
+   response.end('<h1>Online</h1>');
+  }
+ });
+ await new Promise((resolve, reject) => {
+  server.once('error', reject);
+  server.listen(0, '127.0.0.1', resolve);
+ });
+ const origin = 'http://127.0.0.1:' + server.address().port;
+ async function evaluate(expression) {
+  const result = await send('Runtime.evaluate', {expression, awaitPromise:true, returnByValue:true});
+  assert.ok(!result.exceptionDetails, JSON.stringify(result.exceptionDetails));
+  return result.result.value;
+ }
+ async function waitForPage(path, heading) {
+  for (let attempt = 0; attempt < 80; attempt++) {
+   if (await evaluate('location.href') === origin + path &&
+       await evaluate("document.querySelector('h1')?.textContent") === heading) return;
+   await delay(100);
+  }
+  throw Error('Offline recovery did not reach ' + path + ' with heading ' + heading);
+ }
+ try {
+  await send('Page.navigate', {url:origin + '/'});
+  await waitForPage('/', 'Online');
+  await evaluate(`(async () => {
+   const other = await caches.open('unrelated-app');
+   await other.put('/offline.html', new Response('Other application'));
+   await caches.open('bismil-sofra-static-v09');
+   const claimed = new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, {once:true}));
+   await navigator.serviceWorker.register('/sw.js');
+   await claimed;
+   return true;
+  })()`);
+  const names = await evaluate('caches.keys()');
+  assert.ok(names.includes('unrelated-app') && !names.includes('bismil-sofra-static-v09'));
+  connected = false;
+  await send('Page.navigate', {url:origin + '/checkout'});
+  await waitForPage('/checkout', 'İnternet bağlantısı kurulamadı');
+  connected = true;
+  await evaluate("setTimeout(() => document.querySelector('button').click(), 0); true");
+  await waitForPage('/checkout', 'Online');
+  console.log('PWA_OFFLINE_RECOVERY_PASS');
+ } finally {
+  server.closeAllConnections();
+  await new Promise(resolve => server.close(resolve));
+ }
 }
 async function run(){
  let wsUrl;
@@ -128,6 +193,7 @@ async function run(){
    console.log(JSON.stringify({device,path,viewport:state.inner,scroll:state.scroll,errors:0,file}));
   }
  }
+ await checkOfflineRecovery();
 }
 try{await run();console.log('MOBILE_BROWSER_SMOKE_PASS')}
 finally{socket?.close();chrome.kill('SIGTERM');await delay(200);
