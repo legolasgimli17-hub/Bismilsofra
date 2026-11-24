@@ -555,6 +555,10 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal(queued.status,200);
  assert.equal(queued.body.cases.find((record:{id:string})=>record.id===caseId)?.status,'incelemede');
  assert.equal(typeof queued.body.truncated,'boolean');
+ const supportAlerts=await pilotRequest('/v1/admin/alerts',{token:administrator});
+ assert.equal(supportAlerts.status,200);
+ assert.ok(supportAlerts.body.supportQueue.unresolved>=1);
+ assert.ok(Number.isFinite(Date.parse(supportAlerts.body.supportQueue.oldestAt)));
  const resolvedCase=await request(supportPath,{method:'POST',token:administrator,
   body:{expectedStatus:'incelemede',to:'cozuldu'}});
  assert.equal(resolvedCase.status,200);
