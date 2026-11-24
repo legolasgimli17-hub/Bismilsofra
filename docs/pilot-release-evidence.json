@@ -1,79 +1,91 @@
 {
   "project": "Bismil Sofra",
   "pilot": "5 restaurants max",
-  "date": "2026-11-22",
+  "date": "2026-11-24",
   "checks": [
     {
       "id": "isolated_https_staging",
       "status": "open",
       "owner": "",
-      "evidence": ""
+      "evidence": "",
+      "notes": "DOĞRULANMADI: Docker Compose CI geçici HTTPS mevcut; Railway staging henüz 42 staged-create değişiklikten ibaret, 0 çalışan API ve 0 kalıcı domain."
     },
     {
       "id": "real_oidc_mfa_accounts",
       "status": "open",
       "owner": "",
-      "evidence": ""
+      "evidence": "",
+      "notes": "DOĞRULANMADI: Auth0 tenant, gerçek kayıt/e-posta doğrulama, şifre sıfırlama ve restoran/admin MFA saha testi yok. Redirect kodu otomatik test kanıtı değildir."
     },
     {
       "id": "dual_independent_alerts",
       "status": "open",
       "owner": "",
-      "evidence": ""
+      "evidence": "",
+      "notes": "DOĞRULANMADI: İki bağımsız gerçek uyarı sağlayıcısı ve restoran cihazında teslim alındı kanıtı yok."
     },
     {
       "id": "encrypted_offsite_backup_restore",
       "status": "open",
       "owner": "",
-      "evidence": ""
+      "evidence": "",
+      "notes": "DOĞRULANMADI: CI test verisinin şifreli restore denemesi gerçek uzak otomatik yedekleme değildir."
     },
     {
       "id": "authenticated_multi_replica_load",
       "status": "open",
       "owner": "",
-      "evidence": ""
+      "evidence": "",
+      "notes": "DOĞRULANMADI: CI test JWKS'si ve disposable Postgres ile 50/100/200 HTTP denemesi yapılıyor; gerçek Auth0 + kalıcı staging altında doğrulanmadı."
     },
     {
       "id": "mobile_accessibility_devices",
       "status": "open",
       "owner": "",
-      "evidence": ""
+      "evidence": "",
+      "notes": "DOĞRULANMADI: Chromium 360/390/768/1280 emülasyon testleri fiziksel Android/iPhone, ekran okuyucu veya gerçek bildirim testi değildir."
     },
     {
       "id": "licensed_food_media",
       "status": "open",
       "owner": "",
-      "evidence": ""
+      "evidence": "",
+      "notes": "DOĞRULANMADI: 5 gerçek restoranın kullanım izni ve doğrulanmış gerçek ürün fotoğrafları yok."
     },
     {
       "id": "security_independent_review",
       "status": "open",
       "owner": "",
-      "evidence": ""
+      "evidence": "",
+      "notes": "DOĞRULANMADI: Kodun yazarı dışındaki denetçinin imzalı bulgu/tekrar test raporu yok."
     },
     {
       "id": "real_restaurant_consent",
       "status": "open",
       "owner": "",
-      "evidence": ""
+      "evidence": "",
+      "notes": "DOĞRULANMADI: Restoranlarla imzalı onay/sözleşme kaydı sağlanmadı."
     },
     {
       "id": "customer_support_staffed",
       "status": "open",
       "owner": "",
-      "evidence": ""
+      "evidence": "",
+      "notes": "DOĞRULANMADI: Gerçek destek hattı, görevlendirme ve yanıt süresi testi yok."
     },
     {
       "id": "kvkk_etbis_legal_approval",
       "status": "open",
       "owner": "",
-      "evidence": ""
+      "evidence": "",
+      "notes": "DOĞRULANMADI: KVKK/ETBİS/mesafeli sözleşme değerlendirmesi yetkili hukukçu tarafından onaylanmadı."
     },
     {
       "id": "ops_incident_oncall",
       "status": "open",
       "owner": "",
-      "evidence": ""
+      "evidence": "",
+      "notes": "DOĞRULANMADI: 7/24 olay sorumlusu, gerçek paging ve vardiya kayıtları yok."
     }
   ]
 }
