@@ -6,7 +6,7 @@ import {api,ApiError} from '@/lib/api';
 import {readSelectedMerchantId,saveSelectedMerchantId} from '@/lib/merchant-selection';
 import {canViewMerchantInbox} from '@/lib/workspace-access';
 import {money,statusText} from '@/lib/types';
-import {canActOnInbox,currentInboxRequest,inboxLabel,unseenPendingIds,type InboxHealth} from '@/lib/inbox-health';
+import {canActOnInbox,currentInboxRequest,inboxLabel,inboxRefreshDecision,unseenPendingIds,type InboxHealth} from '@/lib/inbox-health';
 import {canSubmitMerchantAction,isMerchantOpenStatus,merchantNextActions} from '@/lib/merchant-workflow';
 import {useOrderEventStream} from '@/hooks/use-order-event-stream';
 import {RefreshCcw,Bell,ShieldCheck,WifiOff,Wifi,AlertTriangle,ChevronDown,Clock3,PackageCheck,MapPin,ClipboardList} from 'lucide-react';
@@ -34,6 +34,7 @@ function Inner({token}:{token:()=>Promise<string>}){
  const ridRef=useRef(rid);
  const requestSequence=useRef(0);
  const requestController=useRef<AbortController|null>(null);
+ const refreshAfter=useRef<AbortController|null>(null);
  const [browserOnline,setBrowserOnline]=useState(true);
  const seenIds=useRef<string[]>([]);
  const sawSnapshot=useRef(false);
@@ -89,11 +90,12 @@ function Inner({token}:{token:()=>Promise<string>}){
   setTruncated(false);setLastSync('');setLastSyncMs(0);
   setState('connecting');setError('');
  },[rid]);
- const load=useCallback(async(priority=false)=>{
-  if(!rid)return;
-  // Periodic reconciliation is single-flight; SSE/manual refresh can supersede.
-  // Slow mobile requests must not be cancelled every 7 seconds forever.
-  if(!priority&&requestController.current&&!requestController.current.signal.aborted)return;
+ const load=useCallback(async function refresh(mode:'poll'|'signal'|'replace'='poll'):Promise<void>{
+  if(!rid||ridRef.current!==rid)return;
+  const running=requestController.current;
+  const decision=inboxRefreshDecision(mode,Boolean(running&&!running.signal.aborted));
+  if(decision==='skip')return;
+  if(decision==='queue'){refreshAfter.current=running;return}
   if(!navigator.onLine){
    requestSequence.current++;requestController.current?.abort();
    setBrowserOnline(false);setState('offline');setNow(Date.now());return;
@@ -106,13 +108,13 @@ function Inner({token}:{token:()=>Promise<string>}){
    const t=await token();
    if(controller.signal.aborted)return;
    const r=await api<{pending:Summary[];active:Summary[];recent?:RecentOrder[];serverTime:string;pendingTruncated:boolean;activeTruncated:boolean}>(
-    `/v1/restaurant/${rid}/inbox`,t,{signal:controller.signal});
+    `/v1/restaurant/${rid}/inbox`,t,{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(15_000)])});
    if(!currentInboxRequest(rid,ridRef.current,sequence,requestSequence.current,
      controller.signal.aborted,navigator.onLine))return;
    const currentIds=r.pending.map(o=>o.id);
    const newIds=unseenPendingIds(seenIds.current,currentIds);
-   if(sawSnapshot.current&&newIds.length>0){
-    setIncomingCount(n=>n+newIds.length);
+   if(newIds.length>0){
+    if(sawSnapshot.current)setIncomingCount(n=>n+newIds.length);
     if(soundOnRef.current&&document.visibilityState==='visible')playChime();
    }
    seenIds.current=currentIds;sawSnapshot.current=true;
@@ -127,11 +129,16 @@ function Inner({token}:{token:()=>Promise<string>}){
    }
    setError(e instanceof Error?e.message:'Bağlantı hatası');
   }finally{
-   if(requestController.current===controller)requestController.current=null;
+   const queued=refreshAfter.current===controller;
+   if(queued)refreshAfter.current=null;
+   if(requestController.current===controller){
+    requestController.current=null;
+    if(queued&&!controller.signal.aborted&&document.visibilityState==='visible'&&navigator.onLine)void refresh();
+   }
   }
  },[rid,token]);
  const realtime=useOrderEventStream(rid?'/v1/restaurant/'+rid+'/events':null,
-  token,()=>{void load(true)});
+  token,()=>{void load('signal')});
  useEffect(()=>{let running=true;token().then(t=>api<{restaurants:Merchant[]}>('/v1/me/staff-restaurants',t)).then(r=>{
   if(running){setList(r.restaurants);setRid(readSelectedMerchantId(r.restaurants.filter(canViewMerchantInbox)))}
  }).catch(e=>{if(running){setState('offline');setError(e instanceof Error?e.message:'Restoran listesi yüklenemedi')}}).finally(()=>{if(running)setLoadingMerchants(false)});
@@ -145,7 +152,7 @@ function Inner({token}:{token:()=>Promise<string>}){
   };
   const online=()=>{
    setBrowserOnline(true);setNow(Date.now());setState('connecting');
-   if(document.visibilityState==='visible')void load(true);
+   if(document.visibilityState==='visible')void load('replace');
   };
   const resume=()=>{
    setNow(Date.now());
@@ -188,11 +195,11 @@ function Inner({token}:{token:()=>Promise<string>}){
    await api(`/v1/restaurant/${rid}/orders/${order.id}/status`,await token(),{method:'POST',body:JSON.stringify({to,reason})});
    if(ridRef.current!==rid)return;
    setDetails(d=>{const copy={...d};delete copy[order.id];return copy});setReasons(r=>({...r,[order.id]:''}));
-   await load(true);
+   await load('replace');
   }catch(e){
    if(ridRef.current!==rid)return;
    setActionError(e instanceof Error?e.message:'İşlem başarısız.');
-   await load(true);
+   await load('replace');
   }
   finally{setBusyOrder('')}
  }
@@ -234,7 +241,7 @@ function Inner({token}:{token:()=>Promise<string>}){
  }
  return <section className="container main-section merchant-v09">
   <div className="section-heading"><div><span className="overline">RESTORAN YÖNETİMİ</span><h1>Sipariş operasyon merkezi</h1><p>Yalnızca yetkili olduğun restoranların kayıtları</p></div>
-   <button className="btn outline" disabled={Boolean(busyOrder)} onClick={()=>void load(true)}><RefreshCcw size={17}/> Güncelle</button></div>
+   <button className="btn outline" disabled={Boolean(busyOrder)} onClick={()=>void load('replace')}><RefreshCcw size={17}/> Güncelle</button></div>
   {rid&&<div className={`merchant-connection ${connected?'healthy':'lost'}`} role="status" aria-live="polite">{connected?<Wifi size={19}/>:<WifiOff size={19}/>}
    <div><strong>{inboxLabel(state,connected)}</strong><span>{connected?`Son eşitleme: ${lastSync}`:'İnternet veya sunucu bağlantısını doğrulayın. Durum değişikliği şu anda engellendi.'}</span></div></div>}
   {rid&&<div className="merchant-banner"><ShieldCheck size={20}/><span>Restoran erişimi MFA ile korunur. {realtime==='live'?'Anlık sipariş sinyali bağlı (SSE).':'Anlık sinyal yok; 7 saniyelik sunucu eşitlemesi devrede.'} Eşitleme sürekli yedek olarak çalışır. Telefon uyurken veya sekme kapalıyken ses garantisi yoktur; bağımsız uyarı kanalı gereklidir.</span></div>}
