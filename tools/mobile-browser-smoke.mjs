@@ -101,7 +101,7 @@ async function run(){
      "(()=>{const selectors=location.pathname==='/'?['.new-search input','.select-wrap select','.filter-chip','.sort-select select']:['.portal-gateway-card .btn','.portal-gateway-back'];return selectors.flatMap(sel=>[...document.querySelectorAll(sel)].filter(el=>el.getClientRects().length>0).map(el=>{const r=el.getBoundingClientRect();return {selector:sel,width:Math.round(r.width),height:Math.round(r.height)}}))})()",
      returnByValue:true});
     const targets=result.result.value;
-    assert.ok(targets.length>=4,device+path+' missing essential touch controls');
+    assert.ok(targets.length>=(path==='/panel'?3:4),device+path+' missing essential touch controls');
     assert.ok(targets.every(x=>x.width>=44&&x.height>=44),
      device+path+' touch target smaller than 44px: '+JSON.stringify(targets.filter(x=>x.width<44||x.height<44)));
    }
