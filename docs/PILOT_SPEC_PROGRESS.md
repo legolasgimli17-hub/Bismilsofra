@@ -35,5 +35,12 @@ Tarih: 22 Kasım 2026. Kaynak: 17.11.2026 tarihli `spec.md v0.1` ve `Bismil_Yeme
 ## "Tamamlandı" demek için
 Her yeni işte: gerçek UI + API + yetkilendirme; olumlu/olumsuz/yarış durumları için test; GitHub PR ve yeşil CI; değişmeyen 50 aktif sınırı; mevcut sipariş geçmişinin korunması; saha gerekiyorsa ayrıca "gerçek cihazda doğrulandı" kanıtı. PR birleştirme tek başına ticari hazır oluş değildir.
 
+## 25 Kasım 2026 — Pilot iş akışı güncellemeleri
+
+- Restoran sahibi ve yöneticisi, canlı sipariş ekranından yeni sipariş alımını duraklatabilir ve yeniden açabilir. Kabul edilmiş siparişler işlenmeye devam eder. Eşzamanlı işlemler ve eski ayarlar sunucu tarafından kontrol edilir.
+- Müşteri vitrininde yoğun ve sipariş alımına ara vermiş restoranlar ayrı gösterilir. Menü bağlantı hatasında tekrar denenebilir. Ödeme ekranı fiyat onayını aynı sepet, adres ve ödeme bilgileriyle eşleştirir.
+- Yönetici özetinde bekleyen destek sayısı ve en eski talep görünür. Destek kuyruğunda açık ve incelemedeki talepler birlikte, en eskiden başlayarak listelenir.
+- Sipariş takibi, cihaz yeniden bağlandığında ve sekme görünür olduğunda kontrol edilir. Restoran operasyon ekranı son kapanan siparişlerin numara ve durumunu gösterir.
+
 ## Sonraki geliştirme dilimi
 Restoran kurulumu geçtiğinde, **gerçek sağlayıcılarla iki kanallı alarm, gerçek Auth0, fiziksel Android/iPhone testi ve 5 restoran saha pilotu** şartnamedeki en önemli açık ürün işlevleridir. Sadece bildirim işçileri/polling ile sürüm büyütülmeyecek.
