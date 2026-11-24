@@ -660,6 +660,10 @@ app.get('/v1/admin/support-cases',async(req)=>{
  if(q.status!==undefined&&q.status!=='unresolved'&&!isSupportStatus(q.status))
   invalid('SUPPORT_STATUS_INVALID','Destek durum filtresi geçersiz.');
  const status=typeof q.status==='string'?q.status:null;
+ if(q.page!==undefined&&(typeof q.page!=='string'||!(/^[1-9][0-9]{0,2}$/).test(q.page)))
+  invalid('SUPPORT_PAGE_INVALID','Destek sayfa numarası geçersiz.');
+ const page=q.page===undefined?1:Number(q.page);
+ const pageSize=100;
  const result=await pool.query(`SELECT s.id,s.order_id,s.issue_type,s.status,
   s.created_at,s.updated_at,r.name AS restaurant_name
   FROM support_cases s
@@ -668,8 +672,8 @@ app.get('/v1/admin/support-cases',async(req)=>{
   WHERE ($1::text IS NULL OR s.status=$1 OR ($1='unresolved' AND s.status IN ('acik','incelemede')))
   ORDER BY CASE WHEN s.status IN ('acik','incelemede') THEN 0 ELSE 1 END,
    CASE WHEN s.status IN ('acik','incelemede') THEN s.created_at END ASC,
-   s.updated_at DESC,s.id DESC LIMIT 101`,[status]);
- return {cases:result.rows.slice(0,100),truncated:result.rows.length>100};
+   s.updated_at DESC,s.id DESC LIMIT $2 OFFSET $3`,[status,pageSize+1,(page-1)*pageSize]);
+ return {cases:result.rows.slice(0,pageSize),truncated:result.rows.length>pageSize,page,hasNext:page<999&&result.rows.length>pageSize};
 });
 app.get('/v1/admin/support-cases/:id',async(req)=>{
  await admin(req);const id=idParam(req,'id');
