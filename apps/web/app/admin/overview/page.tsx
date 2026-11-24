@@ -1,14 +1,16 @@
 'use client';
-import {useCallback,useEffect,useState} from 'react';
+import {useCallback,useEffect,useRef,useState} from 'react';
 import Link from 'next/link';
 import AuthGate from '@/components/auth-gate';
-import {api} from '@/lib/api';
+import {api,ApiError} from '@/lib/api';
 import {money} from '@/lib/types';
 import {ArrowRight,RefreshCw,ShieldCheck,Store,ClipboardList,AlertTriangle,ChartColumnIncreasing,UsersRound,LifeBuoy,Activity,CheckCircle2,LockKeyhole} from 'lucide-react';
 
 type Restaurant={id:string;name:string;active:boolean;has_owner:boolean;has_menu:boolean;has_hours:boolean;has_delivery:boolean};
-type Alerts={latePending:{restaurant_id:string;count:number}[];notificationIssues:{restaurant_id:string;count:number}[];escalationIssues:{restaurant_id:string;count:number}[];workers:{name:string;status:string;lastSeenAt:string|null}[]};
+type Alerts={latePending:{restaurant_id:string;count:number}[];notificationIssues:{restaurant_id:string;count:number}[];escalationIssues:{restaurant_id:string;count:number}[];workers:{name:string;status:string;lastSeenAt:string|null}[];supportQueue?:{unresolved:number;oldestAt:string|null}};
 type Report={summary:{orders:number;delivered:number;delivered_total_kurus:string}};
+const setupReady=(r:Restaurant)=>r.has_owner&&r.has_menu&&r.has_hours&&r.has_delivery;
+const accessDenied=(error:unknown)=>error instanceof ApiError&&[401,403].includes(error.status);
 const total=(rows:{count:number}[])=>(rows||[]).reduce((sum,r)=>sum+r.count,0);
 export default function AdminOverview(){return <AuthGate>{token=><Content token={token}/>}</AuthGate>}
 function Content({token}:{token:()=>Promise<string>}){
@@ -16,8 +18,10 @@ function Content({token}:{token:()=>Promise<string>}){
  const [alerts,setAlerts]=useState<Alerts|null>(null);
  const [report,setReport]=useState<Report|null>(null);
  const [loading,setLoading]=useState(true),[error,setError]=useState(''),[lastSync,setLastSync]=useState('');
+ const inFlight=useRef(false);
  const load=useCallback(async()=>{
-  setLoading(true);
+  if(inFlight.current)return;
+  inFlight.current=true;setLoading(true);
   try{
    const jwt=await token();
    const [r,a,s]=await Promise.allSettled([
@@ -26,8 +30,11 @@ function Content({token}:{token:()=>Promise<string>}){
     api<Report>('/v1/admin/reports?days=7',jwt)
    ]);
    if(r.status==='fulfilled')setRestaurants(r.value.restaurants);
+   else if(accessDenied(r.reason))setRestaurants(null);
    if(a.status==='fulfilled')setAlerts(a.value);
+   else if(accessDenied(a.reason))setAlerts(null);
    if(s.status==='fulfilled')setReport(s.value);
+   else if(accessDenied(s.reason))setReport(null);
    const failed=[
     r.status==='rejected'?'restoranlar':null,
     a.status==='rejected'?'operasyon uyarıları':null,
@@ -36,7 +43,7 @@ function Content({token}:{token:()=>Promise<string>}){
    setError(failed.length?'Güncellenemeyen veriler: '+failed.join(', ')+'.':'');
    if(!failed.length)setLastSync(new Date().toLocaleTimeString('tr-TR'));
   }catch(e){setError(e instanceof Error?e.message:'Platform verileri alınamadı.')}
-  finally{setLoading(false)}
+  finally{inFlight.current=false;setLoading(false)}
  },[token]);
  useEffect(()=>{
   void load();
@@ -44,8 +51,8 @@ function Content({token}:{token:()=>Promise<string>}){
   return()=>clearInterval(timer);
  },[load]);
  const active=restaurants?.filter(r=>r.active).length;
- const setup=restaurants?.filter(r=>!r.has_owner||!r.has_menu||!r.has_hours||!r.has_delivery)||[];
- const orderedRestaurants=restaurants&&[...restaurants].sort((a,b)=>Number(a.active)-Number(b.active));
+ const setup=restaurants?.filter(r=>!setupReady(r))||[];
+ const orderedRestaurants=restaurants&&[...restaurants].sort((a,b)=>Number(setupReady(a))-Number(setupReady(b))||Number(a.active)-Number(b.active));
  const alertsTotal=alerts?total(alerts.latePending)+total(alerts.notificationIssues)+total(alerts.escalationIssues):null;
  const unhealthy=alerts?.workers?.filter(x=>x.status!=='running')||[];
  const metrics=[
@@ -71,17 +78,18 @@ function Content({token}:{token:()=>Promise<string>}){
      <Link className="portal-shortcut" href="/admin#admin-orders"><ClipboardList size={20}/> Sipariş incele <ArrowRight size={16}/></Link>
      <Link className="portal-shortcut" href="/admin#admin-reports"><ChartColumnIncreasing size={20}/> Performans raporları <ArrowRight size={16}/></Link>
      <Link className="portal-shortcut" href="/admin#admin-users"><UsersRound size={20}/> Kullanıcı yetkileri <ArrowRight size={16}/></Link>
-     <Link className="portal-shortcut" href="/admin#admin-support"><LifeBuoy size={20}/> Destek talepleri <ArrowRight size={16}/></Link>
+     <Link className="portal-shortcut" href="/admin#admin-support"><LifeBuoy size={20}/> <span>Destek talepleri{alerts?.supportQueue&&<> · {alerts.supportQueue.unresolved} bekliyor</>}</span> <ArrowRight size={16}/></Link>
      <Link className="portal-shortcut" href="/admin#admin-workers"><Activity size={20}/> Bildirim / işçi durumu <ArrowRight size={16}/></Link>
     </div>
+    {alerts?.supportQueue?.oldestAt&&<p className="muted">En uzun süredir bekleyen destek talebi: <time dateTime={alerts.supportQueue.oldestAt}>{new Date(alerts.supportQueue.oldestAt).toLocaleString('tr-TR')}</time></p>}
    </section>
    <section className="portal-dashboard-block">
     <header className="portal-block-heading"><div><h2>Pilot restoranların durumu</h2><p>Gerçek kurulum kayıtları; restoranı otomatik yayına almaz.</p></div><Link href="/admin#admin-onboarding">Yönet</Link></header>
     {!restaurants?<div className="portal-dashboard-empty">Sunucudan restoran listesi henüz gelmedi.</div>:
      restaurants.length===0?<div className="portal-dashboard-empty">Henüz restoran kaydı bulunmuyor.</div>:
      <div className="portal-dashboard-list">{orderedRestaurants?.slice(0,7).map(r=>{
-      const ready=r.has_owner&&r.has_menu&&r.has_hours&&r.has_delivery;
-      const label=r.active?'Aktif':ready?'Kurulum hazır':'Kurulum eksik';
+      const ready=setupReady(r);
+      const label=!ready?'Kurulum eksik':r.active?'Aktif':'Kurulum hazır';
       return <div className="portal-dashboard-row" key={r.id}><div><strong>{r.name}</strong>
        <small>{r.has_owner?'Sahip ✓':'Sahip eksik'} · {r.has_menu?'Menü ✓':'Menü eksik'} · {r.has_hours?'Saatler ✓':'Saatler eksik'} · {r.has_delivery?'Bölge ✓':'Bölge eksik'}</small></div><span>{label}</span></div>
      })}</div>}
