@@ -4,13 +4,15 @@ import Link from 'next/link';
 import AuthGate from '@/components/auth-gate';
 import {api,ApiError} from '@/lib/api';
 import {readSelectedMerchantId,saveSelectedMerchantId} from '@/lib/merchant-selection';
+import {canViewMerchantInbox} from '@/lib/workspace-access';
 import {money,statusText} from '@/lib/types';
 import {canActOnInbox,currentInboxRequest,inboxLabel,unseenPendingIds,type InboxHealth} from '@/lib/inbox-health';
-import {canSubmitMerchantAction,merchantNextActions} from '@/lib/merchant-workflow';
+import {canSubmitMerchantAction,isMerchantOpenStatus,merchantNextActions} from '@/lib/merchant-workflow';
 import {useOrderEventStream} from '@/hooks/use-order-event-stream';
 import {RefreshCcw,Bell,ShieldCheck,WifiOff,Wifi,AlertTriangle,ChevronDown,Clock3,PackageCheck,MapPin,ClipboardList} from 'lucide-react';
 type Merchant={id:string;name:string;role:string;can_view_orders:boolean;can_manage_orders:boolean;can_manage_menu:boolean};
 type Summary={id:string;status:string;total_kurus:number;created_at:string;expires_at:string};
+type RecentOrder={id:string;status:string;updated_at:string};
 type SnapshotOption={name:string;priceKurus:number};
 type OrderDetail={
  order:Summary&{address_snapshot:{zone?:string;address?:string;directions?:string;phone?:string;label?:string};note:string;payment_method:string};
@@ -20,8 +22,11 @@ type OrderDetail={
 export default function RestaurantPanel(){return <AuthGate>{token=><Inner token={token}/>}</AuthGate>}
 function Inner({token}:{token:()=>Promise<string>}){
  const [list,setList]=useState<Merchant[]>([]);
+ const [loadingMerchants,setLoadingMerchants]=useState(true);
  const [rid,setRid]=useState('');const [pending,setPending]=useState<Summary[]>([]);const [active,setActive]=useState<Summary[]>([]);
  const [error,setError]=useState(''),[busyOrder,setBusyOrder]=useState('');
+ const [actionError,setActionError]=useState('');
+ const [recent,setRecent]=useState<RecentOrder[]>([]);
  const [lastSync,setLastSync]=useState(''),[lastSyncMs,setLastSyncMs]=useState(0);
  const [state,setState]=useState<InboxHealth>('connecting'),[truncated,setTruncated]=useState(false),[now,setNow]=useState(Date.now());
  const [details,setDetails]=useState<Record<string,OrderDetail>>({}),[openOrder,setOpenOrder]=useState<string|null>(null);
@@ -80,7 +85,7 @@ function Inner({token}:{token:()=>Promise<string>}){
   ridRef.current=rid;requestSequence.current++;
   requestController.current?.abort();requestController.current=null;
   seenIds.current=[];sawSnapshot.current=false;setIncomingCount(0);
-  setPending([]);setActive([]);setDetails({});setOpenOrder(null);
+  setPending([]);setActive([]);setRecent([]);setDetails({});setOpenOrder(null);setDetailLoading('');setActionError('');
   setTruncated(false);setLastSync('');setLastSyncMs(0);
   setState('connecting');setError('');
  },[rid]);
@@ -100,7 +105,7 @@ function Inner({token}:{token:()=>Promise<string>}){
   try{
    const t=await token();
    if(controller.signal.aborted)return;
-   const r=await api<{pending:Summary[];active:Summary[];serverTime:string;pendingTruncated:boolean;activeTruncated:boolean}>(
+   const r=await api<{pending:Summary[];active:Summary[];recent?:RecentOrder[];serverTime:string;pendingTruncated:boolean;activeTruncated:boolean}>(
     `/v1/restaurant/${rid}/inbox`,t,{signal:controller.signal});
    if(!currentInboxRequest(rid,ridRef.current,sequence,requestSequence.current,
      controller.signal.aborted,navigator.onLine))return;
@@ -111,14 +116,14 @@ function Inner({token}:{token:()=>Promise<string>}){
     if(soundOnRef.current&&document.visibilityState==='visible')playChime();
    }
    seenIds.current=currentIds;sawSnapshot.current=true;
-   setPending(r.pending);setActive(r.active);setTruncated(Boolean(r.pendingTruncated||r.activeTruncated));
+   setPending(r.pending);setActive(r.active);setRecent((r.recent||[]).filter(order=>!isMerchantOpenStatus(order.status)));setTruncated(Boolean(r.pendingTruncated||r.activeTruncated));
    setLastSync(new Date(r.serverTime).toLocaleTimeString('tr-TR'));
    const stamp=Date.now();setLastSyncMs(stamp);setNow(stamp);setBrowserOnline(true);setState('connected');setError('');
   }catch(e){
    if(controller.signal.aborted||ridRef.current!==rid||sequence!==requestSequence.current)return;
    setBrowserOnline(navigator.onLine);setState('offline');
    if(e instanceof ApiError&&[401,403].includes(e.status)){
-    setPending([]);setActive([]);setDetails({});seenIds.current=[];sawSnapshot.current=false;
+    setPending([]);setActive([]);setRecent([]);setDetails({});seenIds.current=[];sawSnapshot.current=false;
    }
    setError(e instanceof Error?e.message:'Bağlantı hatası');
   }finally{
@@ -128,10 +133,11 @@ function Inner({token}:{token:()=>Promise<string>}){
  const realtime=useOrderEventStream(rid?'/v1/restaurant/'+rid+'/events':null,
   token,()=>{void load(true)});
  useEffect(()=>{let running=true;token().then(t=>api<{restaurants:Merchant[]}>('/v1/me/staff-restaurants',t)).then(r=>{
-  if(running){setList(r.restaurants);setRid(readSelectedMerchantId(r.restaurants))}
- }).catch(e=>{if(running){setState('offline');setError(e instanceof Error?e.message:'Restoran listesi yüklenemedi')}});
+  if(running){setList(r.restaurants);setRid(readSelectedMerchantId(r.restaurants.filter(canViewMerchantInbox)))}
+ }).catch(e=>{if(running){setState('offline');setError(e instanceof Error?e.message:'Restoran listesi yüklenemedi')}}).finally(()=>{if(running)setLoadingMerchants(false)});
   return()=>{running=false}},[token]);
  useEffect(()=>{
+  if(!rid)return;
   const offline=()=>{
    requestSequence.current++;requestController.current?.abort();
    setBrowserOnline(false);setState('offline');setNow(Date.now());
@@ -161,27 +167,33 @@ function Inner({token}:{token:()=>Promise<string>}){
    document.removeEventListener('visibilitychange',resume);
    requestController.current?.abort();
   };
- },[load]);
+ },[load,rid]);
  const connected=canActOnInbox(state,lastSyncMs,now,browserOnline);
  const selectedMerchant=list.find(r=>r.id===rid);
- const canManage=selectedMerchant?.role==='owner'||selectedMerchant?.role==='manager'||selectedMerchant?.can_manage_orders===true;
+ const canManageIntake=selectedMerchant?.role==='owner'||selectedMerchant?.role==='manager';
+ const canManage=canManageIntake||selectedMerchant?.can_manage_orders===true;
  async function toggleDetail(id:string){
   if(openOrder===id){setOpenOrder(null);return}setOpenOrder(id);
   if(details[id])return;
-  setDetailLoading(id);const requestedRid=rid;
+  setDetailLoading(id);setActionError('');const requestedRid=rid;
   try{const data=await api<OrderDetail>(`/v1/restaurant/${rid}/orders/${id}`,await token());if(ridRef.current===requestedRid)setDetails(d=>({...d,[id]:data}))}
-  catch(e){setError(e instanceof Error?e.message:'Sipariş detayları yüklenemedi.')}
-  finally{setDetailLoading('')}
+  catch(e){if(ridRef.current===requestedRid)setActionError(e instanceof Error?e.message:'Sipariş detayları yüklenemedi.')}
+  finally{if(ridRef.current===requestedRid)setDetailLoading(current=>current===id?'':current)}
  }
  async function move(order:Summary,to:string){
   const reason=reasons[order.id]||'';
   if(!canSubmitMerchantAction(order.status,to,reason,connected,Boolean(canManage))||busyOrder)return;
-  setBusyOrder(order.id);
+  setBusyOrder(order.id);setActionError('');
   try{
    await api(`/v1/restaurant/${rid}/orders/${order.id}/status`,await token(),{method:'POST',body:JSON.stringify({to,reason})});
+   if(ridRef.current!==rid)return;
    setDetails(d=>{const copy={...d};delete copy[order.id];return copy});setReasons(r=>({...r,[order.id]:''}));
    await load(true);
-  }catch(e){setError(e instanceof Error?e.message:'İşlem başarısız.');setState('offline')}
+  }catch(e){
+   if(ridRef.current!==rid)return;
+   setActionError(e instanceof Error?e.message:'İşlem başarısız.');
+   await load(true);
+  }
   finally{setBusyOrder('')}
  }
  function orderCard(o:Summary){const expanded=openOrder===o.id,detail=details[o.id];const reason=reasons[o.id]||'';
@@ -223,29 +235,84 @@ function Inner({token}:{token:()=>Promise<string>}){
  return <section className="container main-section merchant-v09">
   <div className="section-heading"><div><span className="overline">RESTORAN YÖNETİMİ</span><h1>Sipariş operasyon merkezi</h1><p>Yalnızca yetkili olduğun restoranların kayıtları</p></div>
    <button className="btn outline" disabled={Boolean(busyOrder)} onClick={()=>void load(true)}><RefreshCcw size={17}/> Güncelle</button></div>
-  <div className={`merchant-connection ${connected?'healthy':'lost'}`} role="status" aria-live="polite">{connected?<Wifi size={19}/>:<WifiOff size={19}/>}
-   <div><strong>{inboxLabel(state,connected)}</strong><span>{connected?`Son eşitleme: ${lastSync}`:'İnternet veya sunucu bağlantısını doğrulayın. Durum değişikliği şu anda engellendi.'}</span></div></div>
-  <div className="merchant-banner"><ShieldCheck size={20}/><span>Restoran erişimi MFA ile korunur. {realtime==='live'?'Anlık sipariş sinyali bağlı (SSE).':'Anlık sinyal yok; 7 saniyelik sunucu eşitlemesi devrede.'} Eşitleme sürekli yedek olarak çalışır. Telefon uyurken veya sekme kapalıyken ses garantisi yoktur; bağımsız uyarı kanalı gereklidir.</span></div>
-  <div className="merchant-sound-row">
+  {rid&&<div className={`merchant-connection ${connected?'healthy':'lost'}`} role="status" aria-live="polite">{connected?<Wifi size={19}/>:<WifiOff size={19}/>}
+   <div><strong>{inboxLabel(state,connected)}</strong><span>{connected?`Son eşitleme: ${lastSync}`:'İnternet veya sunucu bağlantısını doğrulayın. Durum değişikliği şu anda engellendi.'}</span></div></div>}
+  {rid&&<div className="merchant-banner"><ShieldCheck size={20}/><span>Restoran erişimi MFA ile korunur. {realtime==='live'?'Anlık sipariş sinyali bağlı (SSE).':'Anlık sinyal yok; 7 saniyelik sunucu eşitlemesi devrede.'} Eşitleme sürekli yedek olarak çalışır. Telefon uyurken veya sekme kapalıyken ses garantisi yoktur; bağımsız uyarı kanalı gereklidir.</span></div>}
+  {rid&&<div className="merchant-sound-row">
    <button type="button" className="btn outline" onClick={()=>void toggleSound()} aria-pressed={soundOn}>
     <Bell size={17}/> {soundOn?'Sesli uyarıyı kapat':'Sesli uyarıyı aç ve dene'}
    </button>
    {pending.length>0&&<span role="alert" className="merchant-pending-critical"><Bell size={17}/> {pending.length} kabul bekleyen sipariş · {soundOn?'Sesli uyarı tekrar ediyor':'SES KAPALI — uyarıyı açın'}</span>}
    {incomingCount>0&&<span role="status" className="merchant-new-count">{incomingCount} yeni sipariş algılandı (bu oturum)</span>}
    <small>Ses yalnızca bu sekmede, açıkça etkinleştirildiğinde çalar.</small>
-  </div>
+  </div>}
   {error&&<div role="alert" className="notice error">{error}</div>}
+  {actionError&&<div role="alert" className="notice error">{actionError}</div>}
   {truncated&&<div role="alert" className="notice error"><AlertTriangle size={18}/> Sipariş limiti aşıldı. Operasyon müdahalesi gerekli; listede tüm kayıtlar görünmeyebilir.</div>}
-  <div className="panel merchant-control-bar"><label htmlFor="merchant-restaurant-select">Restoran
-   <select id="merchant-restaurant-select" value={rid} onChange={e=>{saveSelectedMerchantId(e.target.value);setRid(e.target.value)}}>{list.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
-   <div className="merchant-role-info">{canManage?'Sipariş yönetme yetkin var.':'Yalnızca görüntüleme yetkisi; işlem yapılamaz.'}</div></div>
-  {!rid?<div className="empty">Bu hesap için restoran yetkisi tanımlı değil.</div>:<div className="merchant-columns">
+  {rid&&<div className="panel merchant-control-bar"><label htmlFor="merchant-restaurant-select">Restoran
+   <select id="merchant-restaurant-select" value={rid} onChange={e=>{const next=e.target.value;ridRef.current=next;saveSelectedMerchantId(next);setRid(next)}}>{list.filter(canViewMerchantInbox).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+   <div className="merchant-role-info">{canManage?'Sipariş yönetme yetkin var.':'Yalnızca görüntüleme yetkisi; işlem yapılamaz.'}</div></div>}
+  {rid&&canManageIntake&&<MerchantOrderIntake key={rid} rid={rid} token={token} connected={connected}/>}
+  {!rid?<div className="empty" role="status">{loadingMerchants?'Restoran yetkileri yükleniyor…':error?'Restoran yetkileri doğrulanamadı.':'Bu hesap için sipariş görüntüleme yetkisi tanımlı değil.'}</div>:<div className="merchant-columns">
    <section className="panel merchant-column"><div className="merchant-column-title"><h2><Bell size={19}/> Yeni siparişler</h2><span className="merchant-count">{pending.length}</span></div>
     {pending.length===0?<div className="empty"><h3>{connected?'Şu anda yeni sipariş yok':'Veriler eşitlenemedi'}</h3><p>{connected?'Yeni gelen siparişler burada gösterilecek.':'Yeniden bağlanınca liste güncellenecek.'}</p></div>:pending.map(orderCard)}</section>
    <section className="panel merchant-column"><div className="merchant-column-title"><h2><PackageCheck size={19}/> Hazırlanan ve yoldaki siparişler</h2><span className="merchant-count">{active.length}</span></div>
     {active.length===0?<div className="empty"><h3>{connected?'Devam eden sipariş yok':'Veriler eşitlenemedi'}</h3></div>:active.map(orderCard)}</section>
   </div>}
+  {rid&&<details className="panel merchant-column">
+   <summary>Son tamamlanan veya kapanan siparişler</summary>
+   {!connected&&<p className="muted">Bağlantı yok. Görünen kayıtlar son eşitlemeye ait olabilir.</p>}
+   {recent.length===0&&connected&&<p className="muted">Son sipariş kayıtları arasında kapanan sipariş yok.</p>}
+   {recent.length>0&&<div className="portal-dashboard-list">{recent.slice(0,20).map(order=>
+    <div className="portal-dashboard-row" key={order.id}>
+     <div><strong>#{order.id.slice(0,8).toUpperCase()}</strong><small>{statusText[order.status]||order.status}</small></div>
+     <time dateTime={order.updated_at}>{new Date(order.updated_at).toLocaleString('tr-TR')}</time>
+    </div>)}</div>}
+  </details>}
   <div className="notice">Bu operasyon paneli bir geliştirme sürümüdür. Üretim için güvenilir push/ikincil alarm, gerçek PostgreSQL ve kimlik sağlayıcısı entegrasyonu test edilmelidir.</div>
-  <div className="merchant-settings-links"><Link href="/restaurant/overview" className="btn outline">Genel bakış</Link>{(selectedMerchant?.role==='owner'||selectedMerchant?.role==='manager'||selectedMerchant?.can_manage_menu===true)&&<Link href="/restaurant/manage" className="btn primary">Restoranı ve menüyü yönet</Link>}<Link href="/">Müşteri görünümüne dön</Link></div>
+  <div className="merchant-settings-links"><Link href="/restaurant/overview" className="btn outline">Genel bakış</Link>{list.some(merchant=>merchant.role==='owner'||merchant.role==='manager'||merchant.can_manage_menu===true)&&<Link href="/restaurant/manage" className="btn primary">Restoranı ve menüyü yönet</Link>}<Link href="/">Müşteri görünümüne dön</Link></div>
+ </section>;
+}
+type OrderIntake={active:boolean;accepts_orders:boolean};
+function MerchantOrderIntake({rid,token,connected}:{rid:string;token:()=>Promise<string>;connected:boolean}){
+ const [intake,setIntake]=useState<OrderIntake|null>(null);
+ const [busy,setBusy]=useState(true);
+ const [error,setError]=useState('');
+ const path=`/v1/restaurant/${rid}/order-intake`;
+ const read=useCallback(async()=>{
+  setBusy(true);setError('');
+  try{setIntake(await api<OrderIntake>(path,await token()))}
+  catch(e){setIntake(null);setError(e instanceof Error?e.message:'Sipariş alım durumu okunamadı.')}
+  finally{setBusy(false)}
+ },[path,token]);
+ useEffect(()=>{void read()},[read]);
+ async function toggle(){
+  if(!intake?.active||!connected||busy)return;
+  const desired=!intake.accepts_orders;
+  if(!desired&&!window.confirm('Yeni sipariş alımı durdurulsun mu? Mevcut siparişleri yönetmeye devam edebilirsiniz.'))return;
+  setBusy(true);setError('');
+  try{
+   setIntake(await api<OrderIntake>(path,await token(),{
+    method:'PATCH',body:JSON.stringify({acceptsOrders:desired,expectedAcceptsOrders:intake.accepts_orders})
+   }));
+  }catch(e){
+   setIntake(null);
+   setError(e instanceof Error?e.message:'Değişiklik doğrulanamadı. Sipariş alım durumunu yeniden kontrol edin.');
+  }finally{setBusy(false)}
+ }
+ return <section className="panel merchant-control-bar" aria-label="Yeni sipariş alımı">
+  <div>
+   <strong role="status">{busy?'Sipariş alım durumu kontrol ediliyor…':
+    !intake?'Sipariş alım durumu bilinmiyor':!intake.active?'Restoran yayında değil':
+    intake.accepts_orders?'Yeni sipariş alım ayarı açık':'Yeni sipariş alımı duraklatıldı'}</strong>
+   <p className="muted">Bu ayar yeni siparişleri etkiler. Çalışma saatleri ve teslimat bölgeleri ayrıca uygulanır.</p>
+   {error&&<p className="notice error" role="alert">{error}</p>}
+  </div>
+  <div className="merchant-settings-links">
+   {intake?.active&&<button type="button" className="btn outline" disabled={busy||!connected} onClick={()=>void toggle()}>
+    {intake.accepts_orders?'Yeni siparişleri duraklat':'Yeni sipariş alımını aç'}
+   </button>}
+   <button type="button" className="btn outline" disabled={busy} onClick={()=>void read()}>Alım durumunu yenile</button>
+  </div>
  </section>;
 }

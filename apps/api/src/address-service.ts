@@ -42,15 +42,16 @@ export async function listCustomerAddresses(pool:Pool,userId:string){
 export async function addCustomerAddress(pool:Pool,userId:string,raw:unknown){
  const input=parseAddressDraft(raw);
  return transaction(pool,async db=>{
+  await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`address-book:${userId}`]);
   await enabledZone(db,input.zoneId);
   const count=await db.query('SELECT count(*)::int AS n FROM addresses WHERE user_id=$1 AND archived_at IS NULL',[userId]);
   if(count.rows[0].n>=30)invalid('ADDRESS_LIMIT','En fazla 30 kayıtlı adres olabilir. Önce kullanılmayan bir adresi arşivleyin.',409);
   const result=await db.query(`INSERT INTO addresses
    (user_id,zone_id,label,full_address,directions,phone) VALUES($1,$2,$3,$4,$5,$6)
-   RETURNING id`,[userId,input.zoneId,input.label,input.fullAddress,input.directions,input.phone]);
+   RETURNING id,label,zone_id,full_address,directions,phone`,[userId,input.zoneId,input.label,input.fullAddress,input.directions,input.phone]);
   await db.query(`INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details)
    VALUES($1,'customer_address_add','address',$2,'{}'::jsonb)`,[userId,result.rows[0].id]);
-  return {id:result.rows[0].id};
+  return {id:result.rows[0].id,address:result.rows[0]};
  });
 }
 export async function editCustomerAddress(pool:Pool,userId:string,addressId:string,raw:unknown){

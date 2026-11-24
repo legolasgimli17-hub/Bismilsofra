@@ -1,21 +1,47 @@
 'use client';
 import {Suspense,useCallback,useEffect,useMemo,useState} from 'react';import {useParams,useSearchParams,useRouter} from 'next/navigation';import Link from 'next/link';import {ArrowLeft,Plus,Minus,ShoppingBag,Check,Truck,Search,X,SlidersHorizontal} from 'lucide-react';
-import {api} from '@/lib/api';import {money,type MenuProduct,type Restaurant} from '@/lib/types';import {DEMO_RESTAURANTS,demoMenu} from '@/lib/demo';import FoodImage from '@/components/food-image';import {useCart} from '@/components/providers';import {cartTotal,cartCount} from '@/lib/cart';import {isRestaurantOrderable} from '@/lib/discovery';import {menuCategories,visibleMenuProducts} from '@/lib/menu-discovery';import {selectProductOption,permitsCartReplacement,type AddWarning} from '@/lib/product-option-ui';
-export default function MenuPage(){return <Suspense fallback={<section className="container main-section empty">Menü açılıyor…</section>}><MenuPageInner/></Suspense>}
-function MenuPageInner(){const params=useParams<{id:string}>(),search=useSearchParams(),router=useRouter(),isDemo=search.get('demo')==='1';const [restaurant,setRestaurant]=useState<Restaurant|null>(null),[products,setProducts]=useState<MenuProduct[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[selected,setSelected]=useState<MenuProduct|null>(null),[selections,setSelections]=useState<Record<string,string[]>>({}),[quantity,setQuantity]=useState(1),[warning,setWarning]=useState<AddWarning>(null);const {cart,add}=useCart();
+import {api,ApiError} from '@/lib/api';import {money,type MenuProduct,type Restaurant} from '@/lib/types';import {DEMO_RESTAURANTS,demoMenu} from '@/lib/demo';import FoodImage from '@/components/food-image';import {useCart} from '@/components/providers';import {cartTotal,cartCount} from '@/lib/cart';import {isRestaurantOrderable,restaurantOrderStatus} from '@/lib/discovery';import {menuCategories,visibleMenuProducts} from '@/lib/menu-discovery';import {selectProductOption,permitsCartReplacement,type AddWarning} from '@/lib/product-option-ui';
+export default function MenuPage(){return <Suspense fallback={<section className="container main-section empty">Menü açılıyor…</section>}><MenuRoute/></Suspense>}
+function MenuRoute(){
+ const {id}=useParams<{id:string}>();
+ const isDemo=useSearchParams().get('demo')==='1';
+ return <MenuPageInner key={id+':'+isDemo} id={id} isDemo={isDemo}/>;
+}
+function MenuPageInner({id,isDemo}:{id:string;isDemo:boolean}){const router=useRouter();const [restaurant,setRestaurant]=useState<Restaurant|null>(null),[products,setProducts]=useState<MenuProduct[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[selected,setSelected]=useState<MenuProduct|null>(null),[selections,setSelections]=useState<Record<string,string[]>>({}),[quantity,setQuantity]=useState(1),[warning,setWarning]=useState<AddWarning>(null);const {cart,add}=useCart();
+ const [attempt,setAttempt]=useState(0);
+ const [menuMissing,setMenuMissing]=useState(false);
  const [menuQuery,setMenuQuery]=useState(''),[menuCategory,setMenuCategory]=useState('Tümü'),[onlyAvailable,setOnlyAvailable]=useState(false),[lastAdded,setLastAdded]=useState('');
- const discoverableProducts=useMemo(()=>products.map(p=>({...p,category_name:p.category_name||(isDemo?DEMO_RESTAURANTS.find(r=>r.id===params.id)?.category:'Diğer')})),[products,isDemo,params.id]);
+ const discoverableProducts=useMemo(()=>products.map(p=>({...p,category_name:p.category_name||(isDemo?DEMO_RESTAURANTS.find(r=>r.id===id)?.category:'Diğer')})),[products,isDemo,id]);
  const categories=useMemo(()=>menuCategories(discoverableProducts),[discoverableProducts]);
  const filteredProducts=useMemo(()=>visibleMenuProducts(discoverableProducts,{query:menuQuery,category:menuCategory,onlyAvailable}),[discoverableProducts,menuQuery,menuCategory,onlyAvailable]);
- useEffect(()=>{if(isDemo){setRestaurant(DEMO_RESTAURANTS.find(x=>x.id===params.id)||null);setProducts(demoMenu(params.id));setLoading(false);return;}api<{restaurant:Restaurant;products:MenuProduct[]}>(`/v1/restaurants/${params.id}/menu`).then(r=>{setRestaurant(r.restaurant);setProducts(r.products)}).catch(e=>setError(e.message)).finally(()=>setLoading(false))},[params.id,isDemo]);
+ useEffect(()=>{
+  if(isDemo){
+   const fixture=DEMO_RESTAURANTS.find(x=>x.id===id)||null;
+   setRestaurant(fixture);setProducts(demoMenu(id));setMenuMissing(!fixture);setLoading(false);
+   return;
+  }
+  const controller=new AbortController();
+  const signal=AbortSignal.any([controller.signal,AbortSignal.timeout(15000)]);
+  api<{restaurant:Restaurant;products:MenuProduct[]}>(`/v1/restaurants/${id}/menu`,undefined,{signal})
+   .then(result=>{if(!controller.signal.aborted){setRestaurant(result.restaurant);setProducts(result.products)}})
+   .catch(e=>{
+    if(controller.signal.aborted)return;
+    setMenuMissing(e instanceof ApiError&&e.status===404);
+    setError(e instanceof ApiError&&e.code==='NETWORK'?'Menüye bağlanılamadı. Bağlantınızı kontrol edin.':
+     e instanceof Error?e.message:'Menü yüklenemedi.');
+   })
+   .finally(()=>{if(!controller.signal.aborted)setLoading(false)});
+  return()=>controller.abort();
+ },[id,isDemo,attempt]);
  const open=(p:MenuProduct)=>{setSelected(p);setSelections({});setQuantity(1);setWarning(null)};
  const total=useMemo(()=>selected?(selected.price_kurus+selected.optionGroups.reduce((s,g)=>s+g.options.filter(o=>(selections[g.id]||[]).includes(o.id)).reduce((v,o)=>v+o.price_kurus,0),0))*quantity:0,[selected,selections,quantity]);
  const onAdd=useCallback((replace=false)=>{if(!selected||!restaurant||!isRestaurantOrderable(restaurant))return;const ids:string[]=[],labels:string[]=[];let extra=0;for(const group of selected.optionGroups){const picked=selections[group.id]||[];if(picked.length<group.min_select||picked.length>group.max_select){setWarning('options');return;}for(const o of group.options.filter(o=>picked.includes(o.id))){ids.push(o.id);labels.push(o.name);extra+=o.price_kurus}}
  try{add(restaurant.id,restaurant.name,{productId:selected.id,name:selected.name,imageUrl:selected.image_url,priceKurus:selected.price_kurus,quantity,optionIds:ids,optionLabels:labels,optionExtraKurus:extra},replace);setLastAdded(`${quantity} × ${selected.name} sepete eklendi.`);setSelected(null);setWarning(null)}catch(e){if(e instanceof Error&&e.message==='OTHER_RESTAURANT')setWarning('restaurant');else setError('Sepet güncellenemedi.')}
  },[selected,restaurant,selections,quantity,add]);
  if(loading)return <section className="container main-section empty">Menü yükleniyor…</section>;
- if(!restaurant)return <section className="container main-section empty"><h2>Restoran bulunamadı</h2><p>{error}</p><Link href="/">Ana sayfaya dön</Link></section>;
- return <><div className="container breadcrumb"><Link href="/"><ArrowLeft size={17}/> Restoranlar</Link></div><section className="container restaurant-detail"><FoodImage src={restaurant.cover_url} alt={restaurant.name}/><div className="restaurant-detail-info"><div className="eyebrow">{isDemo?'ÖRNEK RESTORAN':'BİSMİL SOFRA'}</div><h1>{restaurant.name}</h1><div className="detail-chips"><span><Truck size={16}/> Restoranın kuryesi</span><span>Minimum sepet: mahalleye göre</span><span>{isRestaurantOrderable(restaurant)?'Sipariş alıyor':'Şu an sipariş almıyor'}</span></div></div></section>{isDemo&&<div className="container demo-alert">Bu restoran ve menüsü örnektir. Gerçek sipariş gönderilemez.</div>}
+ if(!restaurant)return <section className="container main-section empty"><h2>{menuMissing?'Restoran bulunamadı':'Menü yüklenemedi'}</h2>{error&&<p role="alert">{error}</p>}
+ {!menuMissing&&<button type="button" className="btn outline" onClick={()=>{setLoading(true);setError('');setAttempt(n=>n+1)}}>Tekrar dene</button>}<Link href="/">Ana sayfaya dön</Link></section>;
+ return <><div className="container breadcrumb"><Link href="/"><ArrowLeft size={17}/> Restoranlar</Link></div><section className="container restaurant-detail"><FoodImage src={restaurant.cover_url} alt={restaurant.name}/><div className="restaurant-detail-info"><div className="eyebrow">{isDemo?'ÖRNEK RESTORAN':'BİSMİL SOFRA'}</div><h1>{restaurant.name}</h1><div className="detail-chips"><span><Truck size={16}/> Restoranın kuryesi</span><span>Minimum sepet: mahalleye göre</span><span>{restaurantOrderStatus(restaurant)}</span></div></div></section>{isDemo&&<div className="container demo-alert">Bu restoran ve menüsü örnektir. Gerçek sipariş gönderilemez.</div>}
  <section className="container main-section"><div className="section-heading"><div><span className="overline">MENÜ</span><h2>Canın ne çekiyor?</h2><p>Yemekleri ara, kategorileri keşfet, seçeneklerini belirle.</p></div><span className="menu-total-count">{products.length} ürün</span></div>
  {lastAdded&&<div className="menu-added-banner" role="status" aria-live="polite"><Check size={18}/><span>{lastAdded}</span><Link href="/checkout">Sepete göz at <ShoppingBag size={15}/></Link></div>}
  {products.length>0&&<div className="menu-discovery-panel">

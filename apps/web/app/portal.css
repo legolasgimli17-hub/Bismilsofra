@@ -134,3 +134,6 @@
  .portal-mobile-session .portal-logout{background:#eef3ee;color:#1e4d3b}
  .portal-admin .portal-mobile-session .portal-logout{background:#edf0f8;color:#304b86}
 }
+
+/* Small-screen gateway links must remain finger-friendly, not text-sized targets. */
+.portal-gateway-back{min-height:44px;padding:9px 2px}

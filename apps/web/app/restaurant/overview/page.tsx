@@ -3,7 +3,8 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import Link from 'next/link';
 import AuthGate from '@/components/auth-gate';
 import {api} from '@/lib/api';
-import {money} from '@/lib/types';
+import {canViewMerchantInbox} from '@/lib/workspace-access';
+import {money,statusText} from '@/lib/types';
 import {readSelectedMerchantId,saveSelectedMerchantId} from '@/lib/merchant-selection';
 import {ArrowRight,RefreshCw,Bell,ClipboardList,Store,UtensilsCrossed,ChartColumnIncreasing,Settings2,UsersRound,ShieldCheck,AlertTriangle,CheckCircle2,Clock3,Wallet} from 'lucide-react';
 
@@ -28,12 +29,14 @@ function Content({token}:{token:()=>Promise<string>}){
    if(!alive)return;
    const valid=result.restaurants.filter(r=>['owner','manager','staff'].includes(r.role));
    setRestaurants(valid);
+   if(!valid.length)setLoading(false);
    setRid(readSelectedMerchantId(valid));
   }).catch(e=>{if(alive){setError(e instanceof Error?e.message:'İşletmeler yüklenemedi.');setLoading(false)}});
   return()=>{alive=false};
  },[token]);
  const selected=restaurants.find(r=>r.id===rid);
  const financial=selected?.role==='owner'||selected?.role==='manager';
+ const canViewOrders=canViewMerchantInbox(selected);
  const load=useCallback(async()=>{
   if(!rid)return;
   const run=++sequence.current;
@@ -41,10 +44,10 @@ function Content({token}:{token:()=>Promise<string>}){
   const owner=restaurants.find(r=>r.id===rid);
   try{
    const jwt=await token();
-   const next=await api<Inbox>('/v1/restaurant/'+rid+'/inbox',jwt);
+   const next=canViewOrders?await api<Inbox>('/v1/restaurant/'+rid+'/inbox',jwt):null;
    if(run!==sequence.current)return;
    setInbox(next);setError('');
-   setLastSync(new Date(next.serverTime).toLocaleTimeString('tr-TR'));
+   setLastSync(next?new Date(next.serverTime).toLocaleTimeString('tr-TR'):'');
    if(owner?.role==='owner'||owner?.role==='manager'){
     try{
      const stats=await api<Report>('/v1/restaurant/'+rid+'/reports?days=7',jwt);
@@ -56,10 +59,11 @@ function Content({token}:{token:()=>Promise<string>}){
     setInbox(null);setReport(null);setError(e instanceof Error?e.message:'Restoran verileri okunamadı.');
    }
   }finally{if(run===sequence.current)setLoading(false)}
- },[rid,restaurants,token]);
+ },[rid,restaurants,token,canViewOrders]);
  useEffect(()=>{
+  if(!rid)return;
   setInbox(null);setReport(null);setError('');setLastSync('');
-  if(rid)void load();
+  void load();
   const timer=setInterval(()=>{if(document.visibilityState==='visible'&&rid)void load()},30000);
   return()=>{sequence.current++;clearInterval(timer)};
  },[rid,load]);
@@ -67,7 +71,7 @@ function Content({token}:{token:()=>Promise<string>}){
  const pending=inbox?.pending?.length;
  const active=inbox?.active?.length;
  const metrics=[
-  {label:'Kabul bekleyen',value:pending===undefined?'—':String(pending),description:'Şu anda yeni siparişler',icon:Bell},
+  {label:'Kabul bekleyen',value:pending===undefined?'—':String(pending),description:canViewOrders?'Şu anda yeni siparişler':'Sipariş görüntüleme yetkisi gerekli',icon:Bell},
   {label:'Hazırlanan / yolda',value:active===undefined?'—':String(active),description:'Devam eden siparişler',icon:ClipboardList},
   {label:'Son 7 gün sipariş',value:financial&&report?String(report.summary.orders):'—',description:financial?'Gerçek kayıtlardan':'Yalnızca sahip/yönetici',icon:ChartColumnIncreasing},
   {label:'Teslim edildi tutarı',value:financial&&report?money(Number(report.summary.delivered_total_kurus)):'—',description:'Tahsilat kanıtı değildir',icon:Wallet}
@@ -94,24 +98,24 @@ function Content({token}:{token:()=>Promise<string>}){
    <section className="portal-dashboard-block">
     <header className="portal-block-heading"><div><h2>İşletme işlemleri</h2><p>Günlük işleri kısa yoldan hallet.</p></div></header>
     <div className="portal-shortcuts">
-     <Link className="portal-shortcut" href="/restaurant"><Bell size={20}/> Yeni siparişleri yönet <ArrowRight size={16}/></Link>
+     {canViewOrders&&<Link className="portal-shortcut" href="/restaurant"><Bell size={20}/> {financial||selected?.can_manage_orders?'Yeni siparişleri yönet':'Siparişleri görüntüle'} <ArrowRight size={16}/></Link>}
      {selected?.can_manage_menu&&<Link className="portal-shortcut" href="/restaurant/manage#merchant-menu"><UtensilsCrossed size={20}/> Menü ve fiyatları düzenle <ArrowRight size={16}/></Link>}
      {financial&&<Link className="portal-shortcut" href="/restaurant/manage#merchant-hours"><Clock3 size={20}/> Çalışma saatleri <ArrowRight size={16}/></Link>}
      {financial&&<Link className="portal-shortcut" href="/restaurant/manage#merchant-zones"><Store size={20}/> Teslimat bölgeleri <ArrowRight size={16}/></Link>}
      {financial&&<Link className="portal-shortcut" href="/restaurant/manage#merchant-team"><UsersRound size={20}/> Personel ve yetkiler <ArrowRight size={16}/></Link>}
      {financial&&<Link className="portal-shortcut" href="/restaurant/manage#merchant-reports"><ChartColumnIncreasing size={20}/> Ayrıntılı raporlar <ArrowRight size={16}/></Link>}
-     <Link className="portal-shortcut" href="/restaurant/manage"><Settings2 size={20}/> İşletme yönetimi <ArrowRight size={16}/></Link>
+     {(financial||selected?.can_manage_menu)&&<Link className="portal-shortcut" href="/restaurant/manage"><Settings2 size={20}/> İşletme yönetimi <ArrowRight size={16}/></Link>}
     </div>
    </section>
    <section className="portal-dashboard-block">
-    <header className="portal-block-heading"><div><h2>Operasyon durumu</h2><p>Son yüklenen sipariş listesi</p></div><Link href="/restaurant">Tümünü gör</Link></header>
-    {!inbox?<div className="portal-dashboard-empty">Canlı sunucu doğrulanmadan sipariş adedi gösterilmez.</div>:
+    <header className="portal-block-heading"><div><h2>Operasyon durumu</h2><p>Son yüklenen sipariş listesi</p></div>{canViewOrders&&<Link href="/restaurant">Tümünü gör</Link>}</header>
+    {!loading&&!error&&!canViewOrders?<div className="portal-dashboard-empty">{selected?'Bu hesap siparişleri görüntüleme yetkisine sahip değil.':'Bu hesaba atanmış bir restoran bulunmuyor.'}</div>:!inbox?<div className="portal-dashboard-empty">Canlı sunucu doğrulanmadan sipariş adedi gösterilmez.</div>:
      inbox.pending.length+inbox.active.length===0?<div className="portal-dashboard-empty"><CheckCircle2 size={23}/><p>Şu an devam eden sipariş görünmüyor.</p></div>:
      <div className="portal-dashboard-list">{[...inbox.pending,...inbox.active].slice(0,5).map(o=>
       <div className="portal-dashboard-row" key={o.id}><div><strong>#{o.id.slice(0,8).toUpperCase()}</strong>
-       <small>{new Date(o.created_at).toLocaleTimeString('tr-TR')} · {o.status}</small></div><span>{money(o.total_kurus)}</span></div>)}
+       <small>{new Date(o.created_at).toLocaleTimeString('tr-TR')} · {statusText[o.status]||o.status}</small></div><span>{money(o.total_kurus)}</span></div>)}
      </div>}
-    <p className="muted" style={{fontSize:11,marginTop:14}}>{lastSync?'Son sunucu eşitlemesi: '+lastSync:'Henüz başarılı eşitleme yok'}. Yeni sipariş sesi için operasyon ekranını açıp uyarıları etkinleştir.</p>
+    {canViewOrders&&<p className="muted" style={{fontSize:11,marginTop:14}}>{lastSync?'Son sunucu eşitlemesi: '+lastSync:'Henüz başarılı eşitleme yok'}. Yeni sipariş sesi için operasyon ekranını açıp uyarıları etkinleştir.</p>}
    </section>
   </div>
   <p className="portal-dashboard-note"><ShieldCheck size={18}/> Sipariş ve menü güncellemeleri API'de restoran yetkisi ile doğrulanır. Bu sayfa arka planda bildirim garantisi vermez; gerçek sipariş kabulü için bağımsız bildirim sağlayıcılarının doğrulanması gerekir.</p>

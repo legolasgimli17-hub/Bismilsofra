@@ -164,7 +164,22 @@ app.post('/v1/orders',async(req,reply)=>{
  reply.code(result.replayed?200:201);return result;
 });
 app.get('/v1/me/orders',async(req)=>{
- const {userId}=await user(req);const r=await pool.query('SELECT id,restaurant_id,status,total_kurus,payment_method,created_at,updated_at FROM orders WHERE customer_id=$1 ORDER BY created_at DESC LIMIT 40',[userId]);return {orders:r.rows};
+ const {userId}=await user(req);
+ const {view,page:requestedPage}=req.query as Record<string,unknown>;
+ if(view!==undefined&&view!=='active'&&view!=='history')
+  invalid('ORDER_VIEW_INVALID','Sipariş filtresi geçersiz.');
+ if(requestedPage!==undefined&&(typeof requestedPage!=='string'||!/^[1-9][0-9]{0,2}$/.test(requestedPage)))
+  invalid('ORDER_PAGE_INVALID','Sipariş sayfası geçersiz.');
+ const page=requestedPage===undefined?1:Number(requestedPage);
+ const pageSize=40;
+ const result=await pool.query(`SELECT o.id,o.restaurant_id,r.name AS restaurant_name,o.status,
+  o.total_kurus,o.payment_method,o.created_at,o.updated_at
+  FROM orders o JOIN restaurants r ON r.id=o.restaurant_id
+  WHERE o.customer_id=$1 AND ($2::text IS NULL OR
+   (o.status IN ('beklemede','kabul_edildi','hazirlaniyor','hazir','yolda'))=($2='active'))
+  ORDER BY o.created_at DESC,o.id DESC LIMIT $3 OFFSET $4`,
+  [userId,view??null,pageSize+1,(page-1)*pageSize]);
+ return {orders:result.rows.slice(0,pageSize),hasNext:page<999&&result.rows.length>pageSize};
 });
 // A network timeout must not cause blind duplicate order submission.
 // Client checks the same Idempotency-Key then safely retries the original POST if absent.
@@ -253,14 +268,48 @@ app.post('/v1/restaurant/:rid/orders/:id/status',async(req)=>{
  if(typeof body.to!=='string'||!STATUSES.includes(body.to as Status))invalid('STATUS_INVALID','Geçersiz sipariş durumu.');
  return changeStatus(pool,'restaurant',userId,id,body.to as Status,cleanNote(body.reason,400));
 });
+app.get('/v1/restaurant/:rid/order-intake',async(req)=>{
+ const rid=idParam(req,'rid'),{role}=await staff(req,rid,null);
+ if(role==='staff')invalid('ROLE_FORBIDDEN','Sipariş alımını yalnızca restoran sahibi veya yöneticisi yönetebilir.',403);
+ const result=await pool.query('SELECT active,accepts_orders FROM restaurants WHERE id=$1',[rid]);
+ if(!result.rowCount)invalid('NOT_FOUND','Restoran bulunamadı.',404);
+ return result.rows[0];
+});
+app.patch('/v1/restaurant/:rid/order-intake',async(req)=>{
+ const rid=idParam(req,'rid'),{role,userId}=await staff(req,rid,null);
+ if(role==='staff')invalid('ROLE_FORBIDDEN','Sipariş alımını yalnızca restoran sahibi veya yöneticisi yönetebilir.',403);
+ const body=(req.body??{}) as Record<string,unknown>;
+ if(typeof body.acceptsOrders!=='boolean'||typeof body.expectedAcceptsOrders!=='boolean'||
+    body.acceptsOrders===body.expectedAcceptsOrders)
+  invalid('INVALID_REQUEST','Mevcut ve istenen sipariş alım durumu gerekli.');
+ return transaction(pool,async db=>{
+  const result=await db.query(`UPDATE restaurants SET accepts_orders=$1
+   WHERE id=$2 AND active=true AND accepts_orders=$3 RETURNING active,accepts_orders`,
+   [body.acceptsOrders,rid,body.expectedAcceptsOrders]);
+  if(!result.rowCount)invalid('ORDER_INTAKE_STALE','Restoran durumu değişti veya restoran aktif değil. Güncel durumu kontrol edin.',409);
+  await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',
+   [userId,'order_intake_update','restaurant',rid,JSON.stringify({from:body.expectedAcceptsOrders,to:body.acceptsOrders})]);
+  return result.rows[0];
+ });
+});
 app.patch('/v1/restaurant/:rid/availability',async(req)=>{
  const rid=idParam(req,'rid'),{userId,role}=await staff(req,rid,null);
  if(role==='staff')invalid('ROLE_FORBIDDEN','Restoranın açılış/kapanış ayarını yalnızca yönetici değiştirebilir.',403);
  const b=(req.body??{}) as Record<string,unknown>;
  if(typeof b.isOpen!=='boolean'||typeof b.isBusy!=='boolean'||typeof b.acceptsOrders!=='boolean')invalid('INVALID_REQUEST','Restoran durumu için üç boolean alan gereklidir.');
+ const expected=b.expected as Record<string,unknown>|undefined;
+ if(expected!==undefined&&(!expected||typeof expected.isOpen!=='boolean'||
+    typeof expected.isBusy!=='boolean'||typeof expected.acceptsOrders!=='boolean'))
+  invalid('INVALID_REQUEST','Önceki restoran durumu geçersiz.');
  return transaction(pool,async db=>{
-  const res=await db.query(`UPDATE restaurants SET is_open=$1,is_busy=$2,accepts_orders=$3 WHERE id=$4 AND active=true RETURNING id,is_open,is_busy,accepts_orders`,[b.isOpen,b.isBusy,b.acceptsOrders,rid]);
-  if(!res.rowCount)invalid('NOT_FOUND','Restoran aktif değil veya bulunamadı.',404);
+  const res=await db.query(`UPDATE restaurants SET is_open=$1,is_busy=$2,accepts_orders=$3
+   WHERE id=$4 AND active=true AND ($5::boolean IS NULL OR (is_open=$5 AND is_busy=$6 AND accepts_orders=$7))
+   RETURNING id,is_open,is_busy,accepts_orders`,
+   [b.isOpen,b.isBusy,b.acceptsOrders,rid,expected?.isOpen??null,expected?.isBusy??null,expected?.acceptsOrders??null]);
+  if(!res.rowCount){
+   if(expected)invalid('AVAILABILITY_STALE','Restoran durumu değişti veya restoran aktif değil. Ayarları yenileyin.',409);
+   invalid('NOT_FOUND','Restoran aktif değil veya bulunamadı.',404);
+  }
   await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',[userId,'availability_update','restaurant',rid,JSON.stringify({isOpen:b.isOpen,isBusy:b.isBusy,acceptsOrders:b.acceptsOrders})]);
   return res.rows[0];
  });
@@ -623,17 +672,23 @@ app.get('/v1/me/support-cases',async(req)=>{
 app.get('/v1/admin/support-cases',async(req)=>{
  await admin(req);
  const q=req.query as Record<string,unknown>;
- if(q.status!==undefined&&!isSupportStatus(q.status))
+ if(q.status!==undefined&&q.status!=='unresolved'&&!isSupportStatus(q.status))
   invalid('SUPPORT_STATUS_INVALID','Destek durum filtresi geçersiz.');
  const status=typeof q.status==='string'?q.status:null;
+ if(q.page!==undefined&&(typeof q.page!=='string'||!(/^[1-9][0-9]{0,2}$/).test(q.page)))
+  invalid('SUPPORT_PAGE_INVALID','Destek sayfa numarası geçersiz.');
+ const page=q.page===undefined?1:Number(q.page);
+ const pageSize=100;
  const result=await pool.query(`SELECT s.id,s.order_id,s.issue_type,s.status,
   s.created_at,s.updated_at,r.name AS restaurant_name
   FROM support_cases s
   JOIN orders o ON o.id=s.order_id
   JOIN restaurants r ON r.id=o.restaurant_id
-  WHERE ($1::text IS NULL OR s.status=$1)
-  ORDER BY s.updated_at DESC,s.id DESC LIMIT 100`,[status]);
- return {cases:result.rows};
+  WHERE ($1::text IS NULL OR s.status=$1 OR ($1='unresolved' AND s.status IN ('acik','incelemede')))
+  ORDER BY CASE WHEN s.status IN ('acik','incelemede') THEN 0 ELSE 1 END,
+   CASE WHEN s.status IN ('acik','incelemede') THEN s.created_at END ASC,
+   s.updated_at DESC,s.id DESC LIMIT $2 OFFSET $3`,[status,pageSize+1,(page-1)*pageSize]);
+ return {cases:result.rows.slice(0,pageSize),truncated:result.rows.length>pageSize,page,hasNext:page<999&&result.rows.length>pageSize};
 });
 app.get('/v1/admin/support-cases/:id',async(req)=>{
  await admin(req);const id=idParam(req,'id');
@@ -675,8 +730,14 @@ app.get('/v1/admin/alerts',async(req)=>{
   WHERE sent_at IS NULL AND cancelled_at IS NULL
    AND (dead_at IS NOT NULL OR (next_attempt_at<=now() AND due_at<now()-interval '20 seconds'))
   GROUP BY restaurant_id ORDER BY count DESC LIMIT 50`);
- const workers=await readWorkerHealth(pool);
- return {latePending:pending.rows,notificationIssues:delivery.rows,escalationIssues:escalations.rows,workers};
+ const [workers,support]=await Promise.all([
+  readWorkerHealth(pool),
+  pool.query(`SELECT count(*)::int AS unresolved,min(created_at) AS "oldestAt"
+   FROM support_cases WHERE status IN ('acik','incelemede')`)
+ ]);
+ return {latePending:pending.rows,notificationIssues:delivery.rows,escalationIssues:escalations.rows,
+  workers,supportQueue:support.rows[0]};
+
 });
 // MFA-protected diagnostic list: never returns customer PII.
 app.get('/v1/admin/escalations',async(req)=>{

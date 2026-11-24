@@ -126,11 +126,11 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  const {privateKey:wrongKey}=await generateKeyPair('RS256');
  const forgery=await sign('forgery',{},wrongKey);
  type HttpResult={status:number;body:Record<string,any>};
- async function request(route:string,opts:{method?:string;token?:string;body?:unknown;headers?:Record<string,string>}={}):Promise<HttpResult>{
+ async function request(route:string,opts:{method?:string;token?:string;body?:unknown;headers?:Record<string,string>}={},targetBase=base):Promise<HttpResult>{
   const headers:Record<string,string>={...(opts.headers||{})};
   if(opts.token)headers.Authorization='Bearer '+opts.token;
   if(opts.body!==undefined)headers['Content-Type']='application/json';
-  const res=await fetch(base+route,{method:opts.method||'GET',headers,
+  const res=await fetch(targetBase+route,{method:opts.method||'GET',headers,
    body:opts.body===undefined?undefined:JSON.stringify(opts.body),signal:AbortSignal.timeout(4000)});
   return {status:res.status,body:await res.json() as Record<string,any>};
  }
@@ -531,6 +531,57 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal((await request(supportPath,{method:'POST',token:administrator,
   body:{expectedStatus:'acik',to:'cozuldu'}})).status,409,
   'stale concurrent support edits must be rejected');
+ // Extra pilot scenarios use a separate loopback process so the main fixture
+ // still reaches its genuine per-IP limit only in the final rate-limit test.
+ const pilotApiPort=await freePort();
+ const pilotApiBase='http://127.0.0.1:'+pilotApiPort;
+ const pilotApi=spawn(process.execPath,['--experimental-strip-types','apps/api/src/server.ts'],{
+  cwd:process.cwd(),stdio:['ignore','ignore','inherit'],
+  env:{...process.env,DATABASE_URL:connection,CORS_ORIGIN:'http://127.0.0.1:3000',
+   OIDC_ISSUER:issuer,OIDC_AUDIENCE:audience,OIDC_JWKS_URL:issuer+'.well-known/jwks.json',
+   PORT:String(pilotApiPort),NODE_ENV:'test'}
+ });
+ t.after(async()=>{
+  if(pilotApi.exitCode!==null)return;
+  pilotApi.kill('SIGTERM');
+  await Promise.race([new Promise(resolve=>pilotApi.once('exit',resolve)),
+   new Promise(resolve=>setTimeout(resolve,1000))]);
+  if(pilotApi.exitCode===null)pilotApi.kill('SIGKILL');
+ });
+ await waitFor(pilotApiBase,pilotApi);
+ const pilotRequest=(route:string,opts:Parameters<typeof request>[1]={})=>request(route,opts,pilotApiBase);
+ const addressBookUser=await pool.query('SELECT id FROM users WHERE oidc_subject=$1',[subject('namespaced')]);
+ const addressBookUserId=addressBookUser.rows[0].id as string;
+ await pool.query(`INSERT INTO addresses(user_id,zone_id,label,full_address,phone)
+  SELECT $1,$2,'CI adres '||n,'CI Test Sokak 29 Daire 1','05000000000'
+  FROM generate_series(1,29) n`,[addressBookUserId,zid]);
+ const lastAddress={zoneId:zid,label:'  Yeni adres  ',fullAddress:'CI Test Sokak 30 Daire 1',phone:'05000000000'};
+ const attempts=await Promise.all([1,2].map(()=>pilotRequest('/v1/me/addresses',{method:'POST',token:namespaced,body:lastAddress})));
+ assert.deepEqual(attempts.map(result=>result.status).sort(),[201,409]);
+ const added=attempts.find(result=>result.status===201)!.body;
+ assert.equal(added.address.id,added.id);
+ assert.equal(added.address.label,'Yeni adres');
+ assert.equal(attempts.find(result=>result.status===409)!.body.code,'ADDRESS_LIMIT');
+ const savedAddresses=await pilotRequest('/v1/me/addresses',{token:namespaced});
+ assert.equal(savedAddresses.body.addresses.length,30);
+ assert.ok(savedAddresses.body.addresses.some((address:{id:string})=>address.id===added.id));
+
+ const unresolvedPath='/v1/admin/support-cases?status=unresolved';
+ const queued=await pilotRequest(unresolvedPath,{token:administrator});
+ assert.equal(queued.status,200);
+ assert.equal(queued.body.cases.find((record:{id:string})=>record.id===caseId)?.status,'incelemede');
+ assert.equal(typeof queued.body.truncated,'boolean');
+ assert.equal(queued.body.page,1);
+ assert.equal(typeof queued.body.hasNext,'boolean');
+ assert.equal((await pilotRequest(unresolvedPath+'&page=0',{token:administrator})).status,400);
+ const nextPage=await pilotRequest(unresolvedPath+'&page=2',{token:administrator});
+ assert.equal(nextPage.status,200);
+ assert.equal(nextPage.body.page,2);
+ assert.equal(nextPage.body.cases.some((record:{id:string})=>record.id===caseId),false);
+ const supportAlerts=await pilotRequest('/v1/admin/alerts',{token:administrator});
+ assert.equal(supportAlerts.status,200);
+ assert.ok(supportAlerts.body.supportQueue.unresolved>=1);
+ assert.ok(Number.isFinite(Date.parse(supportAlerts.body.supportQueue.oldestAt)));
  const resolvedCase=await request(supportPath,{method:'POST',token:administrator,
   body:{expectedStatus:'incelemede',to:'cozuldu'}});
  assert.equal(resolvedCase.status,200);
@@ -538,6 +589,8 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
   body:{expectedStatus:'cozuldu',to:'kapandi'}})).status,200);
  assert.equal((await request(supportPath,{method:'POST',token:administrator,
   body:{expectedStatus:'kapandi',to:'incelemede'}})).status,409);
+ const clearedQueue=await pilotRequest(unresolvedPath,{token:administrator});
+ assert.equal(clearedQueue.body.cases.some((record:{id:string})=>record.id===caseId),false);
  const customerCases=await request('/v1/me/support-cases',{token:customer});
  assert.equal(customerCases.body.cases.find((c:{id:string})=>c.id===caseId).status,'kapandi');
  const history=await pool.query("SELECT details FROM audit_logs WHERE action='support_case_status' AND target_id=$1 ORDER BY id",[caseId]);
@@ -700,6 +753,35 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal((await request('/v1/restaurants/'+rid+'/menu')).body.restaurant.is_orderable,false);
  assert.equal((await request('/v1/restaurant/'+rid+'/availability',{method:'PATCH',token:owner,
   body:{isOpen:originallyOpen.is_open,isBusy:originallyOpen.is_busy,acceptsOrders:originallyOpen.accepts_orders}})).status,200);
+
+ const intakePath='/v1/restaurant/'+rid+'/order-intake';
+ const intake=await pilotRequest(intakePath,{token:owner});
+ assert.equal(intake.status,200);
+ assert.equal(intake.body.accepts_orders,true);
+ const pauseBody={acceptsOrders:false,expectedAcceptsOrders:true};
+ assert.equal((await pilotRequest(intakePath,{token:customer})).status,403);
+ assert.equal((await pilotRequest(intakePath,{method:'PATCH',token:customer,body:pauseBody})).status,403);
+ const pauses=await Promise.all([1,2].map(()=>pilotRequest(intakePath,{method:'PATCH',token:owner,body:pauseBody})));
+ assert.deepEqual(pauses.map(res=>res.status).sort(),[200,409]);
+ const pausedMenu=await pilotRequest('/v1/restaurants/'+rid+'/menu');
+ assert.equal(pausedMenu.body.restaurant.is_orderable,false);
+ const previousAvailability={isOpen:originallyOpen.is_open,isBusy:originallyOpen.is_busy,acceptsOrders:true};
+ const staleSettings=await pilotRequest('/v1/restaurant/'+rid+'/availability',{method:'PATCH',token:owner,
+  body:{...previousAvailability,expected:previousAvailability}});
+ assert.equal(staleSettings.status,409);
+ assert.equal(staleSettings.body.code,'AVAILABILITY_STALE');
+ const pausedQuote=await pilotRequest('/v1/orders/quote',{method:'POST',token:customer,body:payload});
+ assert.equal(pausedQuote.status,409);
+ assert.equal(pausedQuote.body.code,'RESTAURANT_CLOSED');
+ const pausedInbox=await pilotRequest('/v1/restaurant/'+rid+'/inbox',{token:owner});
+ assert.equal(pausedInbox.status,200);
+ assert.ok(pausedInbox.body.active.some((order:{id:string;status:string})=>
+  order.id===orderId&&order.status==='kabul_edildi'),'pausing intake must keep accepted orders in the inbox');
+ const pausedSettings=await pilotRequest('/v1/restaurant/'+rid+'/management',{token:owner});
+ assert.equal(pausedSettings.body.restaurant.is_open,originallyOpen.is_open);
+ assert.equal(pausedSettings.body.restaurant.is_busy,originallyOpen.is_busy);
+ assert.equal((await pilotRequest(intakePath,{method:'PATCH',token:owner,
+  body:{acceptsOrders:true,expectedAcceptsOrders:false}})).status,200);
 
  const badHours=await request('/v1/restaurant/'+rid+'/hours',{method:'PUT',token:owner,body:{slots:[
   {dayOfWeek:1,openTime:'10:00',closeTime:'16:00'},
@@ -995,6 +1077,92 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
   ['customer_address_add','customer_address_update','customer_address_archive']);
  assert.ok(!JSON.stringify(addressAudit.rows).includes('CI Yeni Sokak'));
  assert.ok(!JSON.stringify(addressAudit.rows).includes('05009999999'));
+
+ // Isolated second Fastify HTTP process protects the earlier test's
+ // intentional per-IP rate limiting test without changing production limits.
+ const lifecyclePort=await freePort();
+ const lifecycleBase='http://127.0.0.1:'+lifecyclePort;
+ let lifecycleLog='';
+ const lifecycleChild=spawn(process.execPath,['--experimental-strip-types','apps/api/src/server.ts'],{
+  cwd:process.cwd(),stdio:['ignore','pipe','pipe'],
+  env:{...process.env,DATABASE_URL:connection,CORS_ORIGIN:'http://127.0.0.1:3000',
+   OIDC_ISSUER:issuer,OIDC_AUDIENCE:audience,OIDC_JWKS_URL:issuer+'.well-known/jwks.json',
+   PORT:String(lifecyclePort),NODE_ENV:'test'}
+ });
+ lifecycleChild.stderr?.on('data',chunk=>lifecycleLog=(lifecycleLog+String(chunk)).slice(-900));
+ t.after(async()=>{
+  lifecycleChild.kill('SIGTERM');
+  await Promise.race([
+   new Promise(resolve=>lifecycleChild.once('exit',resolve)),
+   new Promise(resolve=>setTimeout(resolve,1000))
+  ]);
+  if(lifecycleChild.exitCode===null)lifecycleChild.kill('SIGKILL');
+ });
+ try{await waitFor(lifecycleBase,lifecycleChild)}
+ catch(e){throw Error(String(e)+' (isolated lifecycle API: '+lifecycleLog+')')}
+ const lifecycleRequest=(route:string,opts:Parameters<typeof request>[1]={})=>request(route,opts,lifecycleBase);
+ // Complete the customer -> restaurant -> delivered lifecycle over REAL HTTP,
+ // not only by directly invoking the database service. Test account identity is
+ // a local signed-JWKS fixture; it is NOT a genuine Auth0 registration.
+ assert.equal((await lifecycleRequest('/v1/restaurant/'+rid+'/orders/'+orderId+'/status',{
+  method:'POST',token:customer,body:{to:'hazirlaniyor'}})).status,403,
+  'a customer may never send restaurant status changes');
+ assert.equal((await lifecycleRequest('/v1/restaurant/'+rid+'/orders/'+orderId+'/status',{
+  method:'POST',token:noMfa,body:{to:'hazirlaniyor'}})).status,403,
+  'restaurant status writes require genuine issuer-signed MFA');
+ assert.equal((await lifecycleRequest('/v1/restaurant/'+rid+'/orders/'+orderId+'/status',{
+  method:'POST',token:pilotOwner,body:{to:'hazirlaniyor'}})).status,403,
+  'a different restaurant owner may not touch this order');
+ const stages=['hazirlaniyor','hazir','yolda','teslim_edildi'] as const;
+ for(const to of stages){
+  const update=await lifecycleRequest('/v1/restaurant/'+rid+'/orders/'+orderId+'/status',{
+   method:'POST',token:owner,body:{to}});
+  assert.equal(update.status,200,JSON.stringify(update.body));
+  assert.equal(update.body.status,to,'merchant HTTP transition must be persisted');
+  const visible=await lifecycleRequest('/v1/me/orders/'+orderId,{token:customer});
+  assert.equal(visible.status,200);
+  assert.equal(visible.body.order.status,to,'the buyer must see the same status as the merchant');
+ }
+ const completed=await lifecycleRequest('/v1/me/orders/'+orderId,{token:customer});
+ assert.equal(completed.body.order.total_kurus,21500,'delivered order retains the original price');
+ const immutableHistory=await pool.query(
+  'SELECT previous_status,new_status FROM order_events WHERE order_id=$1 ORDER BY id',[orderId]);
+ assert.deepEqual(immutableHistory.rows.map(x=>x.new_status),
+  ['beklemede','kabul_edildi','hazirlaniyor','hazir','yolda','teslim_edildi']);
+ const deliveredStore=await pool.query('SELECT delivered_at,total_kurus,payment_method FROM orders WHERE id=$1',[orderId]);
+ assert.ok(deliveredStore.rows[0].delivered_at,'delivery time must be durable');
+ assert.equal(deliveredStore.rows[0].total_kurus,21500);
+ assert.equal(deliveredStore.rows[0].payment_method,'cash');
+ assert.equal((await lifecycleRequest('/v1/restaurant/'+rid+'/inbox',{token:owner})).body.active
+  .some((x:{id:string})=>x.id===orderId),false,'delivered orders leave the active queue');
+ const postDeliveryRetry=await lifecycleRequest('/v1/orders',{
+  method:'POST',token:customer,headers:{'Idempotency-Key':orderKey},body:correct});
+ assert.equal(postDeliveryRetry.status,200,'a checkout retry after delivery must replay');
+ assert.equal(postDeliveryRetry.body.id,orderId,'retry must never create a second order');
+ assert.equal((await lifecycleRequest('/v1/restaurant/'+rid+'/orders/'+orderId+'/status',{
+  method:'POST',token:owner,body:{to:'teslim_edildi'}})).status,409,
+  'a terminal order can never be delivered twice');
+ const deliveredMerchantReport=await lifecycleRequest('/v1/restaurant/'+rid+'/reports?days=7',{token:owner});
+ assert.equal(deliveredMerchantReport.status,200);
+ assert.ok(deliveredMerchantReport.body.summary.delivered>=1);
+ assert.ok(Number(deliveredMerchantReport.body.summary.delivered_total_kurus)>=21500,
+  'delivered value is a reported order amount, not verified cash collection');
+ assert.equal((await lifecycleRequest('/v1/me/orders/'+orderId,{token:stranger})).status,404,
+  'a completed order still belongs only to its buyer');
+
+ const activeOrders=await lifecycleRequest('/v1/me/orders?view=active',{token:customer});
+ assert.equal(activeOrders.status,200);
+ assert.equal(activeOrders.body.orders.some((order:{id:string})=>order.id===orderId),false);
+ const historyOrders=await lifecycleRequest('/v1/me/orders?view=history&page=1',{token:customer});
+ assert.equal(historyOrders.status,200);
+ const listedOrder=historyOrders.body.orders.find((order:{id:string})=>order.id===orderId);
+ assert.equal(listedOrder?.status,'teslim_edildi');
+ assert.ok(listedOrder.restaurant_name);
+ assert.equal(typeof historyOrders.body.hasNext,'boolean');
+ const otherHistory=await lifecycleRequest('/v1/me/orders?view=history',{token:stranger});
+ assert.equal(otherHistory.body.orders.some((order:{id:string})=>order.id===orderId),false);
+ assert.equal((await lifecycleRequest('/v1/me/orders?view=invalid',{token:customer})).status,400);
+ assert.equal((await lifecycleRequest('/v1/me/orders?view=history&page=0',{token:customer})).status,400);
 
  // Deliberately run last: spoofing a different client IP in X-Forwarded-For
  // must NOT bypass the per-origin order limiter when no peer is trusted.

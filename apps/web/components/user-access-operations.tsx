@@ -17,7 +17,9 @@ export default function UserAccessOperations({token}:{token:()=>Promise<string>}
  const [loading,setLoading]=useState(false),[busy,setBusy]=useState(false);
  const [error,setError]=useState(''),[success,setSuccess]=useState('');
  async function lookup(e?:FormEvent){
-  e?.preventDefault();setLoading(true);setError('');setRecord(null);
+  e?.preventDefault();
+  if(loading||busy)return;
+  setLoading(true);setError('');setSuccess('');setRecord(null);
   try{
    const result=await api<{users:User[]}>(`/v1/admin/users?email=${encodeURIComponent(email.trim())}`,await token());
    if(result.users.length!==1){setError('Bu e-postayla doğrulanmış tek bir hesap bulunamadı.');return}
@@ -44,8 +46,8 @@ export default function UserAccessOperations({token}:{token:()=>Promise<string>}
   <header><h2><ShieldAlert size={21}/> Kullanıcı erişim yönetimi</h2>
    <p className="muted">Yalnızca tam e-posta eşleşmesiyle arayın; toplu müşteri listesi görüntülenmez. İşlem için son 10 dakika MFA gerekir.</p></header>
   <form className="admin-user-form" onSubmit={e=>void lookup(e)}>
-   <label>Kayıtlı e-posta<input value={email} type="email" required
-    onChange={e=>{setEmail(e.target.value);setRecord(null);setSuccess('')}} placeholder="kullanici@example.com"/></label>
+   <label>Kayıtlı e-posta<input value={email} type="email" required disabled={busy||loading}
+    onChange={e=>{setEmail(e.target.value);setRecord(null);setSuccess('');setError('')}} placeholder="kullanici@example.com"/></label>
    <button type="submit" className="btn outline" disabled={busy||loading}><Search size={16}/>{loading?'Aranıyor…':'Hesabı bul'}</button>
   </form>
   {error&&<p className="notice error" role="alert"><AlertTriangle size={17}/>{error}</p>}
@@ -53,7 +55,7 @@ export default function UserAccessOperations({token}:{token:()=>Promise<string>}
   {record&&<div className="admin-user-result">
    <div><strong>{record.email}</strong><small>{record.is_admin?'Platform yöneticisi · ':''}{record.enabled?'Hesap aktif':'Hesap kısıtlanmış'}</small>
     <small>Kimlik: <code>{record.id.slice(0,8)}</code></small></div>
-   <label>İşlem nedeni<select value={reasonCode}
+   <label>İşlem nedeni<select value={reasonCode} disabled={busy||loading}
     onChange={e=>setReasonCode(e.target.value as (typeof reasonOptions)[number]['value'])}>
     {reasonOptions.map(r=><option value={r.value} key={r.value}>{r.label}</option>)}
    </select></label>

@@ -148,9 +148,10 @@ function ManagementScreen({token}:{token:()=>Promise<string>}){
       <input type="checkbox" checked={availability[control.key]} disabled={disabled||!editable}
        onChange={e=>setAvailability(cur=>({...cur,[control.key]:e.target.checked}))}/>
      </label>)}
-     <button className="btn primary" type="button" disabled={disabled||!editable} onClick={()=>void save('Restoran durumu',async()=>api(
+     <button className="btn primary" type="button" disabled={disabled||!editable} onClick={()=>model&&void save('Restoran durumu',async()=>api(
       `/v1/restaurant/${rid}/availability`,await token(),{method:'PATCH',
-       body:JSON.stringify({isOpen:availability.is_open,isBusy:availability.is_busy,acceptsOrders:availability.accepts_orders})}
+       body:JSON.stringify({isOpen:availability.is_open,isBusy:availability.is_busy,acceptsOrders:availability.accepts_orders,
+        expected:{isOpen:model.restaurant.is_open,isBusy:model.restaurant.is_busy,acceptsOrders:model.restaurant.accepts_orders}})}
      ))}><Save size={17}/> Değişiklikleri kaydet</button>
      {!editable&&<p className="muted">Bu bölüm yalnızca restoran sahibi veya yöneticisi tarafından değiştirilebilir.</p>}
     </section>
