@@ -7,7 +7,7 @@ export function safeAuthReturnTo(raw:unknown):string{
  try{
   const origin='https://bismilsofra.local.invalid';
   const uri=new URL(raw,origin);
-  if(uri.origin!==origin||!uri.pathname.startsWith('/'))return '/';
+  if(uri.origin!==origin||!uri.pathname.startsWith('/')||uri.pathname.startsWith('//'))return '/';
   return uri.pathname+uri.search+uri.hash;
  }catch{return '/'}
 }
