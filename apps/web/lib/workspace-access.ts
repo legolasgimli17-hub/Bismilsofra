@@ -14,3 +14,6 @@ export function canEnterMerchantPortal(rows:unknown):rows is StaffRestaurant[]{
   typeof row.id==='string'&&/^[0-9a-f-]{36}$/i.test(row.id)&&
   ['owner','manager','staff'].includes(row.role));
 }
+export function canViewMerchantInbox(row:Pick<StaffRestaurant,'role'|'can_view_orders'>|undefined):boolean{
+ return Boolean(row&&(row.role==='owner'||row.role==='manager'||(row.role==='staff'&&row.can_view_orders===true)));
+}
