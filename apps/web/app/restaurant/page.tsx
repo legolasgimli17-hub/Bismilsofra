@@ -4,6 +4,7 @@ import Link from 'next/link';
 import AuthGate from '@/components/auth-gate';
 import {api,ApiError} from '@/lib/api';
 import {readSelectedMerchantId,saveSelectedMerchantId} from '@/lib/merchant-selection';
+import {canViewMerchantInbox} from '@/lib/workspace-access';
 import {money,statusText} from '@/lib/types';
 import {canActOnInbox,currentInboxRequest,inboxLabel,unseenPendingIds,type InboxHealth} from '@/lib/inbox-health';
 import {canSubmitMerchantAction,isMerchantOpenStatus,merchantNextActions} from '@/lib/merchant-workflow';
@@ -21,6 +22,7 @@ type OrderDetail={
 export default function RestaurantPanel(){return <AuthGate>{token=><Inner token={token}/>}</AuthGate>}
 function Inner({token}:{token:()=>Promise<string>}){
  const [list,setList]=useState<Merchant[]>([]);
+ const [loadingMerchants,setLoadingMerchants]=useState(true);
  const [rid,setRid]=useState('');const [pending,setPending]=useState<Summary[]>([]);const [active,setActive]=useState<Summary[]>([]);
  const [error,setError]=useState(''),[busyOrder,setBusyOrder]=useState('');
  const [actionError,setActionError]=useState('');
@@ -131,10 +133,11 @@ function Inner({token}:{token:()=>Promise<string>}){
  const realtime=useOrderEventStream(rid?'/v1/restaurant/'+rid+'/events':null,
   token,()=>{void load(true)});
  useEffect(()=>{let running=true;token().then(t=>api<{restaurants:Merchant[]}>('/v1/me/staff-restaurants',t)).then(r=>{
-  if(running){setList(r.restaurants);setRid(readSelectedMerchantId(r.restaurants))}
- }).catch(e=>{if(running){setState('offline');setError(e instanceof Error?e.message:'Restoran listesi yüklenemedi')}});
+  if(running){setList(r.restaurants);setRid(readSelectedMerchantId(r.restaurants.filter(canViewMerchantInbox)))}
+ }).catch(e=>{if(running){setState('offline');setError(e instanceof Error?e.message:'Restoran listesi yüklenemedi')}}).finally(()=>{if(running)setLoadingMerchants(false)});
   return()=>{running=false}},[token]);
  useEffect(()=>{
+  if(!rid)return;
   const offline=()=>{
    requestSequence.current++;requestController.current?.abort();
    setBrowserOnline(false);setState('offline');setNow(Date.now());
@@ -164,7 +167,7 @@ function Inner({token}:{token:()=>Promise<string>}){
    document.removeEventListener('visibilitychange',resume);
    requestController.current?.abort();
   };
- },[load]);
+ },[load,rid]);
  const connected=canActOnInbox(state,lastSyncMs,now,browserOnline);
  const selectedMerchant=list.find(r=>r.id===rid);
  const canManageIntake=selectedMerchant?.role==='owner'||selectedMerchant?.role==='manager';
@@ -232,25 +235,25 @@ function Inner({token}:{token:()=>Promise<string>}){
  return <section className="container main-section merchant-v09">
   <div className="section-heading"><div><span className="overline">RESTORAN YÖNETİMİ</span><h1>Sipariş operasyon merkezi</h1><p>Yalnızca yetkili olduğun restoranların kayıtları</p></div>
    <button className="btn outline" disabled={Boolean(busyOrder)} onClick={()=>void load(true)}><RefreshCcw size={17}/> Güncelle</button></div>
-  <div className={`merchant-connection ${connected?'healthy':'lost'}`} role="status" aria-live="polite">{connected?<Wifi size={19}/>:<WifiOff size={19}/>}
-   <div><strong>{inboxLabel(state,connected)}</strong><span>{connected?`Son eşitleme: ${lastSync}`:'İnternet veya sunucu bağlantısını doğrulayın. Durum değişikliği şu anda engellendi.'}</span></div></div>
-  <div className="merchant-banner"><ShieldCheck size={20}/><span>Restoran erişimi MFA ile korunur. {realtime==='live'?'Anlık sipariş sinyali bağlı (SSE).':'Anlık sinyal yok; 7 saniyelik sunucu eşitlemesi devrede.'} Eşitleme sürekli yedek olarak çalışır. Telefon uyurken veya sekme kapalıyken ses garantisi yoktur; bağımsız uyarı kanalı gereklidir.</span></div>
-  <div className="merchant-sound-row">
+  {rid&&<div className={`merchant-connection ${connected?'healthy':'lost'}`} role="status" aria-live="polite">{connected?<Wifi size={19}/>:<WifiOff size={19}/>}
+   <div><strong>{inboxLabel(state,connected)}</strong><span>{connected?`Son eşitleme: ${lastSync}`:'İnternet veya sunucu bağlantısını doğrulayın. Durum değişikliği şu anda engellendi.'}</span></div></div>}
+  {rid&&<div className="merchant-banner"><ShieldCheck size={20}/><span>Restoran erişimi MFA ile korunur. {realtime==='live'?'Anlık sipariş sinyali bağlı (SSE).':'Anlık sinyal yok; 7 saniyelik sunucu eşitlemesi devrede.'} Eşitleme sürekli yedek olarak çalışır. Telefon uyurken veya sekme kapalıyken ses garantisi yoktur; bağımsız uyarı kanalı gereklidir.</span></div>}
+  {rid&&<div className="merchant-sound-row">
    <button type="button" className="btn outline" onClick={()=>void toggleSound()} aria-pressed={soundOn}>
     <Bell size={17}/> {soundOn?'Sesli uyarıyı kapat':'Sesli uyarıyı aç ve dene'}
    </button>
    {pending.length>0&&<span role="alert" className="merchant-pending-critical"><Bell size={17}/> {pending.length} kabul bekleyen sipariş · {soundOn?'Sesli uyarı tekrar ediyor':'SES KAPALI — uyarıyı açın'}</span>}
    {incomingCount>0&&<span role="status" className="merchant-new-count">{incomingCount} yeni sipariş algılandı (bu oturum)</span>}
    <small>Ses yalnızca bu sekmede, açıkça etkinleştirildiğinde çalar.</small>
-  </div>
+  </div>}
   {error&&<div role="alert" className="notice error">{error}</div>}
   {actionError&&<div role="alert" className="notice error">{actionError}</div>}
   {truncated&&<div role="alert" className="notice error"><AlertTriangle size={18}/> Sipariş limiti aşıldı. Operasyon müdahalesi gerekli; listede tüm kayıtlar görünmeyebilir.</div>}
-  <div className="panel merchant-control-bar"><label htmlFor="merchant-restaurant-select">Restoran
-   <select id="merchant-restaurant-select" value={rid} onChange={e=>{const next=e.target.value;ridRef.current=next;saveSelectedMerchantId(next);setRid(next)}}>{list.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
-   <div className="merchant-role-info">{canManage?'Sipariş yönetme yetkin var.':'Yalnızca görüntüleme yetkisi; işlem yapılamaz.'}</div></div>
+  {rid&&<div className="panel merchant-control-bar"><label htmlFor="merchant-restaurant-select">Restoran
+   <select id="merchant-restaurant-select" value={rid} onChange={e=>{const next=e.target.value;ridRef.current=next;saveSelectedMerchantId(next);setRid(next)}}>{list.filter(canViewMerchantInbox).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+   <div className="merchant-role-info">{canManage?'Sipariş yönetme yetkin var.':'Yalnızca görüntüleme yetkisi; işlem yapılamaz.'}</div></div>}
   {rid&&canManageIntake&&<MerchantOrderIntake key={rid} rid={rid} token={token} connected={connected}/>}
-  {!rid?<div className="empty">Bu hesap için restoran yetkisi tanımlı değil.</div>:<div className="merchant-columns">
+  {!rid?<div className="empty" role="status">{loadingMerchants?'Restoran yetkileri yükleniyor…':error?'Restoran yetkileri doğrulanamadı.':'Bu hesap için sipariş görüntüleme yetkisi tanımlı değil.'}</div>:<div className="merchant-columns">
    <section className="panel merchant-column"><div className="merchant-column-title"><h2><Bell size={19}/> Yeni siparişler</h2><span className="merchant-count">{pending.length}</span></div>
     {pending.length===0?<div className="empty"><h3>{connected?'Şu anda yeni sipariş yok':'Veriler eşitlenemedi'}</h3><p>{connected?'Yeni gelen siparişler burada gösterilecek.':'Yeniden bağlanınca liste güncellenecek.'}</p></div>:pending.map(orderCard)}</section>
    <section className="panel merchant-column"><div className="merchant-column-title"><h2><PackageCheck size={19}/> Hazırlanan ve yoldaki siparişler</h2><span className="merchant-count">{active.length}</span></div>
@@ -267,7 +270,7 @@ function Inner({token}:{token:()=>Promise<string>}){
     </div>)}</div>}
   </details>}
   <div className="notice">Bu operasyon paneli bir geliştirme sürümüdür. Üretim için güvenilir push/ikincil alarm, gerçek PostgreSQL ve kimlik sağlayıcısı entegrasyonu test edilmelidir.</div>
-  <div className="merchant-settings-links"><Link href="/restaurant/overview" className="btn outline">Genel bakış</Link>{(selectedMerchant?.role==='owner'||selectedMerchant?.role==='manager'||selectedMerchant?.can_manage_menu===true)&&<Link href="/restaurant/manage" className="btn primary">Restoranı ve menüyü yönet</Link>}<Link href="/">Müşteri görünümüne dön</Link></div>
+  <div className="merchant-settings-links"><Link href="/restaurant/overview" className="btn outline">Genel bakış</Link>{list.some(merchant=>merchant.role==='owner'||merchant.role==='manager'||merchant.can_manage_menu===true)&&<Link href="/restaurant/manage" className="btn primary">Restoranı ve menüyü yönet</Link>}<Link href="/">Müşteri görünümüne dön</Link></div>
  </section>;
 }
 type OrderIntake={active:boolean;accepts_orders:boolean};
