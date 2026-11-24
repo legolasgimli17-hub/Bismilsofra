@@ -657,7 +657,7 @@ app.get('/v1/me/support-cases',async(req)=>{
 app.get('/v1/admin/support-cases',async(req)=>{
  await admin(req);
  const q=req.query as Record<string,unknown>;
- if(q.status!==undefined&&!isSupportStatus(q.status))
+ if(q.status!==undefined&&q.status!=='unresolved'&&!isSupportStatus(q.status))
   invalid('SUPPORT_STATUS_INVALID','Destek durum filtresi geçersiz.');
  const status=typeof q.status==='string'?q.status:null;
  const result=await pool.query(`SELECT s.id,s.order_id,s.issue_type,s.status,
@@ -665,9 +665,11 @@ app.get('/v1/admin/support-cases',async(req)=>{
   FROM support_cases s
   JOIN orders o ON o.id=s.order_id
   JOIN restaurants r ON r.id=o.restaurant_id
-  WHERE ($1::text IS NULL OR s.status=$1)
-  ORDER BY s.updated_at DESC,s.id DESC LIMIT 100`,[status]);
- return {cases:result.rows};
+  WHERE ($1::text IS NULL OR s.status=$1 OR ($1='unresolved' AND s.status IN ('acik','incelemede')))
+  ORDER BY CASE WHEN s.status IN ('acik','incelemede') THEN 0 ELSE 1 END,
+   CASE WHEN s.status IN ('acik','incelemede') THEN s.created_at END ASC,
+   s.updated_at DESC,s.id DESC LIMIT 101`,[status]);
+ return {cases:result.rows.slice(0,100),truncated:result.rows.length>100};
 });
 app.get('/v1/admin/support-cases/:id',async(req)=>{
  await admin(req);const id=idParam(req,'id');
