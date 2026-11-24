@@ -42,5 +42,7 @@ Her yeni işte: gerçek UI + API + yetkilendirme; olumlu/olumsuz/yarış durumla
 - Yönetici özetinde bekleyen destek sayısı ve en eski talep görünür. Destek kuyruğunda açık ve incelemedeki talepler birlikte, en eskiden başlayarak listelenir.
 - Sipariş takibi, cihaz yeniden bağlandığında ve sekme görünür olduğunda kontrol edilir. Restoran operasyon ekranı son kapanan siparişlerin numara ve durumunu gösterir.
 
+- Müşteri siparişleri devam edenler ve geçmiş olarak ayrı, sayfalı listelenir. Restoran adı ve siparişe bağlı destek bağlantısı her kayıtta görünür.
+
 ## Sonraki geliştirme dilimi
 Restoran kurulumu geçtiğinde, **gerçek sağlayıcılarla iki kanallı alarm, gerçek Auth0, fiziksel Android/iPhone testi ve 5 restoran saha pilotu** şartnamedeki en önemli açık ürün işlevleridir. Sadece bildirim işçileri/polling ile sürüm büyütülmeyecek.
