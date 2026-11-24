@@ -53,7 +53,7 @@ function CustomerSupport({token}:{token:()=>Promise<string>}){
   finally{setBusy(false)}
  },[token]);
  useEffect(()=>{void load()},[load]);
- return <section className="panel customer-support" aria-label="Destek taleplerim">
+ return <section id="support-requests" className="panel customer-support portal-anchor" aria-label="Destek taleplerim">
   <div className="support-console-head"><div><h2>Destek taleplerim</h2>
    <p className="muted">Açtığın taleplerin güncel durumunu buradan takip edebilirsin.</p></div>
    <button className="btn outline" disabled={busy} onClick={()=>void load()}>
