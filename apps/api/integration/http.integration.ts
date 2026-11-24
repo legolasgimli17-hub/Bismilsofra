@@ -749,9 +749,11 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal(staleSettings.body.code,'AVAILABILITY_STALE');
  const pausedQuote=await pilotRequest('/v1/orders/quote',{method:'POST',token:customer,body:payload});
  assert.equal(pausedQuote.status,409);
+ assert.equal(pausedQuote.body.code,'RESTAURANT_CLOSED');
  const pausedInbox=await pilotRequest('/v1/restaurant/'+rid+'/inbox',{token:owner});
  assert.equal(pausedInbox.status,200);
- assert.ok(pausedInbox.body.pending.some((order:{id:string})=>order.id===orderId));
+ assert.ok(pausedInbox.body.active.some((order:{id:string;status:string})=>
+  order.id===orderId&&order.status==='kabul_edildi'),'pausing intake must keep accepted orders in the inbox');
  const pausedSettings=await pilotRequest('/v1/restaurant/'+rid+'/management',{token:owner});
  assert.equal(pausedSettings.body.restaurant.is_open,originallyOpen.is_open);
  assert.equal(pausedSettings.body.restaurant.is_busy,originallyOpen.is_busy);
