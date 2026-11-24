@@ -5,7 +5,7 @@ export default function Checkout(){const {cart,ready}=useCart();if(!ready)return
 function DemoBasket(){const {cart,change,clear}=useCart();if(cart.lines.length===0)return <section className="container main-section empty"><ShoppingBag size={38}/><h1 className="empty-page-title">Sepetin boş</h1><Link className="btn primary" href="/">Restoranlara dön</Link></section>;
  return <section className="container main-section"><div className="breadcrumb"><Link href="/"><ArrowLeft size={17}/> Restoranlara dön</Link></div><div className="section-heading"><div><span className="overline">ÖRNEK SEPET</span><h1>Sepetin</h1><p>{cart.restaurantName}</p></div></div><div className="demo-mode-ribbon"><b>TASARIM ÖNİZLEMESİ</b> Bu sepet yalnızca ekranları deneyebilmen içindir. Sipariş oluşturulmaz ve gerçek ödeme alınmaz.</div><div className="checkout-layout"><div className="panel"><h2>Seçtiğin ürünler</h2>{cart.lines.map((line,i)=><div className="cart-line" key={`${line.productId}-${i}`}><div><strong>{line.name}</strong>{line.optionLabels.length>0&&<p>{line.optionLabels.join(', ')}</p>}<small>{money(line.priceKurus+line.optionExtraKurus)} / adet</small></div><div className="line-right"><strong>{money((line.priceKurus+line.optionExtraKurus)*line.quantity)}</strong><div className="stepper tiny"><button onClick={()=>change(i,-1)} aria-label={`${line.name} miktarını azalt`}>−</button><span>{line.quantity}</span><button onClick={()=>change(i,1)} aria-label={`${line.name} miktarını artır`}>+</button></div></div></div>)}</div><aside className="panel checkout-aside"><h2>Örnek sipariş özeti</h2><div className="summary-row"><span>Ürünler</span><strong>{money(cartTotal(cart))}</strong></div><div className="summary-row"><span>Teslimat</span><strong>Mahalle seçildiğinde hesaplanır</strong></div><div className="summary-total"><span>Kesin toplam</span><strong>Hesaplanmadı</strong></div><p className="summary-disclaimer">Gerçek siparişte kapıda nakit/POS ve sunucuda fiyat doğrulaması uygulanır.</p><Link href="/" className="btn primary full">Restoranları keşfet</Link><button className="text-btn center" onClick={clear}>Örnek sepeti temizle</button></aside></div></section>;
 }
-function CheckoutInner({token}:{token:()=>Promise<string>}){const {cart,change,clear}=useCart(),router=useRouter();const [addresses,setAddresses]=useState<Address[]>([]),[zones,setZones]=useState<Zone[]>([]),[addressId,setAddressId]=useState(''),[payment,setPayment]=useState<'cash'|'pos'>('cash'),[note,setNote]=useState(''),[quoted,setQuoted]=useState<{requestBody:string;value:Quote}|null>(null),[approved,setApproved]=useState(false),[addAddress,setAddAddress]=useState(false),[newZone,setNewZone]=useState(''),[newLabel,setNewLabel]=useState('Ev'),[newPhone,setNewPhone]=useState(''),[newFull,setNewFull]=useState(''),[newDirections,setNewDirections]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
+function CheckoutInner({token}:{token:()=>Promise<string>}){const {cart,change,clearSubmitted}=useCart(),router=useRouter();const [addresses,setAddresses]=useState<Address[]>([]),[zones,setZones]=useState<Zone[]>([]),[addressId,setAddressId]=useState(''),[payment,setPayment]=useState<'cash'|'pos'>('cash'),[note,setNote]=useState(''),[quoted,setQuoted]=useState<{requestBody:string;value:Quote}|null>(null),[approved,setApproved]=useState(false),[addAddress,setAddAddress]=useState(false),[newZone,setNewZone]=useState(''),[newLabel,setNewLabel]=useState('Ev'),[newPhone,setNewPhone]=useState(''),[newFull,setNewFull]=useState(''),[newDirections,setNewDirections]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [staleOptions,setStaleOptions]=useState(false);
  const requestBody=JSON.stringify(orderBody(cart,addressId,payment,note));
  const quote=quoted?.requestBody===requestBody?quoted.value:null;
@@ -55,7 +55,7 @@ function CheckoutInner({token}:{token:()=>Promise<string>}){const {cart,change,c
    const result=await api<{id:string}>('/v1/orders',await token(),{
     method:'POST',body:payload,headers:{'Idempotency-Key':requestKey}
    });
-   clear();router.replace(`/orders/${result.id}`);
+   clearSubmitted(cart);router.replace(`/orders/${result.id}`);
   }catch(e){
    if(e instanceof ApiError&&e.code==='PRICE_CHANGED'){
     setQuoted(null);setApproved(false);orderAttempt.current=null;
@@ -63,7 +63,7 @@ function CheckoutInner({token}:{token:()=>Promise<string>}){const {cart,change,c
    }else if(e instanceof ApiError&&e.code==='NETWORK'){
     try{
      const res=await api<{order:{id:string}}>(`/v1/me/orders/by-key/${encodeURIComponent(requestKey)}`,await token());
-     clear();router.replace(`/orders/${res.order.id}`);
+     clearSubmitted(cart);router.replace(`/orders/${res.order.id}`);
     }catch{
      setError('Siparişin sonucu doğrulanamadı. Siparişlerim sayfasını kontrol edebilir veya aynı sepeti yeniden onaylayabilirsin.');
     }
