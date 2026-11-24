@@ -20,3 +20,9 @@ export function unseenPendingIds(previous:readonly string[],current:readonly str
  const known=new Set(previous);
  return [...new Set(current)].filter(id=>!known.has(id));
 }
+
+/** Coalesce stream events while allowing explicit refreshes after mutations. */
+export function inboxRefreshDecision(mode:'poll'|'signal'|'replace',running:boolean){
+ if(!running||mode==='replace')return 'start';
+ return mode==='signal'?'queue':'skip';
+}
