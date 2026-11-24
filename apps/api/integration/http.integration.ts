@@ -1150,6 +1150,20 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal((await lifecycleRequest('/v1/me/orders/'+orderId,{token:stranger})).status,404,
   'a completed order still belongs only to its buyer');
 
+ const activeOrders=await lifecycleRequest('/v1/me/orders?view=active',{token:customer});
+ assert.equal(activeOrders.status,200);
+ assert.equal(activeOrders.body.orders.some((order:{id:string})=>order.id===orderId),false);
+ const historyOrders=await lifecycleRequest('/v1/me/orders?view=history&page=1',{token:customer});
+ assert.equal(historyOrders.status,200);
+ const listedOrder=historyOrders.body.orders.find((order:{id:string})=>order.id===orderId);
+ assert.equal(listedOrder?.status,'teslim_edildi');
+ assert.ok(listedOrder.restaurant_name);
+ assert.equal(typeof historyOrders.body.hasNext,'boolean');
+ const otherHistory=await lifecycleRequest('/v1/me/orders?view=history',{token:stranger});
+ assert.equal(otherHistory.body.orders.some((order:{id:string})=>order.id===orderId),false);
+ assert.equal((await lifecycleRequest('/v1/me/orders?view=invalid',{token:customer})).status,400);
+ assert.equal((await lifecycleRequest('/v1/me/orders?view=history&page=0',{token:customer})).status,400);
+
  // Deliberately run last: spoofing a different client IP in X-Forwarded-For
  // must NOT bypass the per-origin order limiter when no peer is trusted.
  let responseCode=0;
