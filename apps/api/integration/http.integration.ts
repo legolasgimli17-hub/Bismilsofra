@@ -550,6 +550,22 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  });
  await waitFor(pilotApiBase,pilotApi);
  const pilotRequest=(route:string,opts:Parameters<typeof request>[1]={})=>request(route,opts,pilotApiBase);
+ const addressBookUser=await pool.query('SELECT id FROM users WHERE oidc_subject=$1',[subject('namespaced')]);
+ const addressBookUserId=addressBookUser.rows[0].id as string;
+ await pool.query(`INSERT INTO addresses(user_id,zone_id,label,full_address,phone)
+  SELECT $1,$2,'CI adres '||n,'CI Test Sokak 29 Daire 1','05000000000'
+  FROM generate_series(1,29) n`,[addressBookUserId,zid]);
+ const lastAddress={zoneId:zid,label:'  Yeni adres  ',fullAddress:'CI Test Sokak 30 Daire 1',phone:'05000000000'};
+ const attempts=await Promise.all([1,2].map(()=>pilotRequest('/v1/me/addresses',{method:'POST',token:namespaced,body:lastAddress})));
+ assert.deepEqual(attempts.map(result=>result.status).sort(),[201,409]);
+ const added=attempts.find(result=>result.status===201)!.body;
+ assert.equal(added.address.id,added.id);
+ assert.equal(added.address.label,'Yeni adres');
+ assert.equal(attempts.find(result=>result.status===409)!.body.code,'ADDRESS_LIMIT');
+ const savedAddresses=await pilotRequest('/v1/me/addresses',{token:namespaced});
+ assert.equal(savedAddresses.body.addresses.length,30);
+ assert.ok(savedAddresses.body.addresses.some((address:{id:string})=>address.id===added.id));
+
  const unresolvedPath='/v1/admin/support-cases?status=unresolved';
  const queued=await pilotRequest(unresolvedPath,{token:administrator});
  assert.equal(queued.status,200);
