@@ -12,6 +12,12 @@ export function addCartLine(cart:Cart,restaurantId:string,restaurantName:string,
 export function updateLine(cart:Cart,index:number,amount:number):Cart{const lines=cart.lines.map((l,i)=>i===index?{...l,quantity:Math.min(25,Math.max(0,l.quantity+amount))}:l).filter(x=>x.quantity>0);return lines.length?{...cart,lines}:EMPTY_CART}
 export function orderBody(cart:Cart,addressId:string,paymentMethod:'cash'|'pos',note:string){return {restaurantId:cart.restaurantId,addressId,paymentMethod,note,items:cart.lines.map(l=>({productId:l.productId,quantity:l.quantity,optionIds:l.optionIds}))}}
 
+/** Clear the cart that was submitted, preserving another tab's newer items. */
+export function clearOrderedCart(current:Cart,submitted:Cart):Cart{
+ return JSON.stringify(current)===JSON.stringify(submitted)
+  ?EMPTY_CART:current;
+}
+
 /**
  * sessionStorage is untrusted, including values written by browser extensions
  * or an older app version. Refuse malformed snapshots rather than rendering
