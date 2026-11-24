@@ -531,6 +531,11 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal((await request(supportPath,{method:'POST',token:administrator,
   body:{expectedStatus:'acik',to:'cozuldu'}})).status,409,
   'stale concurrent support edits must be rejected');
+ const unresolvedPath='/v1/admin/support-cases?status=unresolved';
+ const queued=await request(unresolvedPath,{token:administrator});
+ assert.equal(queued.status,200);
+ assert.equal(queued.body.cases.find((record:{id:string})=>record.id===caseId)?.status,'incelemede');
+ assert.equal(typeof queued.body.truncated,'boolean');
  const resolvedCase=await request(supportPath,{method:'POST',token:administrator,
   body:{expectedStatus:'incelemede',to:'cozuldu'}});
  assert.equal(resolvedCase.status,200);
@@ -538,6 +543,8 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
   body:{expectedStatus:'cozuldu',to:'kapandi'}})).status,200);
  assert.equal((await request(supportPath,{method:'POST',token:administrator,
   body:{expectedStatus:'kapandi',to:'incelemede'}})).status,409);
+ const clearedQueue=await request(unresolvedPath,{token:administrator});
+ assert.equal(clearedQueue.body.cases.some((record:{id:string})=>record.id===caseId),false);
  const customerCases=await request('/v1/me/support-cases',{token:customer});
  assert.equal(customerCases.body.cases.find((c:{id:string})=>c.id===caseId).status,'kapandi');
  const history=await pool.query("SELECT details FROM audit_logs WHERE action='support_case_status' AND target_id=$1 ORDER BY id",[caseId]);
