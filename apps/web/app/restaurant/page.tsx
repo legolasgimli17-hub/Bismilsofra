@@ -164,7 +164,8 @@ function Inner({token}:{token:()=>Promise<string>}){
  },[load]);
  const connected=canActOnInbox(state,lastSyncMs,now,browserOnline);
  const selectedMerchant=list.find(r=>r.id===rid);
- const canManage=selectedMerchant?.role==='owner'||selectedMerchant?.role==='manager'||selectedMerchant?.can_manage_orders===true;
+ const canManageIntake=selectedMerchant?.role==='owner'||selectedMerchant?.role==='manager';
+ const canManage=canManageIntake||selectedMerchant?.can_manage_orders===true;
  async function toggleDetail(id:string){
   if(openOrder===id){setOpenOrder(null);return}setOpenOrder(id);
   if(details[id])return;
@@ -239,6 +240,7 @@ function Inner({token}:{token:()=>Promise<string>}){
   <div className="panel merchant-control-bar"><label htmlFor="merchant-restaurant-select">Restoran
    <select id="merchant-restaurant-select" value={rid} onChange={e=>{saveSelectedMerchantId(e.target.value);setRid(e.target.value)}}>{list.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
    <div className="merchant-role-info">{canManage?'Sipariş yönetme yetkin var.':'Yalnızca görüntüleme yetkisi; işlem yapılamaz.'}</div></div>
+  {rid&&canManageIntake&&<MerchantOrderIntake key={rid} rid={rid} token={token} connected={connected}/>}
   {!rid?<div className="empty">Bu hesap için restoran yetkisi tanımlı değil.</div>:<div className="merchant-columns">
    <section className="panel merchant-column"><div className="merchant-column-title"><h2><Bell size={19}/> Yeni siparişler</h2><span className="merchant-count">{pending.length}</span></div>
     {pending.length===0?<div className="empty"><h3>{connected?'Şu anda yeni sipariş yok':'Veriler eşitlenemedi'}</h3><p>{connected?'Yeni gelen siparişler burada gösterilecek.':'Yeniden bağlanınca liste güncellenecek.'}</p></div>:pending.map(orderCard)}</section>
@@ -247,5 +249,48 @@ function Inner({token}:{token:()=>Promise<string>}){
   </div>}
   <div className="notice">Bu operasyon paneli bir geliştirme sürümüdür. Üretim için güvenilir push/ikincil alarm, gerçek PostgreSQL ve kimlik sağlayıcısı entegrasyonu test edilmelidir.</div>
   <div className="merchant-settings-links"><Link href="/restaurant/overview" className="btn outline">Genel bakış</Link>{(selectedMerchant?.role==='owner'||selectedMerchant?.role==='manager'||selectedMerchant?.can_manage_menu===true)&&<Link href="/restaurant/manage" className="btn primary">Restoranı ve menüyü yönet</Link>}<Link href="/">Müşteri görünümüne dön</Link></div>
+ </section>;
+}
+type OrderIntake={active:boolean;accepts_orders:boolean};
+function MerchantOrderIntake({rid,token,connected}:{rid:string;token:()=>Promise<string>;connected:boolean}){
+ const [intake,setIntake]=useState<OrderIntake|null>(null);
+ const [busy,setBusy]=useState(true);
+ const [error,setError]=useState('');
+ const path=`/v1/restaurant/${rid}/order-intake`;
+ const read=useCallback(async()=>{
+  setBusy(true);setError('');
+  try{setIntake(await api<OrderIntake>(path,await token()))}
+  catch(e){setIntake(null);setError(e instanceof Error?e.message:'Sipariş alım durumu okunamadı.')}
+  finally{setBusy(false)}
+ },[path,token]);
+ useEffect(()=>{void read()},[read]);
+ async function toggle(){
+  if(!intake?.active||!connected||busy)return;
+  const desired=!intake.accepts_orders;
+  if(!desired&&!window.confirm('Yeni sipariş alımı durdurulsun mu? Mevcut siparişleri yönetmeye devam edebilirsiniz.'))return;
+  setBusy(true);setError('');
+  try{
+   setIntake(await api<OrderIntake>(path,await token(),{
+    method:'PATCH',body:JSON.stringify({acceptsOrders:desired,expectedAcceptsOrders:intake.accepts_orders})
+   }));
+  }catch(e){
+   setIntake(null);
+   setError(e instanceof Error?e.message:'Değişiklik doğrulanamadı. Sipariş alım durumunu yeniden kontrol edin.');
+  }finally{setBusy(false)}
+ }
+ return <section className="panel merchant-control-bar" aria-label="Yeni sipariş alımı">
+  <div>
+   <strong role="status">{busy?'Sipariş alım durumu kontrol ediliyor…':
+    !intake?'Sipariş alım durumu bilinmiyor':!intake.active?'Restoran yayında değil':
+    intake.accepts_orders?'Yeni sipariş alım ayarı açık':'Yeni sipariş alımı duraklatıldı'}</strong>
+   <p className="muted">Bu ayar yeni siparişleri etkiler. Çalışma saatleri ve teslimat bölgeleri ayrıca uygulanır.</p>
+   {error&&<p className="notice error" role="alert">{error}</p>}
+  </div>
+  <div className="merchant-settings-links">
+   {intake?.active&&<button type="button" className="btn outline" disabled={busy||!connected} onClick={()=>void toggle()}>
+    {intake.accepts_orders?'Yeni siparişleri duraklat':'Yeni sipariş alımını aç'}
+   </button>}
+   <button type="button" className="btn outline" disabled={busy} onClick={()=>void read()}>Alım durumunu yenile</button>
+  </div>
  </section>;
 }
