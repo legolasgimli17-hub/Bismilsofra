@@ -3,6 +3,7 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import Link from 'next/link';
 import AuthGate from '@/components/auth-gate';
 import {api} from '@/lib/api';
+import {canViewMerchantInbox} from '@/lib/workspace-access';
 import {money,statusText} from '@/lib/types';
 import {readSelectedMerchantId,saveSelectedMerchantId} from '@/lib/merchant-selection';
 import {ArrowRight,RefreshCw,Bell,ClipboardList,Store,UtensilsCrossed,ChartColumnIncreasing,Settings2,UsersRound,ShieldCheck,AlertTriangle,CheckCircle2,Clock3,Wallet} from 'lucide-react';
@@ -35,7 +36,7 @@ function Content({token}:{token:()=>Promise<string>}){
  },[token]);
  const selected=restaurants.find(r=>r.id===rid);
  const financial=selected?.role==='owner'||selected?.role==='manager';
- const canViewOrders=Boolean(financial||selected?.can_view_orders||selected?.can_manage_orders);
+ const canViewOrders=canViewMerchantInbox(selected);
  const load=useCallback(async()=>{
   if(!rid)return;
   const run=++sequence.current;
