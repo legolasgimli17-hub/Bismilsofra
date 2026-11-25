@@ -1083,10 +1083,12 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  // intentional per-IP rate limiting test without changing production limits.
  const lifecyclePort=await freePort();
  const lifecycleBase='http://127.0.0.1:'+lifecyclePort;
+ const gatewayPort=await freePort();
+ const gatewayBase='http://127.0.0.1:'+gatewayPort;
  let lifecycleLog='';
  const lifecycleChild=spawn(process.execPath,['--experimental-strip-types','apps/api/src/server.ts'],{
   cwd:process.cwd(),stdio:['ignore','pipe','pipe'],
-  env:{...process.env,DATABASE_URL:connection,CORS_ORIGIN:lifecycleBase,
+  env:{...process.env,DATABASE_URL:connection,CORS_ORIGIN:gatewayBase,
    OIDC_ISSUER:issuer,OIDC_AUDIENCE:audience,OIDC_JWKS_URL:issuer+'.well-known/jwks.json',
    PORT:String(lifecyclePort),NODE_ENV:'test'}
  });
@@ -1175,11 +1177,29 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal(roleChecks.length,10);
  assert.ok(roleChecks.some((check:{check:string;status:number})=>check.check==='merchant stream ready'&&check.status===200));
 
+ // Use a stub web upstream here; the browser order actions use the real API.
+ const {createPrivateStagingGateway}=await import('../../../tools/private-staging-gateway.mjs');
+ const webFixture=createServer((_req,res)=>res.end('sofra-web-fixture'));
+ const webPort=await freePort();
+ await new Promise<void>(resolve=>webFixture.listen(webPort,'127.0.0.1',resolve));
+ t.after(()=>{webFixture.close()});
+ const gateway=createPrivateStagingGateway({webPort,apiPort:lifecyclePort});
+ await new Promise<void>(resolve=>gateway.listen(gatewayPort,'127.0.0.1',resolve));
+ t.after(()=>{gateway.closeAllConnections();gateway.close()});
+ assert.equal(await (await fetch(gatewayBase+'/')).text(),'sofra-web-fixture');
+ const stream=await fetch(gatewayBase+'/v1/restaurant/'+rid+'/events',{
+  headers:{Authorization:'Bearer '+owner},signal:AbortSignal.timeout(5000)
+ });
+ assert.equal(stream.status,200);
+ const streamReader=stream.body!.getReader();
+ try{assert.match(new TextDecoder().decode((await streamReader.read()).value),/event: ready/)}
+ finally{await streamReader.cancel()}
+
  // Exercise the customer and merchant from separate Chromium storage contexts.
  const browserRun=await promisify(execFile)(process.execPath,['tools/two-browser-order.mjs'],{
   timeout:35000,
   env:{...process.env,SOFRA_BROWSER_FIXTURE:JSON.stringify({
-   base:lifecycleBase,customer,owner,payload,address:alteredAddress
+   base:gatewayBase,customer,owner,payload,address:alteredAddress
   })}
  });
  assert.match(browserRun.stdout,/TWO_BROWSER_ORDER_PASS/);
