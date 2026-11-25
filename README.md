@@ -12,6 +12,8 @@
 
 Restoran gelen sipariş listesinin yanı sıra hazırlanmakta ve teslimatta olan siparişler de panele eklendi. Yetkili işletme çalışanları ürünleri ve teslimat ayrıntılarını açıp görebiliyor; sipariş durumlarının tam sıralı akışını yönetebiliyor. Müşteri adresleri arka plan liste yenilemelerinde taşınmıyor. [Değişikliklerin ayrıntısı](DEGISIKLIKLER_v0_9.md).
 
+İki fiziksel telefonla izole test siparişi için [özel HTTPS prova kurulumu](docs/PRIVATE_PHONE_REHEARSAL.md).
+
 ## Yerel geliştirme
 
 Gereksinimler: Node.js >=22.16, npm, PostgreSQL, gerçek OIDC sağlayıcısı. Bağımlılıkları kurmak için internet gerekir.
