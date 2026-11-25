@@ -115,4 +115,9 @@ API'nin tanıdığı `amr: ["mfa"]` işareti veya aynı güven seviyesindeki adl
 9. Web giriş/kayıt, e-posta doğrulaması, çıkış ve şifre sıfırlamayı **telefon ve masaüstü üzerinde** tamamla. Kısıtlı hesap/MFA'sız/yanlış tenant/yanlış audience/bozuk imza erişimini reddettiğini doğrula; daha sonra `node tools/staging-preflight.mjs` ile HTTPS API sağlık kontrolünü yap. Üç gerçek API access token'ı ile `npm run test:real-oidc-staging` varsa salt okunur rol testini, token'ları yalnız gizli terminalde tanımlayarak çalıştır.
 10. Her operatör ve cihaz için **tarih, alan adı, gerçek gözlenen sonuç, test kullanıcısı referansı ve PII içermeyen kanıt** kaydet. Gerçekten yapılmadan `docs/pilot-release-evidence.json` kapılarını `verified` yapma.
 
-**Not:** Repo bu anda `test:real-oidc-staging` scriptini ana sürümde içermeyebilir; ilgili güvenli kontrol aracı yalnızca kod dalında varsa çalıştır. Buna alternatif olarak gerçek üç hesapla API rol ve MFA ret kontrolünü manuel yap. Auth0 şifre sıfırlama ve e-posta teslimi bir yazılım derlemesinden kanıtlanamaz.
+
+### Staging yetki ve sipariş bağlantısı kontrolü
+
+`STAGING_API_URL` izole HTTPS API adresi, `STAGING_RESTAURANT_ID` test restoranının kimliği olmalıdır. Sadece bu ortamdaki üç ayrı test hesabının kısa ömürlü API erişim belirteçlerini geçici olarak `STAGING_CUSTOMER_ACCESS_TOKEN`, `STAGING_MERCHANT_ACCESS_TOKEN` ve `STAGING_ADMIN_ACCESS_TOKEN` ortam değişkenlerine yükleyin. Restoran hesabı test restoranının sahibi olmalıdır. Ardından `npm run test:real-oidc-staging` çalıştırın. İş bitince bu üç değişkeni oturumdan kaldırın.
+
+Araç yalnız GET çağrılarıyla veritabanı hazırlığını, müşteri sipariş listesini, restoran rolü ve kuyruğunu, canlı bağlantının hazır sinyalini, yönetici erişimini ve yetkisiz rol retlerini kontrol eder. Çıktı yalnız kontrol adları ve HTTP durumları içerir. API ilk doğrulanmış girişte yerel kullanıcı kaydı oluşturabilir. Bu kontrol tarayıcı kaydını, parola sıfırlamayı, fiziksel cihazları veya sipariş teslimatını tek başına doğrulamaz.
