@@ -803,12 +803,24 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal((await request('/v1/restaurant/'+rid+'/zones/'+zid,{method:'PATCH',token:customer,body:policy(false)})).status,403);
  const disabledZone=await request('/v1/restaurant/'+rid+'/zones/'+zid,{method:'PATCH',token:owner,body:policy(false)});
  assert.equal(disabledZone.status,200,JSON.stringify(disabledZone.body));
+ const unavailableMenu=await request('/v1/restaurants/'+rid+'/menu?zoneId='+zid);
+ assert.equal(unavailableMenu.status,200);
+ assert.equal(unavailableMenu.body.delivery.available,false);
+ assert.equal(unavailableMenu.body.delivery.delivery_fee_kurus,null);
  const discoveryWithoutZone=await request('/v1/restaurants?zoneId='+zid);
  assert.equal(discoveryWithoutZone.status,200);
  assert.equal(discoveryWithoutZone.body.restaurants.some((r:{id:string})=>r.id===rid),false);
  assert.equal((await request('/v1/restaurant/'+rid+'/zones/'+randomUUID(),{
   method:'PATCH',token:owner,body:policy(true)})).status,404);
  assert.equal((await request('/v1/restaurant/'+rid+'/zones/'+zid,{method:'PATCH',token:owner,body:policy(originalZone!.enabled)})).status,200);
+ const neighborhoodMenu=await request('/v1/restaurants/'+rid+'/menu?zoneId='+zid);
+ assert.equal(neighborhoodMenu.status,200);
+ assert.equal(neighborhoodMenu.body.delivery.available,true);
+ assert.equal(neighborhoodMenu.body.delivery.min_basket_kurus,originalZone.min_basket_kurus);
+ assert.equal(neighborhoodMenu.body.delivery.delivery_fee_kurus,originalZone.delivery_fee_kurus);
+ assert.equal((await request('/v1/restaurants/'+rid+'/menu?zoneId='+randomUUID())).body.delivery,null);
+ assert.equal((await request('/v1/restaurants/'+rid+'/menu?zoneId=nope')).status,400);
+ assert.equal((await request('/v1/restaurants/'+rid+'/menu')).body.delivery,null);
  const savedManagement=await request('/v1/restaurant/'+rid+'/management',{token:owner});
  assert.equal(savedManagement.status,200);
  assert.deepEqual(savedManagement.body.hours,baseManagement.body.hours);
