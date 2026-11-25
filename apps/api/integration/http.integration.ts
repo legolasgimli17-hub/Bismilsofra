@@ -6,7 +6,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
-import {spawn,type ChildProcess} from 'node:child_process';
+import {execFile,spawn,type ChildProcess} from 'node:child_process';
+import {promisify} from 'node:util';
 import {randomUUID} from 'node:crypto';
 import {Pool} from 'pg';
 import {exportJWK,generateKeyPair,SignJWT} from 'jose';
@@ -1163,6 +1164,16 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal(otherHistory.body.orders.some((order:{id:string})=>order.id===orderId),false);
  assert.equal((await lifecycleRequest('/v1/me/orders?view=invalid',{token:customer})).status,400);
  assert.equal((await lifecycleRequest('/v1/me/orders?view=history&page=0',{token:customer})).status,400);
+
+ // Exercise the deployment preflight against the same real HTTP API with fixture identities.
+ const preflight=await promisify(execFile)(process.execPath,['--experimental-strip-types','tools/real-oidc-staging.mjs'],{
+  timeout:20000,
+  env:{...process.env,STAGING_API_URL:lifecycleBase,STAGING_RESTAURANT_ID:rid,
+   STAGING_CUSTOMER_ACCESS_TOKEN:customer,STAGING_MERCHANT_ACCESS_TOKEN:owner,STAGING_ADMIN_ACCESS_TOKEN:administrator}
+ });
+ const roleChecks=JSON.parse(preflight.stdout).checks;
+ assert.equal(roleChecks.length,10);
+ assert.ok(roleChecks.some((check:{check:string;status:number})=>check.check==='merchant stream ready'&&check.status===200));
 
  // Deliberately run last: spoofing a different client IP in X-Forwarded-For
  // must NOT bypass the per-origin order limiter when no peer is trusted.
