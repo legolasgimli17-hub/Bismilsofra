@@ -1,0 +1,8 @@
+# Private rehearsal with fictional data only. Combine with staging.compose.yml.
+# The base Compose file binds the API host port to 127.0.0.1.
+name: bismil-sofra-rehearsal
+services:
+  api:
+    environment:
+      NODE_ENV: test
+      PILOT_ACTIVE_RESTAURANTS_MAX: "5"
