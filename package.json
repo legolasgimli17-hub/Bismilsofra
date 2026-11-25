@@ -25,6 +25,7 @@
     "test:menu-discovery": "node --experimental-strip-types --test apps/web/lib/menu-discovery.test.ts",
     "test:recent-orders": "node --experimental-strip-types --test apps/web/lib/recent-orders.test.ts",
     "test:portals": "node --experimental-strip-types --test apps/web/lib/workspace-access.test.ts",
+    "test:real-oidc-staging": "node --experimental-strip-types tools/real-oidc-staging.mjs",
     "test:auth-redirect": "node --experimental-strip-types --test apps/web/lib/auth-redirect.test.ts"
   }
 }
