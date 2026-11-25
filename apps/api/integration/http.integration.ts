@@ -1086,7 +1086,7 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  let lifecycleLog='';
  const lifecycleChild=spawn(process.execPath,['--experimental-strip-types','apps/api/src/server.ts'],{
   cwd:process.cwd(),stdio:['ignore','pipe','pipe'],
-  env:{...process.env,DATABASE_URL:connection,CORS_ORIGIN:'http://127.0.0.1:3000',
+  env:{...process.env,DATABASE_URL:connection,CORS_ORIGIN:lifecycleBase,
    OIDC_ISSUER:issuer,OIDC_AUDIENCE:audience,OIDC_JWKS_URL:issuer+'.well-known/jwks.json',
    PORT:String(lifecyclePort),NODE_ENV:'test'}
  });
