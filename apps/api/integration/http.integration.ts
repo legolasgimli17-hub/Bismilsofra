@@ -1175,6 +1175,16 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal(roleChecks.length,10);
  assert.ok(roleChecks.some((check:{check:string;status:number})=>check.check==='merchant stream ready'&&check.status===200));
 
+ // Exercise the customer and merchant from separate Chromium storage contexts.
+ const browserRun=await promisify(execFile)(process.execPath,['tools/two-browser-order.mjs'],{
+  timeout:35000,
+  env:{...process.env,SOFRA_BROWSER_FIXTURE:JSON.stringify({
+   base:lifecycleBase,customer,owner,payload,address:alteredAddress
+  })}
+ });
+ assert.match(browserRun.stdout,/TWO_BROWSER_ORDER_PASS/);
+ console.log(browserRun.stdout.trim());
+
  // Deliberately run last: spoofing a different client IP in X-Forwarded-For
  // must NOT bypass the per-origin order limiter when no peer is trusted.
  let responseCode=0;
