@@ -53,7 +53,7 @@ test('new order respects restaurant-specific acceptance minutes',async()=>{
   if(sql.includes('FROM orders WHERE customer_id'))return rows();
   if(sql.includes('FROM addresses a'))return rows([{zone_id:ids.zone,zone_enabled:true,zone_name:'Merkez',full_address:'Adres 1234',phone:'05000000000',label:'Ev',directions:''}]);
   if(sql.includes('FROM restaurants WHERE id'))return rows([{active:true,is_open:true,is_busy:false,accepts_orders:true}]);
-  if(sql.includes('FROM restaurant_delivery_zones'))return rows([{min_basket_kurus:100,delivery_fee_kurus:500}]);
+  if(sql.includes('FROM restaurant_delivery_zones'))return rows([{min_basket_kurus:100,delivery_fee_kurus:500,delivery_min_minutes:20,delivery_max_minutes:35}]);
   if(sql.includes('SELECT EXISTS'))return rows([{allowed:true}]);
   if(sql.includes('FROM restaurant_closures'))return rows();
   if(sql.includes('FROM restaurant_settings'))return rows([{accept_minutes:9}]);
@@ -66,7 +66,7 @@ test('new order respects restaurant-specific acceptance minutes',async()=>{
  const result=await placeOrder(db,ids.user,{...input,confirmedTotalKurus:12500},key);
  assert.equal(result.id,ids.order);assert.equal(result.totals?.totalKurus,12500);
  const insert=db.seen.find((q:any)=>q.sql.includes('INSERT INTO orders'));
- assert.equal(insert.params.at(-1),9);
+ assert.deepEqual(insert.params.slice(11),[9,20,35]);
  assert.match(insert.sql,/interval '1 minute'/);
 });
 test('restaurant cannot update an order if staff permission is missing',async()=>{
