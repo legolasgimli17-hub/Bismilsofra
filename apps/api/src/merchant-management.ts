@@ -53,6 +53,6 @@ export function parseZonePolicy(value:unknown):ZonePolicy{
     typeof estimate.min!=='number'||typeof estimate.max!=='number'||
     !Number.isInteger(estimate.min)||!Number.isInteger(estimate.max)||
     estimate.min<5||estimate.max>180||estimate.max<estimate.min)
-  invalid('DELIVERY_ESTIMATE_INVALID','Tahmini teslimat aralığı 5–180 dakika içinde olmalı.');
+  return invalid('DELIVERY_ESTIMATE_INVALID','Tahmini teslimat aralığı 5–180 dakika içinde olmalı.');
  return {...policy,estimate:{min:estimate.min,max:estimate.max}};
 }
