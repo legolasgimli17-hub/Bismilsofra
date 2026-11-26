@@ -95,13 +95,33 @@ try{
  const payload={...fixture.payload,addressId:address.body.id};
  const quote=await customer.request('/v1/orders/quote',{method:'POST',body:payload});
  assert.equal(quote.status,200,'customer browser receives quote');
- const order=await customer.request('/v1/orders',{method:'POST',key:'ci-browser-'+randomUUID(),
-  body:{...payload,confirmedTotalKurus:quote.body.totals.totalKurus}});
+ const attempt={key:randomUUID(),body:{...payload,confirmedTotalKurus:quote.body.totals.totalKurus}};
+ await evaluate(customer.sessionId,`sessionStorage.setItem('sofra-pending-order:fixture',${JSON.stringify(JSON.stringify(attempt))})`);
+ const order=await customer.request('/v1/orders',{method:'POST',...attempt});
  assert.equal(order.status,201,'customer browser places test order');
  const id=order.body.id;
+ // Discard the first response as a checkout UI would after losing connectivity.
+ // The new document can recover the order using only the previous session record.
+ const beforeReload=await evaluate(customer.sessionId,'performance.timeOrigin');
+ await command('Page.reload',{},customer.sessionId);
+ let reloaded=false;
+ for(let i=0;i<60;i++){
+  try{reloaded=await evaluate(customer.sessionId,'performance.timeOrigin')!==beforeReload}catch{}
+  if(reloaded)break;
+  await delay(100);
+ }
+ assert(reloaded,'customer document must actually reload');
+ const recovered=await evaluate(customer.sessionId,"JSON.parse(sessionStorage.getItem('sofra-pending-order:fixture'))");
+ assert.deepEqual(recovered,attempt);
+ const lookup=await customer.request('/v1/me/orders/by-key/'+recovered.key);
+ assert.equal(lookup.status,200);
+ assert.equal(lookup.body.order.id,id);
+ const retry=await customer.request('/v1/orders',{method:'POST',...recovered});
+ assert.equal(retry.status,200);
+ assert.equal(retry.body.id,id);
  const queue=await merchant.request(inbox);
  assert.equal(queue.status,200);
- assert(queue.body.pending.some(x=>x.id===id),'merchant browser sees pending order');
+ assert.equal(queue.body.pending.filter(x=>x.id===id).length,1,'merchant browser sees the original order once');
  for(const status of ['kabul_edildi','hazirlaniyor','hazir','yolda','teslim_edildi']){
   const next=await merchant.request('/v1/restaurant/'+rid+'/orders/'+id+'/status',{method:'POST',body:{to:status}});
   assert.equal(next.status,200,'merchant advances to '+status);
@@ -110,7 +130,7 @@ try{
   assert.equal(view.body.order.status,status);
   assert.equal(view.body.order.total_kurus,quote.body.totals.totalKurus);
  }
- console.log('TWO_BROWSER_ORDER_PASS: quote, create, merchant inbox, 5 status transitions, customer tracking');
+ console.log('TWO_BROWSER_ORDER_PASS: quote, create, reload and retry, merchant inbox, 5 status transitions, customer tracking');
 }finally{
  socket?.close();
  if(chrome.exitCode===null){

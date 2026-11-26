@@ -27,3 +27,9 @@ export function canSubmitMerchantAction(status:string,to:string,reason:string,on
  return !next.requiresReason||reason.trim().length>=5;
 }
 export const isMerchantOpenStatus=(status:string)=>status==='beklemede'||['kabul_edildi','hazirlaniyor','hazir','yolda'].includes(status);
+
+export function acceptanceSeconds(expiresAt:string,estimatedServerNow:number):number|null{
+ const expiry=Date.parse(expiresAt);
+ if(!Number.isFinite(expiry)||!Number.isFinite(estimatedServerNow))return null;
+ return Math.max(0,Math.ceil((expiry-estimatedServerNow)/1000));
+}
