@@ -20,7 +20,9 @@ const binary=process.env.CHROME_BINARY||['google-chrome','chromium','chromium-br
 assert(binary,'Chromium not found');
 const profile=await mkdtemp(join(tmpdir(),'sofra-two-browser-'));
 const chrome=spawn(binary,['--headless=new','--disable-gpu','--no-sandbox','--disable-dev-shm-usage',
- '--remote-debugging-port=0','--user-data-dir='+profile,'about:blank'],{stdio:'ignore'});
+ '--remote-debugging-port=0','--user-data-dir='+profile,'about:blank'],{stdio:['ignore','ignore','pipe']});
+let chromiumErrors='';
+chrome.stderr?.on('data',chunk=>{chromiumErrors=(chromiumErrors+String(chunk)).slice(-900)});
 let socket;
 let messageId=0;
 const pending=new Map();
@@ -63,7 +65,7 @@ async function openBrowser(token,width,height){
 }
 try{
  let endpoint;
- for(let i=0;i<100;i++){
+ for(let i=0;i<240;i++){
   if(chrome.exitCode!==null)throw Error('Chromium did not start');
   try{
    const [port,path]=(await readFile(join(profile,'DevToolsActivePort'),'utf8')).trim().split(/\r?\n/);
@@ -71,7 +73,7 @@ try{
   }catch{}
   await delay(100);
  }
- assert(endpoint,'Chromium DevTools endpoint missing');
+ assert(endpoint,'Chromium DevTools endpoint missing. '+chromiumErrors);
  socket=new WebSocket(endpoint);
  await new Promise((resolve,reject)=>{
   socket.addEventListener('open',resolve,{once:true});
