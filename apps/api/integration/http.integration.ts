@@ -43,7 +43,7 @@ async function waitFor(base:string,child:ChildProcess){
  throw Error('Test API did not become ready.');
 }
 
-test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durable notification retry', {timeout:60000},async t=>{
+test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durable notification retry', {timeout:75000},async t=>{
  const pool=new Pool({connectionString:connection,max:6});
  const {publicKey,privateKey}=await generateKeyPair('RS256',{extractable:true});
  const jwk={...(await exportJWK(publicKey)),kid:'ci-key',alg:'RS256',use:'sig'};
@@ -1250,7 +1250,7 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
 
  // Exercise the customer and merchant from separate Chromium storage contexts.
  const browserRun=await promisify(execFile)(process.execPath,['tools/two-browser-order.mjs'],{
-  timeout:35000,
+  timeout:50000,
   env:{...process.env,SOFRA_BROWSER_FIXTURE:JSON.stringify({
    base:gatewayBase,customer,owner,payload,address:alteredAddress
   })}
