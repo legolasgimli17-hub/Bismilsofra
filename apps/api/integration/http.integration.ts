@@ -477,6 +477,7 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal(address.status,201,JSON.stringify(address.body));
  const addrId=address.body.id as string;
  const payload={restaurantId:rid,addressId:addrId,paymentMethod:'cash',items:[{productId:pid,quantity:1,optionIds:[extra]}],note:'Az acılı'};
+ await pool.query('UPDATE restaurant_delivery_zones SET delivery_min_minutes=20,delivery_max_minutes=35 WHERE restaurant_id=$1 AND zone_id=$2',[rid,zid]);
  const quote=await request('/v1/orders/quote',{method:'POST',token:customer,body:payload});
  assert.equal(quote.status,200,JSON.stringify(quote.body));
  assert.equal(quote.body.totals.totalKurus,21500);
@@ -485,16 +486,25 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
   body:{...payload,confirmedTotalKurus:21499}});
  assert.equal(stale.status,409);
  assert.equal(stale.body.code,'PRICE_CHANGED');
- const correct={...payload,confirmedTotalKurus:quote.body.totals.totalKurus};
+ const correct={...payload,confirmedTotalKurus:quote.body.totals.totalKurus,confirmedDeliveryEstimate:{min:20,max:35}};
+ assert.equal(quote.body.delivery_min_minutes,20);
+ assert.equal(quote.body.delivery_max_minutes,35);
+ const staleEta=await request('/v1/orders',{method:'POST',token:customer,headers:{'Idempotency-Key':orderKey},
+  body:{...correct,confirmedDeliveryEstimate:{min:20,max:25}}});
+ assert.equal(staleEta.status,409);
+ assert.equal(staleEta.body.code,'DELIVERY_ESTIMATE_CHANGED');
  const placed=await request('/v1/orders',{method:'POST',token:customer,headers:{'Idempotency-Key':orderKey},body:correct});
  assert.equal(placed.status,201,JSON.stringify(placed.body));
  const orderId=placed.body.id as string;
+ await pool.query('UPDATE restaurant_delivery_zones SET delivery_min_minutes=NULL,delivery_max_minutes=NULL WHERE restaurant_id=$1 AND zone_id=$2',[rid,zid]);
  const retry=await request('/v1/orders',{method:'POST',token:customer,headers:{'Idempotency-Key':orderKey},body:correct});
  assert.equal(retry.status,200);
  assert.equal(retry.body.id,orderId);
  assert.equal((await request('/v1/me/orders/by-key/'+orderKey,{token:customer})).body.order.id,orderId);
  const ownOrder=await request('/v1/me/orders/'+orderId,{token:customer});
  assert.equal(ownOrder.status,200);
+ assert.equal(ownOrder.body.order.delivery_min_minutes,20);
+ assert.equal(ownOrder.body.order.delivery_max_minutes,35);
  // Reorder source is owner-scoped and exposes historical IDs, never another customer's basket.
  assert.equal(ownOrder.body.items[0].product_id,pid);
  assert.ok(ownOrder.body.items[0].options_snapshot.some((o:{id:string})=>o.id===extra));

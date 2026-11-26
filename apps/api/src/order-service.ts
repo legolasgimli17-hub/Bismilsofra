@@ -24,7 +24,7 @@ export async function placeOrder(pool:Pool,subjectUserId:string,body:unknown,key
   const address=addr.rows[0];
   const rr=await db.query('SELECT id,active,is_open,is_busy,accepts_orders FROM restaurants WHERE id=$1 FOR SHARE',[request.restaurantId]);
   if(!rr.rowCount||!rr.rows[0].active||!rr.rows[0].is_open||rr.rows[0].is_busy||!rr.rows[0].accepts_orders)invalid('RESTAURANT_CLOSED','Restoran şu anda sipariş kabul etmiyor.',409);
-  const dz=await db.query('SELECT min_basket_kurus,delivery_fee_kurus FROM restaurant_delivery_zones WHERE restaurant_id=$1 AND zone_id=$2 AND enabled=true FOR SHARE',[request.restaurantId,address.zone_id]);
+  const dz=await db.query('SELECT min_basket_kurus,delivery_fee_kurus,delivery_min_minutes,delivery_max_minutes FROM restaurant_delivery_zones WHERE restaurant_id=$1 AND zone_id=$2 AND enabled=true FOR SHARE',[request.restaurantId,address.zone_id]);
   if(!dz.rowCount)invalid('ZONE_UNAVAILABLE','Restoran bu mahalleye teslimat yapmıyor.',409);
   // Strict schedule matching in the restaurant-local Europe/Istanbul timezone.
   // A restaurant with no saved schedule is NOT considered open for live ordering.
@@ -52,9 +52,19 @@ export async function placeOrder(pool:Pool,subjectUserId:string,body:unknown,key
   const expected=confirmation.confirmedTotalKurus;
   if(!Number.isSafeInteger(expected)||Number(expected)<0)invalid('CONFIRMATION_REQUIRED','Sipariş özeti ve güncel toplam onaylanmalıdır.',400);
   if(expected!==totals.totalKurus)invalid('PRICE_CHANGED','Sepetin güncel tutarı değişti. Yeni toplamı kontrol edip tekrar onaylayın.',409);
+  const {delivery_min_minutes,delivery_max_minutes}=dz.rows[0];
+  const confirmedEstimate=confirmation.confirmedDeliveryEstimate;
+  if(confirmedEstimate!==undefined){
+   const matches=confirmedEstimate===null
+    ?delivery_min_minutes===null&&delivery_max_minutes===null
+    :typeof confirmedEstimate==='object'&&!Array.isArray(confirmedEstimate)&&
+     (confirmedEstimate as Record<string,unknown>).min===delivery_min_minutes&&
+     (confirmedEstimate as Record<string,unknown>).max===delivery_max_minutes;
+   if(!matches)invalid('DELIVERY_ESTIMATE_CHANGED','Tahmini teslimat süresi değişti. Yeni özeti kontrol edip tekrar onaylayın.',409);
+  }
   const addressSnapshot={zoneId:address.zone_id,zone:address.zone_name,address:address.full_address,directions:address.directions,phone:address.phone,label:address.label};
-  const inserted=await db.query(`INSERT INTO orders(customer_id,restaurant_id,address_id,address_snapshot,payment_method,status,subtotal_kurus,delivery_fee_kurus,total_kurus,note,idempotency_key,payload_hash,expires_at)
-    VALUES($1,$2,$3,$4::jsonb,$5,'beklemede',$6,$7,$8,$9,$10,$11,now()+($12::int * interval '1 minute')) RETURNING id`,[subjectUserId,request.restaurantId,request.addressId,JSON.stringify(addressSnapshot),request.paymentMethod,totals.subtotalKurus,totals.deliveryFeeKurus,totals.totalKurus,request.note,request.idempotencyKey,hash,acceptMinutes]);
+  const inserted=await db.query(`INSERT INTO orders(customer_id,restaurant_id,address_id,address_snapshot,payment_method,status,subtotal_kurus,delivery_fee_kurus,total_kurus,note,idempotency_key,payload_hash,expires_at,delivery_min_minutes,delivery_max_minutes)
+    VALUES($1,$2,$3,$4::jsonb,$5,'beklemede',$6,$7,$8,$9,$10,$11,now()+($12::int * interval '1 minute'),$13,$14) RETURNING id`,[subjectUserId,request.restaurantId,request.addressId,JSON.stringify(addressSnapshot),request.paymentMethod,totals.subtotalKurus,totals.deliveryFeeKurus,totals.totalKurus,request.note,request.idempotencyKey,hash,acceptMinutes,delivery_min_minutes,delivery_max_minutes]);
   const orderId=inserted.rows[0].id;
   for(const line of totals.items){await db.query('INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_kurus,quantity,line_total_kurus,options_snapshot) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)',[orderId,line.productId,line.name,line.unitKurus,line.qty,line.lineKurus,JSON.stringify(line.optionSnapshots)]);}
   await db.query(`INSERT INTO order_events(order_id,previous_status,new_status,actor_type,actor_user_id) VALUES ($1,NULL,'beklemede','system',NULL)`,[orderId]);
@@ -147,7 +157,7 @@ export async function quoteOrder(pool:Pool,subjectUserId:string,body:unknown){
   if(!addr.rowCount||!addr.rows[0].zone_enabled)invalid('ADDRESS_UNAVAILABLE','Adres bulunamadı veya mahalle kapalı.',404);
   const rr=await db.query('SELECT id,active,is_open,is_busy,accepts_orders FROM restaurants WHERE id=$1',[request.restaurantId]);
   if(!rr.rowCount||!rr.rows[0].active||!rr.rows[0].is_open||rr.rows[0].is_busy||!rr.rows[0].accepts_orders)invalid('RESTAURANT_CLOSED','Restoran sipariş kabul etmiyor.',409);
-  const dz=await db.query('SELECT min_basket_kurus,delivery_fee_kurus FROM restaurant_delivery_zones WHERE restaurant_id=$1 AND zone_id=$2 AND enabled=true',[request.restaurantId,addr.rows[0].zone_id]);
+  const dz=await db.query('SELECT min_basket_kurus,delivery_fee_kurus,delivery_min_minutes,delivery_max_minutes FROM restaurant_delivery_zones WHERE restaurant_id=$1 AND zone_id=$2 AND enabled=true',[request.restaurantId,addr.rows[0].zone_id]);
   if(!dz.rowCount)invalid('ZONE_UNAVAILABLE','Bu mahalleye teslimat yok.',409);
   const hours=await db.query(`SELECT EXISTS(SELECT 1 FROM restaurant_hours h WHERE h.restaurant_id=$1 AND
     ((h.open_time<h.close_time AND h.day_of_week=EXTRACT(DOW FROM (now() AT TIME ZONE 'Europe/Istanbul')) AND (now() AT TIME ZONE 'Europe/Istanbul')::time >= h.open_time AND (now() AT TIME ZONE 'Europe/Istanbul')::time < h.close_time)
@@ -164,6 +174,7 @@ export async function quoteOrder(pool:Pool,subjectUserId:string,body:unknown){
   const opts=groupIds.length?(await db.query('SELECT id,group_id,name,price_kurus,available FROM options WHERE group_id=ANY($1::uuid[])',[groupIds])).rows:[];
   const catalog:CatalogProduct[]=pr.rows.map(p=>({id:p.id,name:p.name,priceKurus:p.price_kurus,available:p.available,optionGroups:gr.rows.filter(g=>g.product_id===p.id).map(g=>({id:g.id,name:g.name,minSelect:g.min_select,maxSelect:g.max_select,options:opts.filter(o=>o.group_id===g.id).map(o=>({id:o.id,name:o.name,priceKurus:o.price_kurus,available:o.available}))}))}));
   const totals=calculateOrder(request.items,catalog,dz.rows[0].min_basket_kurus,dz.rows[0].delivery_fee_kurus);
-  return {totals,quotedAt:new Date().toISOString(),message:'Sipariş vermeden önce toplamı onaylayın. Fiyat sipariş anında yeniden kontrol edilir.'};
+  return {totals,delivery_min_minutes:dz.rows[0].delivery_min_minutes,
+   delivery_max_minutes:dz.rows[0].delivery_max_minutes,quotedAt:new Date().toISOString(),message:'Sipariş vermeden önce toplamı onaylayın. Fiyat sipariş anında yeniden kontrol edilir.'};
  });
 }
