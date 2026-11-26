@@ -33,3 +33,7 @@ export function acceptanceSeconds(expiresAt:string,estimatedServerNow:number):nu
  if(!Number.isFinite(expiry)||!Number.isFinite(estimatedServerNow))return null;
  return Math.max(0,Math.ceil((expiry-estimatedServerNow)/1000));
 }
+
+export function pendingBeforeDeadline<T extends {expires_at:string}>(orders:readonly T[],estimatedServerNow:number):T[]{
+ return orders.filter(order=>acceptanceSeconds(order.expires_at,estimatedServerNow)!==0);
+}
