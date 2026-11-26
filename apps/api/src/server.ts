@@ -113,9 +113,9 @@ app.get('/v1/restaurants',async(req)=>{
  const r=await pool.query(`SELECT r.id,r.name,r.slug,r.cover_url,r.is_open,r.is_busy,r.accepts_orders,
  (${CURRENTLY_ACCEPTING_SQL}) AS is_orderable,
  dz.min_basket_kurus AS min_basket_kurus,
- dz.delivery_fee_kurus AS delivery_fee_kurus FROM restaurants r
+ dz.delivery_fee_kurus AS delivery_fee_kurus,dz.delivery_min_minutes,dz.delivery_max_minutes FROM restaurants r
  -- Without a selected neighborhood, DO NOT show an arbitrary neighborhood's price.
- LEFT JOIN LATERAL (SELECT z.zone_id,z.min_basket_kurus,z.delivery_fee_kurus FROM restaurant_delivery_zones z WHERE z.restaurant_id=r.id AND z.enabled=true AND $1::uuid IS NOT NULL AND z.zone_id=$1::uuid AND EXISTS(SELECT 1 FROM delivery_zones v WHERE v.id=z.zone_id AND v.enabled=true) LIMIT 1) dz ON TRUE
+ LEFT JOIN LATERAL (SELECT z.zone_id,z.min_basket_kurus,z.delivery_fee_kurus,z.delivery_min_minutes,z.delivery_max_minutes FROM restaurant_delivery_zones z WHERE z.restaurant_id=r.id AND z.enabled=true AND $1::uuid IS NOT NULL AND z.zone_id=$1::uuid AND EXISTS(SELECT 1 FROM delivery_zones v WHERE v.id=z.zone_id AND v.enabled=true) LIMIT 1) dz ON TRUE
  WHERE r.active=true AND ($1::uuid IS NULL OR dz.zone_id IS NOT NULL)
  AND ($2::text IS NULL OR r.name ILIKE '%'||$2||'%' OR EXISTS(SELECT 1 FROM products p WHERE p.restaurant_id=r.id AND p.available=true AND p.name ILIKE '%'||$2||'%'))
  AND ($3::text IS NULL OR EXISTS(
@@ -137,7 +137,7 @@ app.get('/v1/restaurants/:id/menu',async(req)=>{
  const gids=gs.rows.map(g=>g.id);
  const os=gids.length?await pool.query('SELECT id,group_id,name,price_kurus,available FROM options WHERE group_id=ANY($1::uuid[])',[gids]):{rows:[]};
  const delivery=zoneId===undefined?null:(await pool.query(`SELECT z.name AS neighborhood,dz.enabled IS TRUE AS available,
-  dz.min_basket_kurus,dz.delivery_fee_kurus FROM delivery_zones z
+  dz.min_basket_kurus,dz.delivery_fee_kurus,dz.delivery_min_minutes,dz.delivery_max_minutes FROM delivery_zones z
   LEFT JOIN restaurant_delivery_zones dz ON dz.zone_id=z.id AND dz.restaurant_id=$1 AND dz.enabled=true
   WHERE z.id=$2 AND z.enabled=true`,[id,zoneId])).rows[0]??null;
  return {restaurant:rest.rows[0],delivery,products:ps.rows.map(p=>({...p,optionGroups:gs.rows.filter(g=>g.product_id===p.id).map(g=>({...g,options:os.rows.filter(o=>o.group_id===g.id)}))}))};
@@ -346,7 +346,7 @@ app.get('/v1/restaurant/:rid/management',async(req)=>{
     to_char(open_time,'HH24:MI') AS "openTime",
     to_char(close_time,'HH24:MI') AS "closeTime"
     FROM restaurant_hours WHERE restaurant_id=$1 ORDER BY day_of_week,open_time`,[rid]),
-  pool.query(`SELECT dz.zone_id,z.name,dz.enabled,dz.min_basket_kurus,dz.delivery_fee_kurus
+  pool.query(`SELECT dz.zone_id,z.name,dz.enabled,dz.min_basket_kurus,dz.delivery_fee_kurus,dz.delivery_min_minutes,dz.delivery_max_minutes
     FROM restaurant_delivery_zones dz JOIN delivery_zones z ON z.id=dz.zone_id
     WHERE dz.restaurant_id=$1 ORDER BY z.name LIMIT 100`,[rid]),
   pool.query('SELECT id,name,sort_order FROM categories WHERE restaurant_id=$1 ORDER BY sort_order,name LIMIT 50',[rid])
@@ -624,10 +624,13 @@ app.patch('/v1/restaurant/:rid/zones/:zid',async(req)=>{
  const input=parseZonePolicy(req.body);
  return transaction(pool,async db=>{
   const zone=await db.query(`UPDATE restaurant_delivery_zones
-    SET enabled=$1,min_basket_kurus=$2,delivery_fee_kurus=$3
+    SET enabled=$1,min_basket_kurus=$2,delivery_fee_kurus=$3,
+      delivery_min_minutes=CASE WHEN $6::boolean THEN $7::integer ELSE delivery_min_minutes END,
+      delivery_max_minutes=CASE WHEN $6::boolean THEN $8::integer ELSE delivery_max_minutes END
     WHERE restaurant_id=$4 AND zone_id=$5
-    RETURNING zone_id,enabled,min_basket_kurus,delivery_fee_kurus`,
-   [input.enabled,input.minBasketKurus,input.deliveryFeeKurus,rid,zid]);
+    RETURNING zone_id,enabled,min_basket_kurus,delivery_fee_kurus,delivery_min_minutes,delivery_max_minutes`,
+   [input.enabled,input.minBasketKurus,input.deliveryFeeKurus,rid,zid,input.estimate!==undefined,
+    input.estimate?.min??null,input.estimate?.max??null]);
   if(!zone.rowCount)invalid('NOT_FOUND','Bu mahalle restorana tanımlı değil.',404);
   await db.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',
    [userId,'restaurant_zone_update','restaurant',rid,JSON.stringify({zoneId:zid,...input})]);

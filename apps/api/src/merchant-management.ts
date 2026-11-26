@@ -37,12 +37,22 @@ export function parseWeeklyHours(value:unknown):WeeklyHour[]{
  return normalized.sort((a,b)=>a.dayOfWeek-b.dayOfWeek||a.openTime.localeCompare(b.openTime));
 }
 
-export type ZonePolicy={enabled:boolean;minBasketKurus:number;deliveryFeeKurus:number};
+export type ZonePolicy={enabled:boolean;minBasketKurus:number;deliveryFeeKurus:number;estimate?:{min:number;max:number}|null};
 export function parseZonePolicy(value:unknown):ZonePolicy{
  if(!value||typeof value!=='object'||Array.isArray(value))
   invalid('ZONE_POLICY_INVALID','Teslimat bölgesi ayarları geçersiz.');
  const body=value as Record<string,unknown>;
  if(typeof body.enabled!=='boolean'||!price(body.minBasketKurus)||!price(body.deliveryFeeKurus))
   invalid('ZONE_POLICY_INVALID','Bölge aktifliği boolean; minimum sepet ve teslimat ücreti kuruş cinsinden tam sayı olmalı.');
- return {enabled:body.enabled as boolean,minBasketKurus:body.minBasketKurus as number,deliveryFeeKurus:body.deliveryFeeKurus as number};
+ const policy:ZonePolicy={enabled:body.enabled as boolean,minBasketKurus:body.minBasketKurus as number,
+  deliveryFeeKurus:body.deliveryFeeKurus as number};
+ if(body.estimate===undefined)return policy;
+ if(body.estimate===null)return {...policy,estimate:null};
+ const estimate=body.estimate as {min?:unknown;max?:unknown};
+ if(typeof estimate!=='object'||Array.isArray(estimate)||
+    typeof estimate.min!=='number'||typeof estimate.max!=='number'||
+    !Number.isInteger(estimate.min)||!Number.isInteger(estimate.max)||
+    estimate.min<5||estimate.max>180||estimate.max<estimate.min)
+  invalid('DELIVERY_ESTIMATE_INVALID','Tahmini teslimat aralığı 5–180 dakika içinde olmalı.');
+ return {...policy,estimate:{min:estimate.min,max:estimate.max}};
 }
