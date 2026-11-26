@@ -577,6 +577,17 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal(savedAddresses.body.addresses.length,30);
  assert.ok(savedAddresses.body.addresses.some((address:{id:string})=>address.id===added.id));
 
+ const supportPayload={orderId,issueType:'yanlis_urun',description:'Test siparişindeki ürün açıklaması farklı.'};
+ const sendCase=(description:string)=>pilotRequest('/v1/me/support-cases',{method:'POST',token:customer,
+  body:{...supportPayload,description}});
+ const duplicates=await Promise.all([sendCase(supportPayload.description),sendCase(' '+supportPayload.description+' ')]);
+ assert.deepEqual(duplicates.map(result=>result.status).sort(),[200,201]);
+ assert.equal(duplicates[0].body.caseId,duplicates[1].body.caseId);
+ assert.ok(duplicates.some(result=>result.body.reused===true));
+ const distinct=await sendCase('Bu kez gelen başka bir ürün hakkında yazıyorum.');
+ assert.equal(distinct.status,201);
+ assert.notEqual(distinct.body.caseId,duplicates[0].body.caseId);
+
  const unresolvedPath='/v1/admin/support-cases?status=unresolved';
  const queued=await pilotRequest(unresolvedPath,{token:administrator});
  assert.equal(queued.status,200);

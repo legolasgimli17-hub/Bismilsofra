@@ -664,11 +664,22 @@ app.post('/v1/me/support-cases',async(req,reply)=>{
  const description=typeof b.description==='string'?b.description:'';
  if(!uuid(b.orderId)||typeof b.issueType!=='string'||!allowed.includes(b.issueType)||description.trim().length<10||description.length>1200)
   invalid('SUPPORT_INVALID','Sipariş, konu ve en az 10 karakterli açıklama gerekli.');
- const result=await pool.query(`INSERT INTO support_cases(customer_id,order_id,issue_type,description)
-  SELECT $1,o.id,$3,$4 FROM orders o WHERE o.id=$2 AND o.customer_id=$1 RETURNING id,created_at`,
-  [userId,b.orderId,b.issueType,description.trim()]);
- if(!result.rowCount)invalid('NOT_FOUND','Sipariş bulunamadı.',404);
- reply.code(201);return {caseId:result.rows[0].id,createdAt:result.rows[0].created_at};
+ const normalized=description.trim();
+ const result=await transaction(pool,async db=>{
+  // The order row serializes simultaneous support submissions for this order.
+  const order=await db.query('SELECT id FROM orders WHERE id=$1 AND customer_id=$2 FOR UPDATE',[b.orderId,userId]);
+  if(!order.rowCount)invalid('NOT_FOUND','Sipariş bulunamadı.',404);
+  const existing=await db.query(`SELECT id,created_at FROM support_cases
+   WHERE customer_id=$1 AND order_id=$2 AND issue_type=$3 AND description=$4
+    AND status IN ('acik','incelemede')
+   ORDER BY created_at ASC,id ASC LIMIT 1`,[userId,b.orderId,b.issueType,normalized]);
+  if(existing.rowCount)return {row:existing.rows[0],created:false};
+  const inserted=await db.query(`INSERT INTO support_cases(customer_id,order_id,issue_type,description)
+   VALUES ($1,$2,$3,$4) RETURNING id,created_at`,[userId,b.orderId,b.issueType,normalized]);
+  return {row:inserted.rows[0],created:true};
+ });
+ reply.code(result.created?201:200);
+ return {caseId:result.row.id,createdAt:result.row.created_at,reused:!result.created};
 });
 app.get('/v1/me/support-cases',async(req)=>{
  const {userId}=await user(req);
