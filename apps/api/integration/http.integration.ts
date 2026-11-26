@@ -813,9 +813,29 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  assert.equal((await request('/v1/restaurant/'+rid+'/zones/'+randomUUID(),{
   method:'PATCH',token:owner,body:policy(true)})).status,404);
  assert.equal((await request('/v1/restaurant/'+rid+'/zones/'+zid,{method:'PATCH',token:owner,body:policy(originalZone!.enabled)})).status,200);
+ const zonePath='/v1/restaurant/'+rid+'/zones/'+zid;
+ const invalidEstimate=await pilotRequest(zonePath,{method:'PATCH',token:owner,
+  body:{...policy(true),estimate:{min:45,max:20}}});
+ assert.equal(invalidEstimate.status,400);
+ assert.equal(invalidEstimate.body.code,'DELIVERY_ESTIMATE_INVALID');
+ const setEstimate=await pilotRequest(zonePath,{method:'PATCH',token:owner,
+  body:{...policy(true),estimate:{min:20,max:35}}});
+ assert.equal(setEstimate.status,200);
+ assert.equal(setEstimate.body.zone.delivery_min_minutes,20);
+ assert.equal((await pilotRequest(zonePath,{method:'PATCH',token:owner,body:policy(true)})).body.zone.delivery_max_minutes,35);
  const neighborhoodMenu=await request('/v1/restaurants/'+rid+'/menu?zoneId='+zid);
  assert.equal(neighborhoodMenu.status,200);
  assert.equal(neighborhoodMenu.body.delivery.available,true);
+ assert.equal(neighborhoodMenu.body.delivery.delivery_min_minutes,20);
+ assert.equal(neighborhoodMenu.body.delivery.delivery_max_minutes,35);
+ const cards=await pilotRequest('/v1/restaurants?zoneId='+zid);
+ const card=cards.body.restaurants.find((item:{id:string})=>item.id===rid);
+ assert.equal(card?.delivery_min_minutes,20);
+ assert.equal(card?.delivery_max_minutes,35);
+ const cleared=await pilotRequest(zonePath,{method:'PATCH',token:owner,body:{...policy(true),estimate:null}});
+ assert.equal(cleared.status,200);
+ assert.equal(cleared.body.zone.delivery_min_minutes,null);
+ assert.equal(cleared.body.zone.delivery_max_minutes,null);
  assert.equal(neighborhoodMenu.body.delivery.min_basket_kurus,originalZone.min_basket_kurus);
  assert.equal(neighborhoodMenu.body.delivery.delivery_fee_kurus,originalZone.delivery_fee_kurus);
  assert.equal((await request('/v1/restaurants/'+rid+'/menu?zoneId='+randomUUID())).body.delivery,null);

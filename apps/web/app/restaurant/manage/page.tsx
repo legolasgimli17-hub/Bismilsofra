@@ -14,14 +14,14 @@ import {Settings2,Clock3,MapPin,RefreshCcw,ShieldCheck,CheckCircle2,AlertTriangl
 
 type Merchant={id:string;name:string;role:string;can_manage_menu?:boolean};
 type Product=EditorProduct;
-type Zone={zone_id:string;name:string;enabled:boolean;min_basket_kurus:number;delivery_fee_kurus:number};
+type Zone={zone_id:string;name:string;enabled:boolean;min_basket_kurus:number;delivery_fee_kurus:number;delivery_min_minutes?:number|null;delivery_max_minutes?:number|null};
 type Availability={is_open:boolean;is_busy:boolean;accepts_orders:boolean};
 type Model={
  restaurant:Availability&{id:string;name:string;active:boolean};
  products:Product[];categories:EditorCategory[];hours:MerchantScheduleSlot[];zones:Zone[];
  permissions:{canManageMenu:boolean;canManageSettings:boolean};
 };
-type ZoneDraft={enabled:boolean;minimum:string;delivery:string};
+type ZoneDraft={enabled:boolean;minimum:string;delivery:string;etaMin:string;etaMax:string};
 
 export default function MerchantManagement(){return <AuthGate>{token=><ManagementScreen token={token}/>}</AuthGate>}
 
@@ -57,7 +57,8 @@ function ManagementScreen({token}:{token:()=>Promise<string>}){
    setAvailability({is_open:result.restaurant.is_open,is_busy:result.restaurant.is_busy,accepts_orders:result.restaurant.accepts_orders});
    setHours(result.hours);
    setZoneDrafts(Object.fromEntries(result.zones.map(z=>[z.zone_id,{
-    enabled:z.enabled,minimum:kurusToInput(z.min_basket_kurus),delivery:kurusToInput(z.delivery_fee_kurus)
+    enabled:z.enabled,minimum:kurusToInput(z.min_basket_kurus),delivery:kurusToInput(z.delivery_fee_kurus),
+    etaMin:String(z.delivery_min_minutes??''),etaMax:String(z.delivery_max_minutes??'')
    }])));
    setError('');
   }catch(e){if(seq===requests.current){setModel(null);setError(e instanceof Error?e.message:'İşletme ayarları yüklenemedi.')}if(throwOnError)throw e}
@@ -103,8 +104,14 @@ function ManagementScreen({token}:{token:()=>Promise<string>}){
   if(!draft)return;
   const min=inputToKurus(draft.minimum),fee=inputToKurus(draft.delivery);
   if(min===null||fee===null){setError('Minimum sepet ve teslimat ücreti geçerli TL tutarı olmalı (örnek 125,50).');return}
+  const lower=draft.etaMin.trim(),upper=draft.etaMax.trim();
+  const etaMin=Number(lower),etaMax=Number(upper);
+  if((lower||upper)&&(!/^\d+$/.test(lower)||!/^\d+$/.test(upper)||etaMin<5||etaMax>180||etaMin>etaMax)){
+   setError('Tahmini süre için 5–180 dakika arasında iki değer girin veya iki alanı da boş bırakın.');return;
+  }
+  const estimate=lower?{min:etaMin,max:etaMax}:null;
   void save(z.name+' teslimat bölgesi',async()=>api(`/v1/restaurant/${rid}/zones/${z.zone_id}`,await token(),{
-   method:'PATCH',body:JSON.stringify({enabled:draft.enabled,minBasketKurus:min,deliveryFeeKurus:fee})
+   method:'PATCH',body:JSON.stringify({enabled:draft.enabled,minBasketKurus:min,deliveryFeeKurus:fee,estimate})
   }));
  }
 
@@ -205,6 +212,8 @@ function ManagementScreen({token}:{token:()=>Promise<string>}){
         <label>Teslimat ücreti (TL)
          <input inputMode="decimal" type="text" value={draft.delivery} disabled={disabled||!editable}
           onChange={e=>updateZone(z.zone_id,{delivery:e.target.value})} placeholder="20,00"/></label>
+        <label>Tahmini en kısa süre (dk)<input inputMode="numeric" value={draft.etaMin} disabled={disabled||!editable} onChange={e=>updateZone(z.zone_id,{etaMin:e.target.value})}/></label>
+        <label>Tahmini en uzun süre (dk)<input inputMode="numeric" value={draft.etaMax} disabled={disabled||!editable} onChange={e=>updateZone(z.zone_id,{etaMax:e.target.value})}/></label>
        </div>
        <button className="btn outline" type="button" disabled={disabled||!editable}
         onClick={()=>saveZone(z)}><Save size={16}/> Mahalleyi kaydet</button>
