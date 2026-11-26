@@ -7,7 +7,7 @@ import {readSelectedMerchantId,saveSelectedMerchantId} from '@/lib/merchant-sele
 import {canViewMerchantInbox} from '@/lib/workspace-access';
 import {money,statusText} from '@/lib/types';
 import {canActOnInbox,currentInboxRequest,inboxLabel,inboxRefreshDecision,unseenPendingIds,type InboxHealth} from '@/lib/inbox-health';
-import {canSubmitMerchantAction,isMerchantOpenStatus,merchantNextActions} from '@/lib/merchant-workflow';
+import {acceptanceSeconds,canSubmitMerchantAction,isMerchantOpenStatus,merchantNextActions} from '@/lib/merchant-workflow';
 import {useOrderEventStream} from '@/hooks/use-order-event-stream';
 import {RefreshCcw,Bell,ShieldCheck,WifiOff,Wifi,AlertTriangle,ChevronDown,Clock3,PackageCheck,MapPin,ClipboardList} from 'lucide-react';
 type Merchant={id:string;name:string;role:string;can_view_orders:boolean;can_manage_orders:boolean;can_manage_menu:boolean};
@@ -27,6 +27,7 @@ function Inner({token}:{token:()=>Promise<string>}){
  const [error,setError]=useState(''),[busyOrder,setBusyOrder]=useState('');
  const [actionError,setActionError]=useState('');
  const [recent,setRecent]=useState<RecentOrder[]>([]);
+ const [serverOffset,setServerOffset]=useState(0);
  const [lastSync,setLastSync]=useState(''),[lastSyncMs,setLastSyncMs]=useState(0);
  const [state,setState]=useState<InboxHealth>('connecting'),[truncated,setTruncated]=useState(false),[now,setNow]=useState(Date.now());
  const [details,setDetails]=useState<Record<string,OrderDetail>>({}),[openOrder,setOpenOrder]=useState<string|null>(null);
@@ -120,7 +121,7 @@ function Inner({token}:{token:()=>Promise<string>}){
    seenIds.current=currentIds;sawSnapshot.current=true;
    setPending(r.pending);setActive(r.active);setRecent((r.recent||[]).filter(order=>!isMerchantOpenStatus(order.status)));setTruncated(Boolean(r.pendingTruncated||r.activeTruncated));
    setLastSync(new Date(r.serverTime).toLocaleTimeString('tr-TR'));
-   const stamp=Date.now();setLastSyncMs(stamp);setNow(stamp);setBrowserOnline(true);setState('connected');setError('');
+   const stamp=Date.now();setServerOffset(Date.parse(r.serverTime)-stamp);setLastSyncMs(stamp);setNow(stamp);setBrowserOnline(true);setState('connected');setError('');
   }catch(e){
    if(controller.signal.aborted||ridRef.current!==rid||sequence!==requestSequence.current)return;
    setBrowserOnline(navigator.onLine);setState('offline');
@@ -175,6 +176,11 @@ function Inner({token}:{token:()=>Promise<string>}){
    requestController.current?.abort();
   };
  },[load,rid]);
+ useEffect(()=>{
+  if(!pending.length)return;
+  const tick=setInterval(()=>setNow(Date.now()),1000);
+  return()=>clearInterval(tick);
+ },[pending.length]);
  const connected=canActOnInbox(state,lastSyncMs,now,browserOnline);
  const selectedMerchant=list.find(r=>r.id===rid);
  const canManageIntake=selectedMerchant?.role==='owner'||selectedMerchant?.role==='manager';
@@ -189,6 +195,7 @@ function Inner({token}:{token:()=>Promise<string>}){
  }
  async function move(order:Summary,to:string){
   const reason=reasons[order.id]||'';
+  if(order.status==='beklemede'&&acceptanceSeconds(order.expires_at,Date.now()+serverOffset)===0)return;
   if(!canSubmitMerchantAction(order.status,to,reason,connected,Boolean(canManage))||busyOrder)return;
   setBusyOrder(order.id);setActionError('');
   try{
@@ -204,13 +211,14 @@ function Inner({token}:{token:()=>Promise<string>}){
   finally{setBusyOrder('')}
  }
  function orderCard(o:Summary){const expanded=openOrder===o.id,detail=details[o.id];const reason=reasons[o.id]||'';
+  const remaining=o.status==='beklemede'?acceptanceSeconds(o.expires_at,now+serverOffset):null;
   const actions=merchantNextActions(o.status);const requireReason=actions.some(a=>a.requiresReason);
   return <article className="merchant-order-v09" key={o.id}>
    <div className="merchant-order-head">
     <div><span className="merchant-order-kicker">SİPARİŞ #{o.id.slice(0,8).toUpperCase()}</span><h3>{money(o.total_kurus)}</h3>
      <span className="merchant-status-tag">{statusText[o.status]||o.status}</span>
      <div className="merchant-order-dates"><span><Clock3 size={14}/> {new Date(o.created_at).toLocaleTimeString('tr-TR')}</span>
-       {o.status==='beklemede'&&<span><AlertTriangle size={14}/> Son kabul: {new Date(o.expires_at).toLocaleTimeString('tr-TR')}</span>}</div>
+       {o.status==='beklemede'&&<span><AlertTriangle size={14}/> {remaining===null?'Son kabul: '+new Date(o.expires_at).toLocaleTimeString('tr-TR'):remaining===0?'Kabul süresi doldu':`Kalan süre: ${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')}`}</span>}</div>
     </div>
     <button className="btn outline merchant-details-toggle" aria-expanded={expanded} aria-controls={`merchant-detail-${o.id}`} onClick={()=>void toggleDetail(o.id)}>
      <ClipboardList size={17}/> {expanded?'Detayları kapat':'Ürünleri ve adresi gör'} <ChevronDown size={16}/>
@@ -235,7 +243,7 @@ function Inner({token}:{token:()=>Promise<string>}){
     <textarea value={reason} maxLength={400} rows={2} placeholder="Gerekli işlemler için en az 5 karakter açıklama yazın" onChange={e=>setReasons(r=>({...r,[o.id]:e.target.value}))}/>
    </label>}
    {actions.length>0&&<div className="merchant-order-actions">
-    {actions.map(a=><button key={a.to} className={`btn ${a.kind==='danger'?'merchant-danger':a.kind}`} disabled={Boolean(busyOrder)||!canSubmitMerchantAction(o.status,a.to,reason,connected,Boolean(canManage))} onClick={()=>void move(o,a.to)}>{a.label}</button>)}
+    {actions.map(a=><button key={a.to} className={`btn ${a.kind==='danger'?'merchant-danger':a.kind}`} disabled={Boolean(busyOrder)||remaining===0||!canSubmitMerchantAction(o.status,a.to,reason,connected,Boolean(canManage))} onClick={()=>void move(o,a.to)}>{a.label}</button>)}
    </div>}
   </article>;
  }

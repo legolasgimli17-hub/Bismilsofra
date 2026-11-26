@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {merchantNextActions,canSubmitMerchantAction,isMerchantOpenStatus} from './merchant-workflow.ts';
+import {acceptanceSeconds,merchantNextActions,canSubmitMerchantAction,isMerchantOpenStatus} from './merchant-workflow.ts';
 test('incoming order can only be accepted or rejected',()=>assert.deepEqual(merchantNextActions('beklemede').map(x=>x.to),['kabul_edildi','reddedildi']));
 test('accepted order can start preparation or be cancelled',()=>assert.deepEqual(merchantNextActions('kabul_edildi').map(x=>x.to),['hazirlaniyor','restoran_iptal']));
 test('preparing order can be made ready or cancelled',()=>assert.deepEqual(merchantNextActions('hazirlaniyor').map(x=>x.to),['hazir','restoran_iptal']));
@@ -23,4 +23,13 @@ test('every merchant UI action exists in authoritative backend state machine',()
    assert.doesNotThrow(()=>assertTransition(status as Status,action.to as Status,'restaurant',action.requiresReason?'Ürün stokta yok':'',createdAt,actionTime,expiry),`${status} -> ${action.to}`);
   }
  }
+});
+
+test('acceptance countdown reaches zero at the server deadline',()=>{
+ const deadline='2026-11-19T12:04:00Z';
+ const at=Date.parse(deadline);
+ assert.equal(acceptanceSeconds(deadline,at-1001),2);
+ assert.equal(acceptanceSeconds(deadline,at),0);
+ assert.equal(acceptanceSeconds(deadline,at+1000),0);
+ assert.equal(acceptanceSeconds('unknown',at),null);
 });

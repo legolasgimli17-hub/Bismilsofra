@@ -11,7 +11,7 @@
     "web:build": "npm --workspace apps/web run build",
     "api:dev": "npm --workspace apps/api run dev",
     "test:api": "npm --workspace apps/api run test",
-    "test:cart": "node --experimental-strip-types --test apps/web/lib/cart.test.ts",
+    "test:cart": "node --experimental-strip-types --test apps/web/lib/cart.test.ts apps/web/lib/pending-order.test.ts",
     "test:product-options": "node --experimental-strip-types --test apps/web/lib/product-option-ui.test.ts",
     "test:reorder": "node --experimental-strip-types --test apps/web/lib/reorder-preview.test.ts",
     "test:discovery": "node --experimental-strip-types --test apps/web/lib/discovery.test.ts",
