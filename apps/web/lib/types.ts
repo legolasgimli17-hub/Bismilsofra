@@ -17,3 +17,8 @@ export function deliveryEstimateText({delivery_min_minutes:min,delivery_max_minu
  if(typeof min!=='number'||typeof max!=='number')return null;
  return min===max?min+' dk':min+'–'+max+' dk';
 }
+
+export function isTerminalOrderStatus(status:string|undefined):boolean{
+ return status==='teslim_edildi'||status==='reddedildi'||status==='suresi_doldu'||
+  status==='musteri_iptal'||status==='restoran_iptal'||status==='teslim_edilemedi';
+}

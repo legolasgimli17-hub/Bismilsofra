@@ -1,4 +1,5 @@
-'use client';import {useCallback,useEffect,useRef,useState} from 'react';import {useParams,useRouter} from 'next/navigation';import Link from 'next/link';import {ArrowLeft,RefreshCw,AlertCircle} from 'lucide-react';import AuthGate from '@/components/auth-gate';import {api,ApiError} from '@/lib/api';import {useOrderEventStream} from '@/hooks/use-order-event-stream';import {deliveryEstimateText,money,type Order,type MenuProduct,type Restaurant,statusText} from '@/lib/types';import {useCart} from '@/components/providers';import {buildReorderPreview,type PastOrderLine,type ReorderPreview} from '@/lib/reorder-preview';import {Repeat2,ShoppingBag} from 'lucide-react';
+'use client';import {useCallback,useEffect,useRef,useState} from 'react';import {useParams,useRouter} from 'next/navigation';import Link from 'next/link';import {ArrowLeft,RefreshCw,AlertCircle} from 'lucide-react';import AuthGate from '@/components/auth-gate';import {api,ApiError} from '@/lib/api';import {useOrderEventStream} from '@/hooks/use-order-event-stream';import {inboxRefreshDecision} from '@/lib/inbox-health';
+import {deliveryEstimateText,isTerminalOrderStatus,money,type Order,type MenuProduct,type Restaurant,statusText} from '@/lib/types';import {useCart} from '@/components/providers';import {buildReorderPreview,type PastOrderLine,type ReorderPreview} from '@/lib/reorder-preview';import {Repeat2,ShoppingBag} from 'lucide-react';
 type Detail={order:Order;items:PastOrderLine[];events:{previous_status:string|null;new_status:string;created_at:string;reason:string|null}[]};
 export default function OrderDetail(){
  const {id}=useParams<{id:string}>();
@@ -9,36 +10,58 @@ function Inner({token,id}:{token:()=>Promise<string>;id:string}){const router=us
  const [reorderBusy,setReorderBusy]=useState(false),[reorder,setReorder]=useState<ReorderPreview|null>(null);
  const [trackingError,setTrackingError]=useState('');
  const trackingRequest=useRef<AbortController|null>(null);
- const load=useCallback(async(priority=false)=>{
-  if(trackingRequest.current&&!priority)return;
-  trackingRequest.current?.abort();
+ const queuedRefresh=useRef<AbortController|null>(null);
+ const [online,setOnline]=useState(true);
+ const terminal=isTerminalOrderStatus(detail?.order.status);
+ const load=useCallback(async function refresh(mode:'poll'|'signal'|'replace'='poll'):Promise<void>{
+  if(!navigator.onLine){setOnline(false);return}
+  const running=trackingRequest.current;
+  const decision=inboxRefreshDecision(mode,Boolean(running&&!running.signal.aborted));
+  if(decision==='skip')return;
+  if(decision==='queue'){queuedRefresh.current=running;return}
+  running?.abort();
   const controller=new AbortController();
   trackingRequest.current=controller;
+  let finished=false;
   try{
    const jwt=await token();
    if(controller.signal.aborted)return;
    const signal=AbortSignal.any([controller.signal,AbortSignal.timeout(15000)]);
    const next=await api<Detail>(`/v1/me/orders/${id}`,jwt,{signal});
-   if(!controller.signal.aborted){setDetail(next);setTrackingError('')}
+   if(!controller.signal.aborted){setDetail(next);setTrackingError('');finished=isTerminalOrderStatus(next.order.status)}
   }catch(e){
    if(controller.signal.aborted)return;
    if(e instanceof ApiError&&[401,403,404].includes(e.status))setDetail(null);
    setTrackingError(e instanceof Error?e.message:'Sipariş durumu güncellenemedi.');
-  }finally{if(trackingRequest.current===controller)trackingRequest.current=null}
+  }finally{
+   const queued=queuedRefresh.current===controller;
+   if(queued)queuedRefresh.current=null;
+   if(trackingRequest.current===controller){
+    trackingRequest.current=null;
+    if(queued&&!finished&&!controller.signal.aborted&&document.visibilityState==='visible'&&navigator.onLine)
+     void refresh();
+   }
+  }
  },[id,token]);
- const realtime=useOrderEventStream('/v1/me/orders/'+id+'/events',token,()=>{void load()});
+ const realtime=useOrderEventStream(terminal?null:'/v1/me/orders/'+id+'/events',token,()=>{void load('signal')});
  useEffect(()=>{
-  const reconcile=()=>{if(document.visibilityState==='visible')void load()};
-  void load();
-  const poll=setInterval(reconcile,realtime==='live'?20_000:10_000);
+  const reconcile=()=>{if(!terminal&&document.visibilityState==='visible')void load('signal')};
+  const reconnect=()=>{setOnline(true);reconcile()};
+  const disconnect=()=>{setOnline(false);trackingRequest.current?.abort()};
+  if(navigator.onLine)reconnect();else disconnect();
+  const poll=terminal?undefined:setInterval(()=>{
+   if(navigator.onLine&&document.visibilityState==='visible')void load();
+  },realtime==='live'?20_000:10_000);
   document.addEventListener('visibilitychange',reconcile);
-  window.addEventListener('online',reconcile);
+  window.addEventListener('online',reconnect);
+  window.addEventListener('offline',disconnect);
   return()=>{
    clearInterval(poll);
    document.removeEventListener('visibilitychange',reconcile);
-   window.removeEventListener('online',reconcile);
+   window.removeEventListener('online',reconnect);
+   window.removeEventListener('offline',disconnect);
   };
- },[load,realtime]);
+ },[load,realtime,terminal]);
  useEffect(()=>()=>{trackingRequest.current?.abort();trackingRequest.current=null},[load]);
  useEffect(()=>{
   if(detail&&window.location.hash==='#order-help')
@@ -61,10 +84,10 @@ function Inner({token,id}:{token:()=>Promise<string>;id:string}){const router=us
   replaceCart(reorder.cart);
   router.push('/checkout');
  }
- async function cancel(){if(busy||!detail||!window.confirm('Beklemedeki sipariş iptal edilsin mi?'))return;setBusy(true);setError('');try{await api(`/v1/me/orders/${id}/cancel`,await token(),{method:'POST'});await load(true)}catch(e){setError(e instanceof Error?e.message:'İptal edilemedi.')}finally{setBusy(false)}}
+ async function cancel(){if(busy||!online||!detail||!window.confirm('Beklemedeki sipariş iptal edilsin mi?'))return;setBusy(true);setError('');try{await api(`/v1/me/orders/${id}/cancel`,await token(),{method:'POST'});await load('replace')}catch(e){setError(e instanceof Error?e.message:'İptal edilemedi.')}finally{setBusy(false)}}
  async function support(){if(busy||sent||!issue||description.trim().length<10||description.length>1200)return;setBusy(true);setError('');try{await api('/v1/me/support-cases',await token(),{method:'POST',body:JSON.stringify({orderId:id,issueType:issue,description})});setSent(true)}catch(e){setError(e instanceof Error?e.message:'Destek kaydı açılamadı.')}finally{setBusy(false)}}
  const estimate=detail?deliveryEstimateText(detail.order):null;
- return <section className="container main-section"><div className="breadcrumb"><Link href="/orders"><ArrowLeft size={17}/> Siparişlerim</Link></div><div className="section-heading"><div><span className="overline">SİPARİŞ DETAYI</span><h1>Sipariş takibi</h1><p>#{id.slice(0,8).toUpperCase()}</p></div><button className="btn outline" onClick={()=>void load(true)}><RefreshCw size={17}/> Yenile</button></div>{error&&<div role="alert" className="notice error">{error}</div>}{trackingError&&<div role="alert" className="notice error">{trackingError}{detail?' Son doğrulanan sipariş durumu aşağıda.':''}</div>}{!detail?<div className="empty" role="status">{trackingError?'Sipariş bilgisi alınamadı. Yenile düğmesiyle tekrar deneyebilirsin.':'Sipariş yükleniyor…'}</div>:<div className="checkout-layout"><div className="checkout-main"><div className="panel"><span className="overline">GÜNCEL DURUM</span><h2 className="tracking-title">{statusText[detail.order.status]||detail.order.status}</h2><p className="muted" role="status">{realtime==='live'?'Sipariş durumu canlı olay akışıyla güncelleniyor.':'Sipariş durumu düzenli aralıklarla kontrol ediliyor.'}</p>{detail.order.status==='beklemede'&&<button className="btn outline" disabled={busy} onClick={()=>void cancel()}>Siparişi iptal et</button>}</div><div className="panel reorder-panel">
+ return <section className="container main-section"><div className="breadcrumb"><Link href="/orders"><ArrowLeft size={17}/> Siparişlerim</Link></div><div className="section-heading"><div><span className="overline">SİPARİŞ DETAYI</span><h1>Sipariş takibi</h1><p>#{id.slice(0,8).toUpperCase()}</p></div><button className="btn outline" onClick={()=>void load('replace')}><RefreshCw size={17}/> Yenile</button></div>{error&&<div role="alert" className="notice error">{error}</div>}{!online&&<div className="notice" role="status">Bağlantı kesildi. {detail?'Son doğrulanan sipariş durumu gösteriliyor.':'Bağlantı geldiğinde sipariş bilgisi yüklenecek.'}</div>}{trackingError&&<div role="alert" className="notice error">{trackingError}{detail?' Son doğrulanan sipariş durumu aşağıda.':''}</div>}{!detail?<div className="empty" role="status">{trackingError?'Sipariş bilgisi alınamadı. Yenile düğmesiyle tekrar deneyebilirsin.':'Sipariş yükleniyor…'}</div>:<div className="checkout-layout"><div className="checkout-main"><div className="panel"><span className="overline">GÜNCEL DURUM</span><h2 className="tracking-title">{statusText[detail.order.status]||detail.order.status}</h2><p className="muted" role="status">{terminal?'Sipariş takibi sona erdi.':!online?'Bağlantı geldiğinde durum güncellenecek.':realtime==='live'?'Sipariş durumu canlı güncelleniyor.':'Sipariş durumu düzenli aralıklarla kontrol ediliyor.'}</p>{detail.order.status==='beklemede'&&<button className="btn outline" disabled={busy||!online} onClick={()=>void cancel()}>Siparişi iptal et</button>}</div><div className="panel reorder-panel">
   <div className="reorder-eyebrow"><Repeat2 size={16}/> KOLAY SİPARİŞ</div>
   <h2>Sevdiğin lezzetleri yeniden seç</h2>
   <p className="muted">Eski sipariş doğrudan gönderilmez. Ürünler, ekstra malzemeler ve güncel fiyatlar kontrol edilir; teslimat ücreti ve kesin tutar ödeme ekranında yeniden hesaplanır.</p>

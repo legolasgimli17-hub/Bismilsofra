@@ -7,7 +7,7 @@ import {readSelectedMerchantId,saveSelectedMerchantId} from '@/lib/merchant-sele
 import {canViewMerchantInbox} from '@/lib/workspace-access';
 import {money,statusText} from '@/lib/types';
 import {canActOnInbox,currentInboxRequest,inboxLabel,inboxRefreshDecision,unseenPendingIds,type InboxHealth} from '@/lib/inbox-health';
-import {acceptanceSeconds,canSubmitMerchantAction,isMerchantOpenStatus,merchantNextActions} from '@/lib/merchant-workflow';
+import {acceptanceSeconds,canSubmitMerchantAction,isMerchantOpenStatus,merchantNextActions,pendingBeforeDeadline} from '@/lib/merchant-workflow';
 import {useOrderEventStream} from '@/hooks/use-order-event-stream';
 import {RefreshCcw,Bell,ShieldCheck,WifiOff,Wifi,AlertTriangle,ChevronDown,Clock3,PackageCheck,MapPin,ClipboardList} from 'lucide-react';
 type Merchant={id:string;name:string;role:string;can_view_orders:boolean;can_manage_orders:boolean;can_manage_menu:boolean};
@@ -39,7 +39,7 @@ function Inner({token}:{token:()=>Promise<string>}){
  const [browserOnline,setBrowserOnline]=useState(true);
  const seenIds=useRef<string[]>([]);
  const sawSnapshot=useRef(false);
- const alarmHealth=useRef({pending:0,state:'connecting' as InboxHealth,syncAt:0,online:true});
+ const alarmHealth=useRef({pending:[] as Summary[],serverOffset:0,state:'connecting' as InboxHealth,syncAt:0,online:true});
  const alertAudio=useRef<AudioContext|null>(null);
  const soundOnRef=useRef(false);
  const [soundOn,setSoundOn]=useState(false);
@@ -72,12 +72,12 @@ function Inner({token}:{token:()=>Promise<string>}){
  // The user must explicitly enable browser audio once. Thereafter the chime
  // repeats while an unaccepted order is present, not just on its first arrival.
  useEffect(()=>{
-  alarmHealth.current={pending:pending.length,state,syncAt:lastSyncMs,online:browserOnline};
- },[pending.length,state,lastSyncMs,browserOnline]);
+  alarmHealth.current={pending,serverOffset,state,syncAt:lastSyncMs,online:browserOnline};
+ },[pending,serverOffset,state,lastSyncMs,browserOnline]);
  useEffect(()=>{
   const timer=setInterval(()=>{
    const h=alarmHealth.current;
-   if(soundOnRef.current&&h.pending>0&&document.visibilityState==='visible'&&
+   if(soundOnRef.current&&pendingBeforeDeadline(h.pending,Date.now()+h.serverOffset).length>0&&document.visibilityState==='visible'&&
       navigator.onLine&&canActOnInbox(h.state,h.syncAt,Date.now(),h.online))
     playChime();
   },11_000);
@@ -112,7 +112,7 @@ function Inner({token}:{token:()=>Promise<string>}){
     `/v1/restaurant/${rid}/inbox`,t,{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(15_000)])});
    if(!currentInboxRequest(rid,ridRef.current,sequence,requestSequence.current,
      controller.signal.aborted,navigator.onLine))return;
-   const currentIds=r.pending.map(o=>o.id);
+   const currentIds=pendingBeforeDeadline(r.pending,Date.parse(r.serverTime)).map(o=>o.id);
    const newIds=unseenPendingIds(seenIds.current,currentIds);
    if(newIds.length>0){
     if(sawSnapshot.current)setIncomingCount(n=>n+newIds.length);
@@ -181,6 +181,7 @@ function Inner({token}:{token:()=>Promise<string>}){
   const tick=setInterval(()=>setNow(Date.now()),1000);
   return()=>clearInterval(tick);
  },[pending.length]);
+ const waitingCount=pendingBeforeDeadline(pending,now+serverOffset).length;
  const connected=canActOnInbox(state,lastSyncMs,now,browserOnline);
  const selectedMerchant=list.find(r=>r.id===rid);
  const canManageIntake=selectedMerchant?.role==='owner'||selectedMerchant?.role==='manager';
@@ -257,7 +258,7 @@ function Inner({token}:{token:()=>Promise<string>}){
    <button type="button" className="btn outline" onClick={()=>void toggleSound()} aria-pressed={soundOn}>
     <Bell size={17}/> {soundOn?'Sesli uyarıyı kapat':'Sesli uyarıyı aç ve dene'}
    </button>
-   {pending.length>0&&<span role="alert" className="merchant-pending-critical"><Bell size={17}/> {pending.length} kabul bekleyen sipariş · {soundOn?'Sesli uyarı tekrar ediyor':'SES KAPALI — uyarıyı açın'}</span>}
+   {connected&&waitingCount>0&&<span role="alert" className="merchant-pending-critical"><Bell size={17}/> {waitingCount} kabul bekleyen sipariş · {soundOn?'Sesli uyarı tekrar ediyor':'SES KAPALI — uyarıyı açın'}</span>}
    {incomingCount>0&&<span role="status" className="merchant-new-count">{incomingCount} yeni sipariş algılandı (bu oturum)</span>}
    <small>Ses yalnızca bu sekmede, açıkça etkinleştirildiğinde çalar.</small>
   </div>}
