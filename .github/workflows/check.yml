@@ -84,7 +84,7 @@ jobs:
           MOBILE_TEST_BASE_URL=http://127.0.0.1:3180 node tools/mobile-browser-smoke.mjs
       - name: Upload mobile/tablet/desktop rendered screenshots (QA evidence)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mobile-rendering-qa
           path: /tmp/sofra-mobile-shots/*.png
@@ -269,7 +269,7 @@ jobs:
           NODE
       - name: Archive security report for operator review
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: production-dependency-audit
           path: /tmp/sofra-npm-audit.json
