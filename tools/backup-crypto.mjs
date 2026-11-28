@@ -62,7 +62,7 @@ async function seal(input,destination,checkSource=async()=>{}){
 }
 async function openEnvelope(inputPath,destination){
  const secret=key();
- const tmp=tempPath(destination);
+ const tmp=destination?tempPath(destination):undefined;
  const source=await open(inputPath,'r');
  let file;
  try{
@@ -79,18 +79,24 @@ async function openEnvelope(inputPath,destination){
   const decipher=createDecipheriv('aes-256-gcm',secret,iv);
   decipher.setAAD(header);
   decipher.setAuthTag(tag);
-  file=await open(tmp,'wx',0o600);
+  if(tmp)file=await open(tmp,'wx',0o600);
   const cipherStream=source.createReadStream({start:HEADER_BYTES,end:stat.size-TAG_BYTES-1,autoClose:false});
-  for await(const part of cipherStream)await writeAll(file,decipher.update(part));
+  for await(const part of cipherStream){
+   const plain=decipher.update(part);
+   if(file)await writeAll(file,plain);
+  }
   // Authentication verification happens BEFORE any plaintext becomes final.
-  await writeAll(file,decipher.final());
-  const done=file;file=undefined;
-  await finish(done,tmp,destination);
-  console.log(JSON.stringify({backup:'opened',authenticated:true}));
+  const final=decipher.final();
+  if(file){
+   await writeAll(file,final);
+   await finish(file,tmp,destination);
+   file=undefined;
+  }
+  console.log(JSON.stringify({backup:destination?'opened':'verified',authenticated:true}));
  }finally{
   if(file)await file.close().catch(()=>{});
   await source.close().catch(()=>{});
-  await unlink(tmp).catch(()=>{});
+  if(tmp)await unlink(tmp).catch(()=>{});
  }
 }
 async function sealCommand(destination,command,args){
@@ -118,4 +124,5 @@ if(mode==='seal-command'&&from&&to)await sealCommand(from,to,args);
 else if(mode==='seal-stdin'&&from&&!to)await seal(process.stdin,from);
 else if(mode==='seal'&&from&&to)await seal(createReadStream(from),to);
 else if(mode==='open'&&from&&to)await openEnvelope(from,to);
-else throw Error('Usage: backup-crypto.mjs seal-command <encrypted-output> <command> [args...] | seal-stdin <encrypted-output> | seal <plain-file> <encrypted-output> | open <encrypted-input> <plain-output>');
+else if(mode==='verify'&&from&&!to)await openEnvelope(from);
+else throw Error('Usage: backup-crypto.mjs seal-command <encrypted-output> <command> [args...] | seal-stdin <encrypted-output> | seal <plain-file> <encrypted-output> | open <encrypted-input> <plain-output> | verify <encrypted-input>');
