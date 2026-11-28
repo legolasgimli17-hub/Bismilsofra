@@ -48,7 +48,7 @@ jobs:
           grep -qx outbox <<< "$services"
           grep -qx escalation <<< "$services"
       - name: Authenticated backup encryption, corruption and key safety tests
-        run: node --test tools/backup-crypto.test.mjs
+        run: node --test tools/backup-crypto.test.mjs tools/offsite-backup.test.mjs
       - name: Offline privacy and accessible recovery smoke
         run: node --test tools/web-recovery.test.mjs
       - name: Pilot release NO_GO regression and reviewer evidence tests
