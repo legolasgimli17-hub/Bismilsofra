@@ -1,13 +1,14 @@
 /** A durable, best-effort webhook dispatcher. Delivery is at-least-once: receiver MUST dedupe X-Sofra-Event-ID. */
 import type {Pool} from 'pg';
 import {createHmac,randomUUID} from 'node:crypto';
+import {httpsEndpoint,validWebhookSecret} from './runtime-guard.ts';
 
 type OutboxEvent={id:string|number;order_id:string;restaurant_id:string;type:string;payload:unknown;attempts:number};
 export type Deliver=(event:OutboxEvent)=>Promise<void>;
 export function createSignedWebhook(url:string,secret:string):Deliver{
- const target=new URL(url);
- if(target.protocol!=='https:'||!target.hostname||target.username||target.password||target.hash)throw new Error('ALERT_WEBHOOK_URL must be an HTTPS URL without credentials or fragment.');
- if(secret.length<32||secret.includes('REPLACE')||secret.includes('PUT_A_RANDOM'))throw new Error('ALERT_WEBHOOK_SECRET must be 32+ characters.');
+ const target=httpsEndpoint(url);
+ if(!target)throw new Error('ALERT_WEBHOOK_URL must be an HTTPS URL without credentials or fragment.');
+ if(!validWebhookSecret(secret))throw new Error('ALERT_WEBHOOK_SECRET must be 32+ characters.');
  return async(event)=>{
   const body=JSON.stringify({eventId:String(event.id),type:event.type,orderId:event.order_id,restaurantId:event.restaurant_id,payload:event.payload});
   const signature=createHmac('sha256',secret).update(body).digest('hex');

@@ -27,3 +27,13 @@ test('primary and fallback providers receive signed, stable non-PII event IDs',a
  assert.doesNotMatch(captured.body,/address|phone|directions|customer|full_address/i);
  assert.match(captured.body,/pending_order_escalation/);
 });
+
+test('dispatcher rejects the same unusable credentials as production intake',()=>{
+ for(const secret of ['PUT_A_RANDOM_SECRET_OF_AT_LEAST_32_CHARACTERS_HERE','PUT_AN_INDEPENDENT_RANDOM_SECRET_MIN_32_CHARACTERS','replace_with_a_real_random_secret_here',' '.repeat(40),'a'.repeat(40)+'\n']){
+  assert.throws(()=>createSignedWebhook('https://alerts.example.test/hook',secret));
+ }
+ for(const url of ['http://alerts.example.test/hook','https://user:pass@alerts.example.test/hook','https://alerts.example.test/hook#fragment','not a URL']){
+  assert.throws(()=>createSignedWebhook(url,'a'.repeat(48)));
+ }
+ assert.doesNotThrow(()=>createSignedWebhook('https://alerts.example.test/hook','a'.repeat(48)));
+});

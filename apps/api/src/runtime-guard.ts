@@ -10,13 +10,18 @@ export function apiSettings(env:NodeJS.ProcessEnv):ApiSettings{
  return {port:Number(rawPort),host:host as ApiSettings['host']};
 }
 export type IntakeStatus={enabled:boolean;reason:'allowed'|'disabled'|'missing-channels'|'shared-provider'|'insecure-origin'};
-function httpsEndpoint(raw:string|undefined):URL|null{
+export function httpsEndpoint(raw:string|undefined):URL|null{
  if(!raw)return null;
  try{
   const url=new URL(raw);
   return url.protocol==='https:'&&!!url.hostname&&!url.username&&!url.password&&!url.hash?url:null;
  }catch{return null}
 }
+/** Keep the API intake and delivery workers on the same credential policy. */
+export function validWebhookSecret(secret:string):boolean{
+ return secret.length>=32&&secret.trim()===secret&&!/\s/.test(secret)&&!/REPLACE|PUT_A_RANDOM|PUT_AN_INDEPENDENT/i.test(secret);
+}
+function canonicalHost(url:URL):string{return url.hostname.replace(/\.+$/,'').toLowerCase()}
 /** Production is closed by default. Different HTTPS hostnames are a
  * configuration guard, NOT a guarantee that providers will deliver alerts.
  */
@@ -28,9 +33,9 @@ export function pilotOrderIntake(env:NodeJS.ProcessEnv):IntakeStatus{
  const primary=httpsEndpoint(env.ALERT_WEBHOOK_URL);
  const fallback=httpsEndpoint(env.ESCALATION_WEBHOOK_URL);
  const secret1=env.ALERT_WEBHOOK_SECRET||'',secret2=env.ESCALATION_WEBHOOK_SECRET||'';
- if(!primary||!fallback||secret1.length<32||secret2.length<32)
+ if(!primary||!fallback||!validWebhookSecret(secret1)||!validWebhookSecret(secret2))
   return {enabled:false,reason:'missing-channels'};
- if(primary.hostname===fallback.hostname||secret1===secret2)
+ if(canonicalHost(primary)===canonicalHost(fallback)||secret1===secret2)
   return {enabled:false,reason:'shared-provider'};
  return {enabled:true,reason:'allowed'};
 }

@@ -15,7 +15,7 @@ Bu doküman, en fazla **50 aktif restoran** ve ilk **5 restoran pilotu** için p
 
 - `DATABASE_URL`: yedekli/kalıcı PostgreSQL; schema migrations 001, 003, 004 uygulanmış olmalı.
 - Birincil kanal: `ALERT_WEBHOOK_URL` + rastgele 32+ karakter `ALERT_WEBHOOK_SECRET`.
-- Gerçekten **bağımsız** ikincil kanal: `ESCALATION_WEBHOOK_URL` + farklı 32+ karakter `ESCALATION_WEBHOOK_SECRET`. Aynı URL iki kanalda kullanılamaz. İkinci sağlayıcının ayrı altyapısı olması tercih edilir.
+- Gerçekten **bağımsız** ikincil kanal: `ESCALATION_WEBHOOK_URL` + farklı 32+ karakter `ESCALATION_WEBHOOK_SECRET`. Aynı DNS ana makinesi (son nokta dahil eşdeğer yazımlar) veya aynı gizli anahtar iki kanalda kullanılamaz. API ve worker örnek/boşluk içeren gizli anahtarları reddeder. Farklı DNS adları gerçek sağlayıcı bağımsızlığının kanıtı değildir; ikinci sağlayıcı ayrı altyapıda olmalıdır.
 - Süreçler: API, `worker` (süre dolumu), `worker:outbox` (ilk bildirim) ve `worker:escalation` ayrı, sağlığı izlenebilir süreçlerdir. Sunucusuz kısa süreli HTTP fonksiyonları bu sürekli worker'ların yerine otomatik geçmez.
 - İmzalı webhook alıcısı `sha256=` HMAC imzasını gelen ham HTTP gövdesi üzerinde doğrulamalı; `eventId` değerini kalıcı olarak tekilleştirmelidir. Tekrarlı teslimatlar normaldir.
 - Payload müşteri telefonunu, açık adresini ve sipariş notlarını içermez. İşletme detayları JWT + MFA ile korunan API'den okur.

@@ -30,3 +30,11 @@ test('enabling production requires distinct HTTPS alert channels and origin',()=
  assert.equal(pilotOrderIntake({...valid,ESCALATION_WEBHOOK_URL:'https://primary.provider.example/other'}).reason,'shared-provider');
  assert.equal(pilotOrderIntake({...valid,ESCALATION_WEBHOOK_SECRET:valid.ALERT_WEBHOOK_SECRET}).reason,'shared-provider');
 });
+
+test('intake rejects placeholder or whitespace secrets and DNS hostname aliases',()=>{
+ for(const secret of ['PUT_A_RANDOM_SECRET_OF_AT_LEAST_32_CHARACTERS_HERE','PUT_AN_INDEPENDENT_RANDOM_SECRET_MIN_32_CHARACTERS','replace_with_a_real_random_secret_here',' '.repeat(40),'a'.repeat(40)+'\n']){
+  assert.equal(pilotOrderIntake({...valid,ALERT_WEBHOOK_SECRET:secret}).reason,'missing-channels');
+  assert.equal(pilotOrderIntake({...valid,ESCALATION_WEBHOOK_SECRET:secret}).reason,'missing-channels');
+ }
+ assert.equal(pilotOrderIntake({...valid,ESCALATION_WEBHOOK_URL:'https://PRIMARY.provider.example./different'}).reason,'shared-provider');
+});
