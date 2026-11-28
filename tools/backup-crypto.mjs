@@ -4,6 +4,7 @@
  * File format: 8-byte magic, 12-byte random IV, ciphertext, 16-byte GCM tag.
  */
 import {createCipheriv,createDecipheriv,randomBytes} from 'node:crypto';
+import {spawn} from 'node:child_process';
 import {createReadStream} from 'node:fs';
 import {open,link,unlink} from 'node:fs/promises';
 
@@ -36,7 +37,7 @@ async function finish(file,tmp,dest){
  await link(tmp,dest);
  await unlink(tmp);
 }
-async function seal(input,destination){
+async function seal(input,destination,checkSource=async()=>{}){
  const secret=key();
  const tmp=tempPath(destination);
  let file;
@@ -48,6 +49,7 @@ async function seal(input,destination){
   cipher.setAAD(header);
   await writeAll(file,header);
   for await(const part of input)await writeAll(file,cipher.update(part));
+  await checkSource();
   await writeAll(file,cipher.final());
   await writeAll(file,cipher.getAuthTag());
   const done=file;file=undefined;
@@ -91,8 +93,29 @@ async function openEnvelope(inputPath,destination){
   await unlink(tmp).catch(()=>{});
  }
 }
-const [mode,from,to]=process.argv.slice(2);
-if(mode==='seal-stdin'&&from&&!to)await seal(process.stdin,from);
+async function sealCommand(destination,command,args){
+ const env={...process.env};
+ delete env.SOFRA_BACKUP_KEY_B64;
+ const child=spawn(command,args,{shell:false,env,stdio:['ignore','pipe','inherit']});
+ // Register both listeners before consuming stdout, including when spawning fails.
+ const outcome=new Promise(resolve=>{
+  child.once('error',error=>resolve({error}));
+  child.once('close',(code,signal)=>resolve({code,signal}));
+ });
+ try{
+  await seal(child.stdout,destination,async()=>{
+   const result=await outcome;
+   if(result.error)throw result.error;
+   if(result.code!==0)throw Error('Backup source failed: '+(result.signal||result.code));
+  });
+ }finally{
+  if(child.exitCode===null&&child.signalCode===null)child.kill();
+  await outcome;
+ }
+}
+const [mode,from,to,...args]=process.argv.slice(2);
+if(mode==='seal-command'&&from&&to)await sealCommand(from,to,args);
+else if(mode==='seal-stdin'&&from&&!to)await seal(process.stdin,from);
 else if(mode==='seal'&&from&&to)await seal(createReadStream(from),to);
 else if(mode==='open'&&from&&to)await openEnvelope(from,to);
-else throw Error('Usage: backup-crypto.mjs seal-stdin <encrypted-output> | seal <plain-file> <encrypted-output> | open <encrypted-input> <plain-output>');
+else throw Error('Usage: backup-crypto.mjs seal-command <encrypted-output> <command> [args...] | seal-stdin <encrypted-output> | seal <plain-file> <encrypted-output> | open <encrypted-input> <plain-output>');

@@ -182,7 +182,7 @@ jobs:
           backup_dir="$(mktemp -d)"
           trap 'rm -rf "$backup_dir"; docker exec "$POSTGRES_CONTAINER_ID" rm -f /tmp/bismil_sofra_ci.dump >/dev/null 2>&1 || true' EXIT
           export SOFRA_BACKUP_KEY_B64="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("base64"))')"
-          docker exec "$POSTGRES_CONTAINER_ID" pg_dump -U sofra -d bismil_sofra_test -Fc | node tools/backup-crypto.mjs seal-stdin "$backup_dir/bismil.enc"
+          node tools/backup-crypto.mjs seal-command "$backup_dir/bismil.enc" docker exec "$POSTGRES_CONTAINER_ID" pg_dump -U sofra -d bismil_sofra_test -Fc
           test -s "$backup_dir/bismil.enc"
           test ! -e "$backup_dir/bismil.dump"
           node tools/backup-crypto.mjs open "$backup_dir/bismil.enc" "$backup_dir/bismil.dump"
