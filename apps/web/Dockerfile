@@ -5,6 +5,7 @@ COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 RUN npm ci --no-audit --no-fund
+COPY apps/api/src/domain.ts apps/api/src/domain.ts
 COPY apps/web apps/web
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_AUTH0_DOMAIN
