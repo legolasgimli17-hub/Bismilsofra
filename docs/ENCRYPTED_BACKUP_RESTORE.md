@@ -11,7 +11,7 @@
 1. Üretim veritabanı için ayrı, en az yetkili, salt-okunur yedekleme rolü, TLS bağlantısı ve server-side secret store kullan.
 2. Şifreleme için 32 rastgele baytlık anahtarı secret manager'da sakla; SOFRA_BACKUP_KEY_B64 ortam değişkenine sunucu tarafında ver. Anahtarı Git'e, CI loguna veya shell geçmişine yazma.
 3. Veritabanı bağlantısını güvenilir PGHOST / PGPORT / PGDATABASE / PGUSER / PGPASSWORD ortam değişkenleriyle ver (bağlantı URL'sinde şifreyi komut satırında göstermemeye dikkat et).
-4. pg_dump --format=custom --no-owner --no-acl | node tools/backup-crypto.mjs seal-stdin /restricted-path/backup-date.sofraenc
+4. `node tools/backup-crypto.mjs seal-command /restricted-path/backup-date.sofraenc pg_dump --format=custom --no-owner --no-acl`
 5. Şifreli çıktıyı ayrı hesapta, sunucu dışı bir nesne deposuna S3 uyumlu istemciyle, özel bucket, versioning, MFA, retention, immutable retention ve TLS üzerinden yükle. Başarılı uzak kopya ve zaman damgası izleme/uyarı koşuluna bağlı olmalıdır.
 6. Farklı erişim yetkileriyle staging'de restore provası yap: node tools/backup-crypto.mjs open /restricted-path/backup-date.sofraenc /restricted-temp/backup.dump; yalnız izole database'e pg_restore uygula; migration/checksum, row counts, trigger, audit ve order event zincirini doğrula. Daha sonra plaintext dosyayı güvenli ve kayıtlı şekilde temizle.
 7. Geri yükleme anahtarının yedekten ayrı lokasyonda erişilebilirliğini ve kurtarma personeli yetkisini düzenli test et. Anahtar kaybolursa şifreli yedek geri getirilemez.
