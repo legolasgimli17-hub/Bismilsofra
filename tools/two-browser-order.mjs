@@ -135,11 +135,11 @@ try{
  console.log('TWO_BROWSER_ORDER_PASS: quote, create, reload and retry, merchant inbox, 5 status transitions, customer tracking');
 }finally{
  socket?.close();
- if(chrome.exitCode===null){
+ if(chrome.exitCode===null&&chrome.signalCode===null){
   const exited=once(chrome,'exit');
   chrome.kill('SIGTERM');
   await Promise.race([exited,delay(2000)]);
-  if(chrome.exitCode===null){chrome.kill('SIGKILL');await exited}
+  if(chrome.exitCode===null&&chrome.signalCode===null){chrome.kill('SIGKILL');await exited}
  }
- await rm(profile,{recursive:true,force:true});
+ await rm(profile,{recursive:true,force:true,maxRetries:6,retryDelay:100});
 }
