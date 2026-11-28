@@ -46,7 +46,12 @@ export function requireMfa(identity:Identity,recent=false){
  // the authentication method for proof that two distinct factors completed.
  // Accept only the issuer-signed explicit MFA result.
  if(!identity.amr.includes('mfa'))invalid('MFA_REQUIRED','Restoran/yönetici hesabında iki aşamalı doğrulama gerekli.',403);
- if(recent&&(!identity.authTime||Date.now()/1000-identity.authTime>600))invalid('REAUTH_REQUIRED','Kritik işlem için son 10 dakika içinde yeniden doğrulama gerekiyor.',403);
+ if(recent){
+  const age=Date.now()/1000-(identity.authTime??NaN);
+  // Allow the same five seconds of clock skew as JWT verification, not arbitrary future timestamps.
+  if(!Number.isFinite(age)||age < -5||age > 600||identity.authTime! <= 0)
+   invalid('REAUTH_REQUIRED','Kritik işlem için son 10 dakika içinde yeniden doğrulama gerekiyor.',403);
+ }
 }
 export async function provisionVerifiedUser(pool:Pool,ident:Identity):Promise<string>{
  requireVerifiedEmail(ident);

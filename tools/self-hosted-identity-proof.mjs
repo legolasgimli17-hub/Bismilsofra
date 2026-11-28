@@ -83,8 +83,16 @@ async function check() {
     const identity = await verifyBearer('Bearer '+await login(account));
     requireVerifiedEmail(identity);
     assert.equal(identity.email,account.username+'@example.invalid');
-    if (account.otp) requireMfa(identity,true);
-    else assert.throws(()=>requireMfa(identity), e=>e.code==='MFA_REQUIRED');
+    if (account.otp) {
+      requireMfa(identity,true);
+      const now=Date.now()/1000;
+      for (const authTime of [undefined,0,NaN,Infinity,now-601,now+60]) {
+        assert.throws(()=>requireMfa({...identity,authTime},true),e=>e.code==='REAUTH_REQUIRED');
+      }
+      requireMfa({...identity,authTime:now-590},true);
+      requireMfa({...identity,authTime:now+2},true);
+      requireMfa({...identity,authTime:now-601}); // Ordinary access is not a recent-MFA operation.
+    } else assert.throws(()=>requireMfa(identity), e=>e.code==='MFA_REQUIRED');
   }
   console.log('Verified password-only and two-factor sessions with the application guards.');
 }
