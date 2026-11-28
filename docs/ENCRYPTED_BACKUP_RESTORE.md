@@ -24,3 +24,13 @@
 - Bu araç genel bir dosya şifreleme katmanıdır. Sızdırılmış host veya sızmış şifreleme anahtarına karşı tek başına çözüm değildir.
 
 Operasyon sorumlusu ve güvenlik incelemesi olmadan canlı veritabanında çalıştırma. Buradaki test adımları yalnızca disposable CI PostgreSQL için otomatik yürütülür.
+
+## Tek seferlik otomasyon (zamanlayıcıya hazır)
+Linux sunucuda özel, 0700 izinli gerçek bir dizin oluştur. `pg_dump` sunucu sürümüyle uyumlu olmalı; PGHOST, PGDATABASE, PGUSER, PGSSLMODE=verify-full, gerektiğinde PGPASSFILE/PGSSLROOTCERT değerlerini ve şifreleme anahtarını güvenli ortamdan sağla. Fotoğraf deposundan ayrı özel bucket ve ayrı erişim anahtarı kullan:
+- SOFRA_BACKUP_DIR
+- SOFRA_BACKUP_S3_ENDPOINT (HTTPS)
+- SOFRA_BACKUP_S3_BUCKET, SOFRA_BACKUP_S3_REGION
+- SOFRA_BACKUP_S3_KEY_ID, SOFRA_BACKUP_S3_SECRET
+- SOFRA_BACKUP_KEY_B64
+
+`node apps/api/scripts/offsite-backup.mjs` şifreli dump oluşturur, GCM doğrular, ayrı depoya yükler ve uzak nesneyi yeniden okuyarak SHA-256 ve boyut karşılaştırması yapar. Hata olursa çıkış kodu 1; mevcut şifreli arşivleri silmez. S3 tek nesne yüklemesi bu sürümde 5 GB ile sınırlıdır. Günlük operatör zamanlayıcısı, süre aşımı, disk kapasitesi, alarm, bucket erişim/retention ayarları ve gerçek izole restore tatbikatı ayrıca kurulmalıdır. Windows için dosya ACL kontrolü operatöre aittir. Bu otomasyon kendiliğinden çalışmaz ve hiçbir sağlayıcı hesabı oluşturmaz. CI yalnızca sentetik dump ve bellek içi sahte depoyu kullanır; gerçek uzak depolama onayı değildir.
