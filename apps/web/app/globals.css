@@ -633,3 +633,12 @@ body{background:#fbfaf7;color:#263129}
 
 /* Browser-measured 360px regression: the real search input was only 40px. */
 @media(max-width:610px){.new-search input{min-height:44px;height:44px}}
+
+.ordering-heading { background: #f3f7f4; padding: clamp(22px, 4vw, 48px) 0; border-bottom: 1px solid #dce7df; color: #143d33; }
+.ordering-heading h1 { font-size: clamp(1.7rem, 4vw, 3rem); letter-spacing: -.045em; line-height: 1.1; margin: 0 0 20px; }
+.ordering-controls { display: grid; grid-template-columns: minmax(200px, 280px) minmax(0, 1fr); gap: 12px; align-items: end; }
+.ordering-location > span { display: block; margin-bottom: 6px; font-weight: 650; font-size: .85rem; }
+.ordering-controls .select-wrap, .ordering-controls .new-search { margin: 0; width: 100%; max-width: none; min-width: 0; height: 48px; background: white; color: #173a33; border: 1px solid #afc6bc; border-radius: 12px; box-shadow: none; }
+.ordering-controls .new-search input { min-width: 0; color: #173a33; }
+.ordering-controls :is(.select-wrap,.new-search):focus-within { outline: 3px solid #237854; outline-offset: 2px; }
+@media(max-width: 640px) { .ordering-controls { grid-template-columns: 1fr; } .ordering-heading h1 { margin-bottom: 14px; } }
