@@ -249,7 +249,7 @@ function Inner({token}:{token:()=>Promise<string>}){
   </article>;
  }
  return <section className="container main-section merchant-v09">
-  <div className="section-heading"><div><span className="overline">RESTORAN YÖNETİMİ</span><h1>Sipariş operasyon merkezi</h1><p>Yalnızca yetkili olduğun restoranların kayıtları</p></div>
+  <div className="section-heading"><div><h1>Sipariş merkezi</h1></div>
    <button className="btn outline" disabled={Boolean(busyOrder)} onClick={()=>void load('replace')}><RefreshCcw size={17}/> Güncelle</button></div>
   {rid&&<div className={`merchant-connection ${connected?'healthy':'lost'}`} role="status" aria-live="polite">{connected?<Wifi size={19}/>:<WifiOff size={19}/>}
    <div><strong>{inboxLabel(state,connected)}</strong><span>{connected?`Son eşitleme: ${lastSync}`:'İnternet veya sunucu bağlantısını doğrulayın. Durum değişikliği şu anda engellendi.'}</span></div></div>}
@@ -272,7 +272,7 @@ function Inner({token}:{token:()=>Promise<string>}){
   {!rid?<div className="empty" role="status">{loadingMerchants?'Restoran yetkileri yükleniyor…':error?'Restoran yetkileri doğrulanamadı.':'Bu hesap için sipariş görüntüleme yetkisi tanımlı değil.'}</div>:<div className="merchant-columns">
    <section className="panel merchant-column"><div className="merchant-column-title"><h2><Bell size={19}/> Yeni siparişler</h2><span className="merchant-count">{pending.length}</span></div>
     {pending.length===0?<div className="empty"><h3>{connected?'Şu anda yeni sipariş yok':'Veriler eşitlenemedi'}</h3><p>{connected?'Yeni gelen siparişler burada gösterilecek.':'Yeniden bağlanınca liste güncellenecek.'}</p></div>:pending.map(orderCard)}</section>
-   <section className="panel merchant-column"><div className="merchant-column-title"><h2><PackageCheck size={19}/> Hazırlanan ve yoldaki siparişler</h2><span className="merchant-count">{active.length}</span></div>
+   <section className="panel merchant-column"><div className="merchant-column-title"><h2><PackageCheck size={19}/> Devam eden siparişler</h2><span className="merchant-count">{active.length}</span></div>
     {active.length===0?<div className="empty"><h3>{connected?'Devam eden sipariş yok':'Veriler eşitlenemedi'}</h3></div>:active.map(orderCard)}</section>
   </div>}
   {rid&&<details className="panel merchant-column">
