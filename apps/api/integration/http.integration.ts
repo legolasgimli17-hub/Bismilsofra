@@ -493,13 +493,37 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
   body:{...correct,confirmedDeliveryEstimate:{min:20,max:25}}});
  assert.equal(staleEta.status,409);
  assert.equal(staleEta.body.code,'DELIVERY_ESTIMATE_CHANGED');
- const placed=await request('/v1/orders',{method:'POST',token:customer,headers:{'Idempotency-Key':orderKey},body:correct});
- assert.equal(placed.status,201,JSON.stringify(placed.body));
- const orderId=placed.body.id as string;
+ // Lose only the client-facing response, after the real API has committed the order.
+ const submission={method:'POST',token:customer,headers:{'Idempotency-Key':orderKey},body:correct};
+ let committed:HttpResult|undefined;
+ let forwardingFailure:unknown;
+ const dropResponse=createServer(async (incoming,outgoing)=>{
+  try{
+   const chunks:Buffer[]=[];
+   for await(const chunk of incoming)chunks.push(Buffer.from(chunk));
+   committed=await request('/v1/orders',{
+    method:'POST',token:incoming.headers.authorization?.slice('Bearer '.length),
+    headers:{'Idempotency-Key':String(incoming.headers['idempotency-key'])},
+    body:JSON.parse(Buffer.concat(chunks).toString())
+   });
+  }catch(error){forwardingFailure=error}finally{outgoing.destroy()}
+ });
+ await new Promise<void>(resolve=>dropResponse.listen(0,'127.0.0.1',resolve));
+ try{
+  const address=dropResponse.address();
+  assert.ok(address&&typeof address!=='string');
+  await assert.rejects(request('/v1/orders',submission,'http://127.0.0.1:'+address.port),TypeError);
+ }finally{await new Promise<void>(resolve=>dropResponse.close(()=>resolve()))}
+ if(forwardingFailure)throw forwardingFailure;
+ assert.ok(committed);
+ assert.equal(committed.status,201);
+ const orderId=committed.body.id as string;
  await pool.query('UPDATE restaurant_delivery_zones SET delivery_min_minutes=NULL,delivery_max_minutes=NULL WHERE restaurant_id=$1 AND zone_id=$2',[rid,zid]);
  const retry=await request('/v1/orders',{method:'POST',token:customer,headers:{'Idempotency-Key':orderKey},body:correct});
  assert.equal(retry.status,200);
  assert.equal(retry.body.id,orderId);
+ const persisted=await pool.query('SELECT id FROM orders WHERE idempotency_key=$1',[orderKey]);
+ assert.deepEqual(persisted.rows,[{id:orderId}]);
  assert.equal((await request('/v1/me/orders/by-key/'+orderKey,{token:customer})).body.order.id,orderId);
  const ownOrder=await request('/v1/me/orders/'+orderId,{token:customer});
  assert.equal(ownOrder.status,200);
