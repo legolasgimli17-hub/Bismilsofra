@@ -522,8 +522,8 @@ test('HTTP: verified JWT, owner MFA, real order, isolation, reconnect and durabl
  const retry=await request('/v1/orders',{method:'POST',token:customer,headers:{'Idempotency-Key':orderKey},body:correct});
  assert.equal(retry.status,200);
  assert.equal(retry.body.id,orderId);
- const persisted=await pool.query('SELECT id FROM orders WHERE idempotency_key=$1',[orderKey]);
- assert.deepEqual(persisted.rows,[{id:orderId}]);
+ const matchingOrders=await pool.query('SELECT id FROM orders WHERE idempotency_key=$1',[orderKey]);
+ assert.deepEqual(matchingOrders.rows,[{id:orderId}]);
  assert.equal((await request('/v1/me/orders/by-key/'+orderKey,{token:customer})).body.order.id,orderId);
  const ownOrder=await request('/v1/me/orders/'+orderId,{token:customer});
  assert.equal(ownOrder.status,200);
