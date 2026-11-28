@@ -75,7 +75,8 @@ function CartProvider({children}:{children:ReactNode}){
 }
 export default function Providers({children}:{children:ReactNode}){
  const router=useRouter();
- const [origin,setOrigin]=useState('http://127.0.0.1:3000');useEffect(()=>{setOrigin(window.location.origin);if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{})},[]);
+ const origin=typeof window==='undefined'?undefined:window.location.origin;
+ useEffect(()=>{if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{})},[]);
  const sdk=authReady?<Auth0Provider domain={auth.domain} clientId={auth.clientId} authorizationParams={{redirect_uri:origin,audience:auth.audience,scope:'openid profile email'}} cacheLocation="memory" useRefreshTokens
   onRedirectCallback={appState=>{
    // Keep the provider mounted so the SDK retains its in-memory session.
