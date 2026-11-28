@@ -240,6 +240,13 @@ jobs:
           status="$(curl --insecure --silent --show-error --output /tmp/sofra-staging-orders.json --write-out '%{http_code}' --request POST https://localhost:8443/v1/orders --header 'Content-Type: application/json' --data '{}')"
           test "$status" = 503
           grep -q 'ORDER_INTAKE_CLOSED' /tmp/sofra-staging-orders.json
+          export NEXT_PUBLIC_AUTH0_DOMAIN=oidc-staging.example.invalid NEXT_PUBLIC_AUTH0_CLIENT_ID=ci-public-client
+          webstack=(docker compose -f deploy/staging.compose.yml -f deploy/private-web.compose.yml)
+          "${webstack[@]}" up -d --build --no-deps web private-web
+          curl --retry 30 --retry-delay 2 --retry-all-errors -fsS http://127.0.0.1:4172/readyz >/dev/null
+          curl --retry 30 --retry-delay 2 --retry-all-errors -fsS http://127.0.0.1:4172/restaurant/overview -o /tmp/sofra-merchant.html
+          grep -q '/_next/static/' /tmp/sofra-merchant.html
+          curl -fsS http://127.0.0.1:4172/v1/zones | jq -e '.zones | type == "array"' >/dev/null
           echo 'STAGING_LOCAL_HTTPS_PASS: isolated PostgreSQL migrated, HTTPS discovery healthy, real order intake CLOSED'
 
   security-audit:

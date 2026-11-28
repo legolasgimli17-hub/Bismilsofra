@@ -39,39 +39,22 @@ Bu prova için geliştirme bilgisayarı çalışır durumda, iki telefon aynı �
 - Restoran tarafında kabul sayacının sıfıra indiğinde düğmeleri kapattığını kontrol edin. Cihaz saatini değiştirerek sayacın sunucu saatine uyumunu da doğrulayın.
 - Prova sonunda `tailscale serve --https=443 off` ile bu prova için açılan HTTPS rotasını kapatın ve Compose projesini durdurun. Varsayılan Compose kapatma komutu prova veritabanı volume'unu silmez.
 
-## Windows'ta mevcut provayı yeniden açma (ek hosting bütçesi: 0 TL)
+## Windows: özel prova ortamını tek komutla açma
 
-28 Kasım 2026 provası Docker Desktop, yerel PostgreSQL, Next.js ve özel Tailscale HTTPS adresiyle yapıldı. Bu düzen bilgisayar açık ve internete bağlıyken çalışır. Prova verileri aynı Compose volume'unda tutulur. Docker Desktop ve Tailscale'i açın. Aşağıdaki komutları depo kökünde çalıştırın.
-
-1. Mevcut veritabanı, migration, API ve süre aşımı işçisini başlatın:
+Docker Desktop ve Tailscale açıkken güncel depo kökünde çalıştırın. Önceki provadaki `deploy/staging.env` ve `apps/web/.env.local` dosyalarını kullanır. Web derlemesine yalnızca herkese açık SPA ayarları aktarılır. Aynı Compose proje adı ve PostgreSQL volume'u kullanılır.
 
 ```powershell
-docker compose --env-file deploy/staging.env -f deploy/staging.compose.yml -f deploy/staging.rehearsal.compose.yml up -d db migrate api expiry
-curl.exe -fsS http://127.0.0.1:4188/readyz
+docker compose --env-file deploy/staging.env --env-file apps/web/.env.local -f deploy/staging.compose.yml -f deploy/staging.rehearsal.compose.yml -f deploy/private-web.compose.yml up --build -d
 ```
 
-2. Kod güncellendiyse, önceden yapılandırılmış `apps/web/.env.local` ile prova derlemesini yenileyin. İlk kurulumda depo bağımlılıkları gerekir. Eski prova sunucusu çalışıyorsa önce o sunucuyu kapatın.
+İlk web derlemesi internet bağlantısı gerektirir. API ve arayüz yanıt verdikten sonra mevcut özel HTTPS adresini yeni geçide yönlendirin:
 
 ```powershell
-$env:BISMIL_REHEARSAL_BUILD = '1'
-node .\node_modules\next\dist\bin\next build apps/web --webpack
-if ($LASTEXITCODE -eq 0) { node .\node_modules\next\dist\bin\next start apps/web --hostname 127.0.0.1 --port 3001 }
-```
-
-3. İkinci PowerShell penceresinde aynı depo klasöründen geçidi çalıştırın. 4171 üzerinde mevcut prova geçidi zaten çalışıyorsa onu kullanın.
-
-```powershell
-node --input-type=module -e "import {createPrivateStagingGateway} from './tools/private-staging-gateway.mjs'; createPrivateStagingGateway({webPort:3001}).listen(4171,'127.0.0.1')"
-```
-
-4. Üçüncü pencerede iki kontrol de başarılı olunca özel HTTPS yönlendirmesini açın:
-
-```powershell
-curl.exe -fsS -o NUL http://127.0.0.1:4171/restaurant/overview
+curl.exe -fsS http://127.0.0.1:4172/readyz
 if ($LASTEXITCODE -eq 0) {
-  curl.exe -fsS http://127.0.0.1:4171/readyz
-  if ($LASTEXITCODE -eq 0) { tailscale serve --bg http://127.0.0.1:4171 }
+  curl.exe -fsS -o NUL http://127.0.0.1:4172/restaurant/overview
+  if ($LASTEXITCODE -eq 0) { tailscale serve --bg http://127.0.0.1:4172 }
 }
 ```
 
-Telefonda Tailscale açıkken aynı HTTPS adresine gidin. Müşteri ve restoran hesapları ayrıdır. Restoran MFA'sı Auth0 denemesinde sınandı; deneme sonrası ücretsiz MFA ayrıca doğrulanmalıdır. Pilot açılış durumu için [kanıt kaydına](pilot-release-evidence.json) bakın.
+Profil bildirim işçilerini varsayılan olarak başlatmaz; webhook provası ayrıca yapılandırılır. Bu özel ortam bilgisayar açıkken erişilebilir. Önceki geçit hâlâ çalışıyorsa yönlendirme `tailscale serve --bg http://127.0.0.1:4171` ile geri alınabilir. Veritabanı volume'unu silmeyin.

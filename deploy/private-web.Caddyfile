@@ -1,0 +1,11 @@
+:8080 {
+ @api path /v1 /v1/* /readyz /healthz
+ handle @api {
+  reverse_proxy api:4000 {
+   flush_interval -1
+  }
+ }
+ handle {
+  reverse_proxy web:3000
+ }
+}

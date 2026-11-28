@@ -22,3 +22,6 @@
 **/*.sofraenc
 **/*.pg.enc
 **/*.backup
+
+# Local Compose credentials may be named staging.env rather than .env.local.
+**/*.env
