@@ -8,7 +8,7 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -111,7 +111,7 @@ jobs:
       DATABASE_URL: postgresql://sofra:ci-test-only-password@127.0.0.1:5432/bismil_sofra_test
       INTEGRATION_DATABASE_URL: postgresql://sofra:ci-test-only-password@127.0.0.1:5432/bismil_sofra_test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
@@ -202,7 +202,7 @@ jobs:
       STAGING_OIDC_AUDIENCE: ci-staging-test
       STAGING_OIDC_JWKS_URL: https://oidc-staging.example.invalid/.well-known/jwks.json
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build isolated TLS staging stack and apply real migrations
         run: |
           set -euo pipefail
@@ -253,7 +253,7 @@ jobs:
     name: Production dependency vulnerability audit (high and critical)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
