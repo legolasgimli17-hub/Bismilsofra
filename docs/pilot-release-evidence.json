@@ -1,21 +1,21 @@
 {
   "project": "Bismil Sofra",
   "pilot": "5 restaurants max",
-  "date": "2026-11-24",
+  "date": "2026-11-28",
   "checks": [
     {
       "id": "isolated_https_staging",
       "status": "open",
       "owner": "",
       "evidence": "",
-      "notes": "DOĞRULANMADI: Docker Compose CI geçici HTTPS mevcut; Railway staging henüz 42 staged-create değişiklikten ibaret, 0 çalışan API ve 0 kalıcı domain."
+      "notes": "Özel Tailscale HTTPS provasında gerçek telefon siparişi ve restoran paneli çalıştı. Railway staging dört servis tanımı içeriyor. 28 Kasım kontrolünde dağıtım listesi boş. Kalıcı ortam doğrulaması bekliyor."
     },
     {
       "id": "real_oidc_mfa_accounts",
       "status": "open",
       "owner": "",
       "evidence": "",
-      "notes": "DOĞRULANMADI: Auth0 tenant, gerçek kayıt/e-posta doğrulama, şifre sıfırlama ve restoran/admin MFA saha testi yok. Redirect kodu otomatik test kanıtı değildir."
+      "notes": "Özel provada ayrı müşteri ve restoran hesaplarıyla giriş, restoran OTP kaydı ve MFA sonrası restoran erişimi kullanıcı tarafından doğrulandı. Yönetici MFA, parola sıfırlama, kurtarma ve deneme sonrası MFA planı açık."
     },
     {
       "id": "dual_independent_alerts",
@@ -43,7 +43,7 @@
       "status": "open",
       "owner": "",
       "evidence": "",
-      "notes": "DOĞRULANMADI: Chromium 360/390/768/1280 emülasyon testleri fiziksel Android/iPhone, ekran okuyucu veya gerçek bildirim testi değildir."
+      "notes": "DOĞRULANMADI: Chromium 360/390/768/1280 emülasyon testleri fiziksel Android/iPhone, ekran okuyucu veya gerçek bildirim testi değildir. 28 Kasım kullanıcı provası: teslimat durumu sayfa yenilenmeden güncellendi. Müşteri ve restoran bağlantıları geri geldiğinde siparişler eşitlendi. Kabul süresi dolan sipariş aktif listeden kalktı. Cihaz ve erişilebilirlik matrisi açık."
     },
     {
       "id": "licensed_food_media",
@@ -87,5 +87,13 @@
       "evidence": "",
       "notes": "DOĞRULANMADI: 7/24 olay sorumlusu, gerçek paging ve vardiya kayıtları yok."
     }
-  ]
+  ],
+  "rehearsalEvidence": {
+    "date": "2026-11-28",
+    "environment": "Özel test restoranı, müşteri telefonu ve restoran bilgisayarı",
+    "reportedBy": "Prova operatörü",
+    "result": "Sipariş teslim edildi. Gönderim anında bağlantı kesintisi denemesinde bir sipariş gözlendi; kurtarma düğmesinin kullanımı doğrulanmadı.",
+    "automatedLostResponse": "https://github.com/legolasgimli17-hub/Bismilsofra/actions/runs/46142307298",
+    "menuChecks": "https://github.com/legolasgimli17-hub/Bismilsofra/actions/runs/46154063229"
+  }
 }
