@@ -77,3 +77,23 @@ test('a failed dump never publishes an encrypted partial backup',async t=>{
  assert.equal(call('open',output,restored).status,0);
  assert.equal(await readFile(restored,'utf8'),'complete dump');
 });
+
+test('verify authenticates archives without writing any plaintext or output files',async t=>{
+ const dir=await mkdtemp(join(tmpdir(),'sofra-verify-'));
+ t.after(()=>rm(dir,{recursive:true,force:true}));
+ const archive=join(dir,'archive.sofraenc');
+ assert.equal(call('seal-command',archive,process.execPath,'-e',"process.stdout.write('private test fixture')").status,0);
+ const result=call('verify',archive);
+ assert.equal(result.status,0,result.stderr);
+ assert.deepEqual(JSON.parse(result.stdout),{backup:'verified',authenticated:true});
+ assert.deepEqual(await readdir(dir),['archive.sofraenc']);
+ const wrongKey=spawnSync(process.execPath,[tool,'verify',archive],{env:{...process.env,SOFRA_BACKUP_KEY_B64:randomBytes(32).toString('base64')},encoding:'utf8',timeout:15000});
+ assert.notEqual(wrongKey.status,0);
+ const bytes=await readFile(archive);
+ bytes[20]^=0xff;
+ await writeFile(archive,bytes);
+ assert.notEqual(call('verify',archive).status,0);
+ await writeFile(archive,bytes.subarray(0,20));
+ assert.notEqual(call('verify',archive).status,0);
+ assert.deepEqual(await readdir(dir),['archive.sofraenc']);
+});
