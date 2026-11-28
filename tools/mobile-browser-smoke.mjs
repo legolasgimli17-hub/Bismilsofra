@@ -199,6 +199,32 @@ async function run(){
    console.log(JSON.stringify({device,path,viewport:state.inner,scroll:state.scroll,errors:0,file}));
   }
  }
+ // Use two public demo menus so a cross-restaurant add opens the real confirmation dialog.
+ const read=async expression=>{
+  const reply=await send('Runtime.evaluate',{expression,returnByValue:true});
+  assert.ok(!reply.exceptionDetails,JSON.stringify(reply.exceptionDetails));
+  return reply.result.value;
+ };
+ async function until(expression){
+  for(let i=0;i<100;i++){if(await read(expression))return;await delay(100)}
+  throw Error('Menu smoke condition timed out: '+expression);
+ }
+ async function visitMenu(id){
+  await send('Page.navigate',{url:target.origin+'/restaurants/'+id+'?demo=1'});
+  await until("location.pathname==='/restaurants/"+id+"' && !!document.querySelector('.add-button:not(:disabled)')");
+ }
+ await visitMenu('demo-ocak');
+ await read("document.querySelector('.add-button').click()");
+ await until("!!document.querySelector('.menu-cart-bar')");
+ await visitMenu('demo-burger');
+ await read("document.querySelector('.add-button').focus();document.querySelector('.add-button').click()");
+ await until("!!document.querySelector('dialog:modal')");
+ assert.equal(await read("document.querySelector('dialog').contains(document.activeElement)"),true);
+ await send('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+ await send('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+ await until("!document.querySelector('dialog') && document.activeElement.matches('.add-button')");
+ assert.equal(await read("JSON.parse(localStorage.getItem('sofra-cart-v22')).restaurantId"),'demo-ocak');
+ console.log('MENU_KEYBOARD_RECOVERY_PASS');
  await checkOfflineRecovery();
 }
 try{await run();console.log('MOBILE_BROWSER_SMOKE_PASS')}
