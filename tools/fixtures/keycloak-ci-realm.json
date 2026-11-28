@@ -1,0 +1,108 @@
+{
+  "realm": "sofra-ci",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 300,
+  "browserFlow": "Sofra browser",
+  "authenticationFlows": [
+    {
+      "alias": "Sofra browser",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-username-password-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10
+        },
+        {
+          "flowAlias": "Sofra second factor",
+          "authenticatorFlow": true,
+          "requirement": "CONDITIONAL",
+          "priority": 20
+        }
+      ]
+    },
+    {
+      "alias": "Sofra second factor",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "conditional-user-configured",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10
+        },
+        {
+          "authenticator": "auth-otp-form",
+          "authenticatorConfig": "Completed second factor",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "Completed second factor",
+      "config": {
+        "default.reference.value": "mfa",
+        "default.reference.maxAge": "600"
+      }
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "sofra-web",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://127.0.0.1:3180/"
+      ],
+      "webOrigins": [
+        "http://127.0.0.1:3180"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "defaultClientScopes": [
+        "profile",
+        "email",
+        "basic"
+      ],
+      "protocolMappers": [
+        {
+          "name": "Completed authentication methods",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-amr-mapper",
+          "config": {
+            "access.token.claim": "true",
+            "id.token.claim": "true"
+          }
+        },
+        {
+          "name": "Bismil Sofra API",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "sofra-api",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ]
+}
