@@ -1,5 +1,5 @@
 'use client';
-import {Suspense,useCallback,useEffect,useMemo,useState} from 'react';import {useParams,useSearchParams,useRouter} from 'next/navigation';import Link from 'next/link';import {ArrowLeft,Plus,Minus,ShoppingBag,Check,Truck,Search,X,SlidersHorizontal} from 'lucide-react';
+import {Suspense,useCallback,useEffect,useMemo,useRef,useState} from 'react';import {useParams,useSearchParams,useRouter} from 'next/navigation';import Link from 'next/link';import {ArrowLeft,Plus,Minus,ShoppingBag,Check,Truck,Search,X,SlidersHorizontal} from 'lucide-react';
 import {api,ApiError} from '@/lib/api';import {deliveryEstimateText,money,type MenuProduct,type Restaurant} from '@/lib/types';import {DEMO_RESTAURANTS,DEMO_ZONES,demoMenu} from '@/lib/demo';import FoodImage from '@/components/food-image';import {useCart} from '@/components/providers';import {cartTotal,cartCount} from '@/lib/cart';import {isRestaurantOrderable,restaurantOrderStatus} from '@/lib/discovery';import {menuCategories,visibleMenuProducts} from '@/lib/menu-discovery';import {selectProductOption,permitsCartReplacement,type AddWarning} from '@/lib/product-option-ui';
 export default function MenuPage(){return <Suspense fallback={<section className="container main-section empty">Menü açılıyor…</section>}><MenuRoute/></Suspense>}
 type Delivery={neighborhood:string;available:boolean;min_basket_kurus:number|null;delivery_fee_kurus:number|null;delivery_min_minutes?:number|null;delivery_max_minutes?:number|null;};
@@ -12,6 +12,17 @@ function MenuRoute(){
  return <MenuPageInner key={id+':'+isDemo+':'+zoneId} id={id} isDemo={isDemo} zoneId={zoneId}/>;
 }
 function MenuPageInner({id,isDemo,zoneId}:{id:string;isDemo:boolean;zoneId:string|null}){const router=useRouter();const [restaurant,setRestaurant]=useState<Restaurant|null>(null),[products,setProducts]=useState<MenuProduct[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[selected,setSelected]=useState<MenuProduct|null>(null),[selections,setSelections]=useState<Record<string,string[]>>({}),[quantity,setQuantity]=useState(1),[warning,setWarning]=useState<AddWarning>(null);const {cart,add}=useCart();
+ const dialogRef=useRef<HTMLDialogElement>(null);
+ const openerRef=useRef<HTMLElement|null>(null);
+ useEffect(()=>{
+  const dialog=dialogRef.current;
+  if(!selected||!dialog)return;
+  dialog.showModal();
+  return ()=>{
+   dialog.close();
+   openerRef.current?.focus({preventScroll:true});
+  };
+ },[selected]);
  const [delivery,setDelivery]=useState<Delivery|null>(null);
  const canOrderHere=!zoneId||delivery?.available===true;
  const [attempt,setAttempt]=useState(0);
@@ -45,7 +56,7 @@ function MenuPageInner({id,isDemo,zoneId}:{id:string;isDemo:boolean;zoneId:strin
    .finally(()=>{if(!controller.signal.aborted)setLoading(false)});
   return()=>controller.abort();
  },[id,isDemo,zoneId,attempt]);
- const open=(p:MenuProduct)=>{setSelected(p);setSelections({});setQuantity(1);setWarning(null)};
+ const open=(p:MenuProduct)=>{openerRef.current=document.activeElement instanceof HTMLElement?document.activeElement:null;setSelected(p);setSelections({});setQuantity(1);setWarning(null)};
  const [addError,setAddError]=useState('');
  const chooseProduct=(product:MenuProduct)=>{
   setAddError('');
@@ -61,7 +72,7 @@ function MenuPageInner({id,isDemo,zoneId}:{id:string;isDemo:boolean;zoneId:strin
  };
  const total=useMemo(()=>selected?(selected.price_kurus+selected.optionGroups.reduce((s,g)=>s+g.options.filter(o=>(selections[g.id]||[]).includes(o.id)).reduce((v,o)=>v+o.price_kurus,0),0))*quantity:0,[selected,selections,quantity]);
  const onAdd=useCallback((replace=false)=>{if(!selected||!restaurant||!isRestaurantOrderable(restaurant)||!canOrderHere)return;const ids:string[]=[],labels:string[]=[];let extra=0;for(const group of selected.optionGroups){const picked=selections[group.id]||[];if(picked.length<group.min_select||picked.length>group.max_select){setWarning('options');return;}for(const o of group.options.filter(o=>picked.includes(o.id))){ids.push(o.id);labels.push(o.name);extra+=o.price_kurus}}
- try{add(restaurant.id,restaurant.name,{productId:selected.id,name:selected.name,imageUrl:selected.image_url,priceKurus:selected.price_kurus,quantity,optionIds:ids,optionLabels:labels,optionExtraKurus:extra},replace);setLastAdded(`${quantity} × ${selected.name} sepete eklendi.`);setSelected(null);setWarning(null)}catch(e){if(e instanceof Error&&e.message==='OTHER_RESTAURANT')setWarning('restaurant');else setError('Sepet güncellenemedi.')}
+ try{add(restaurant.id,restaurant.name,{productId:selected.id,name:selected.name,imageUrl:selected.image_url,priceKurus:selected.price_kurus,quantity,optionIds:ids,optionLabels:labels,optionExtraKurus:extra},replace);setLastAdded(`${quantity} × ${selected.name} sepete eklendi.`);setSelected(null);setWarning(null);setAddError('')}catch(e){if(e instanceof Error&&e.message==='OTHER_RESTAURANT')setWarning('restaurant');else setAddError(e instanceof Error&&e.message==='QUANTITY_LIMIT'?'Bir üründen en fazla 25 adet ekleyebilirsin.':'Sepet güncellenemedi.')}
  },[selected,restaurant,selections,quantity,add,canOrderHere]);
  if(loading)return <section className="container main-section empty">Menü yükleniyor…</section>;
  if(!restaurant)return <section className="container main-section empty"><h2>{menuMissing?'Restoran bulunamadı':'Menü yüklenemedi'}</h2>{error&&<p role="alert">{error}</p>}
@@ -69,7 +80,7 @@ function MenuPageInner({id,isDemo,zoneId}:{id:string;isDemo:boolean;zoneId:strin
  const estimate=delivery?.available&&isRestaurantOrderable(restaurant)?deliveryEstimateText(delivery):null;
  return <><div className="container breadcrumb"><Link href="/"><ArrowLeft size={17}/> Restoranlar</Link></div><section className="container restaurant-detail menu-cover"><FoodImage src={restaurant.cover_url} alt={restaurant.name}/><div className="restaurant-detail-info"><h1>{restaurant.name}</h1><div className="detail-chips"><span><Truck size={16}/> {restaurantOrderStatus(restaurant)}</span>{delivery?.available&&<><span>{delivery.neighborhood}</span><span>Minimum sepet {money(delivery.min_basket_kurus)}</span><span>Teslimat {delivery.delivery_fee_kurus===0?'ücretsiz':money(delivery.delivery_fee_kurus)}</span></>}{estimate&&<span>Tahmini teslimat {estimate}</span>}</div></div></section>{!canOrderHere&&<section className="container notice" aria-label="Teslimat durumu"><p>{delivery?`Bu restoran ${delivery.neighborhood} mahallesine teslimat yapmıyor.`:'Seçili mahalle artık geçerli değil.'} <Link href="/">Mahalle değiştir</Link></p></section>}{!zoneId&&<section className="container notice" aria-label="Teslimat bilgisi"><Link href="/">Teslimat ücreti ve minimum sepet için mahalleni seç</Link></section>}{isDemo&&<div className="container demo-alert">Bu restoran ve menüsü örnektir. Gerçek sipariş gönderilemez.</div>}
  <section className="container main-section"><div className="section-heading"><div><h2>Menü</h2></div><span className="menu-total-count">{products.length} ürün</span></div>
- {addError&&<p className="notice error" role="alert">{addError}</p>}
+ {addError&&!selected&&<p className="notice error" role="alert">{addError}</p>}
  {lastAdded&&<div className="menu-added-banner" role="status" aria-live="polite"><Check size={18}/><span>{lastAdded}</span></div>}
  {products.length>0&&<div className="menu-discovery-panel">
   <div className="menu-discovery-toolbar"><label className="menu-search-field"><Search size={20}/><input type="search" aria-label="Menüde yemek ara" placeholder="Menüde yemek veya malzeme ara…" value={menuQuery} maxLength={100} onChange={e=>setMenuQuery(e.target.value)}/>{menuQuery&&<button type="button" onClick={()=>setMenuQuery('')} aria-label="Menü aramasını temizle"><X size={17}/></button>}</label>
@@ -78,7 +89,7 @@ function MenuPageInner({id,isDemo,zoneId}:{id:string;isDemo:boolean;zoneId:strin
  </div>}
  {products.length===0?<div className="empty">Bu restoranda henüz ürün eklenmemiş.</div>:<><p className="menu-match-count" role="status">{filteredProducts.length} ürün gösteriliyor</p>{filteredProducts.length===0?<div className="menu-no-results"><SlidersHorizontal size={28}/><h3>Aradığın yemek bulunamadı</h3><p>Farklı bir arama yapabilir veya kategori filtrelerini sıfırlayabilirsin.</p><button type="button" className="btn outline" onClick={()=>{setMenuQuery('');setMenuCategory('Tümü');setOnlyAvailable(false)}}>Filtreleri temizle</button></div>:<div className="product-list order-menu-list">{filteredProducts.map(p=><div className={`product-card ${!p.available?'menu-unavailable-product':''}`} key={p.id}><div className="product-copy"><h3>{p.name}</h3>{p.description&&<p>{p.description}</p>}{!p.available&&<span className="menu-unavailable-label">Şu anda satışta değil</span>}<strong>{money(p.price_kurus)}</strong></div><div className="product-visual"><FoodImage src={p.image_url} alt={`${p.name} fotoğrafı`}/><button className="add-button" disabled={!p.available||!isRestaurantOrderable(restaurant)||!canOrderHere} onClick={()=>chooseProduct(p)} aria-label={p.optionGroups.length?p.name+' seçeneklerini aç':p.name+' ekle'}>{p.optionGroups.length?'Seç':<Plus size={20}/>}</button></div></div>)}</div>}</>}
  {cartCount(cart)>0&&<div className="sticky-cart menu-cart-bar"><div className="container sticky-inner"><div><strong>{cartCount(cart)} ürün · {cart.restaurantName}</strong><span>{money(cartTotal(cart))} + teslimat</span></div><button onClick={()=>router.push('/checkout')} className="btn primary"><ShoppingBag size={19}/> Sepeti gör</button></div></div>}
- </section>{selected&&<div className="modal-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setSelected(null)}}><div role="dialog" aria-modal="true" aria-labelledby="product-title" className="product-dialog"><button className="close-dialog" onClick={()=>setSelected(null)} aria-label="Kapat">×</button><FoodImage src={selected.image_url} alt={selected.name}/><div className="dialog-body"><h2 id="product-title">{selected.name}</h2><p>{selected.description}</p>{selected.optionGroups.map(g=>{const picks=selections[g.id]||[];return <fieldset key={g.id} className="option-group"><legend>{g.name} · {g.min_select>0?'Zorunlu':'İsteğe bağlı'} ({g.min_select}–{g.max_select})</legend>{g.min_select===0&&g.max_select===1&&<label><input type="radio" name={g.id} checked={picks.length===0}
+ </section>{selected&&<dialog ref={dialogRef} className="modal-backdrop menu-option-overlay" aria-labelledby="product-title" onCancel={e=>{e.preventDefault();setSelected(null)}} onMouseDown={e=>{if(e.target===e.currentTarget)setSelected(null)}}><div className="product-dialog"><button className="close-dialog" onClick={()=>setSelected(null)} aria-label="Kapat">×</button><FoodImage src={selected.image_url} alt={selected.name}/><div className="dialog-body"><h2 id="product-title">{selected.name}</h2><p>{selected.description}</p>{selected.optionGroups.map(g=>{const picks=selections[g.id]||[];return <fieldset key={g.id} className="option-group"><legend>{g.name} · {g.min_select>0?'Zorunlu':'İsteğe bağlı'} ({g.min_select}–{g.max_select})</legend>{g.min_select===0&&g.max_select===1&&<label><input type="radio" name={g.id} checked={picks.length===0}
  onChange={()=>setSelections(prev=>({...prev,[g.id]:[]}))}/>Seçim istemiyorum <span>Ücretsiz</span></label>}
 {g.options.map(o=><label key={o.id}><input type={g.max_select===1?'radio':'checkbox'} name={g.id}
  disabled={!o.available||(g.max_select>1&&picks.length>=g.max_select&&!picks.includes(o.id))}
@@ -86,4 +97,4 @@ function MenuPageInner({id,isDemo,zoneId}:{id:string;isDemo:boolean;zoneId:strin
  onChange={e=>{const checked=e.currentTarget.checked;setSelections(prev=>({
   ...prev,[g.id]:selectProductOption(prev[g.id]||[],o.id,checked,g.max_select)
  }))}}/>{o.name} <span>{o.price_kurus?'+'+money(o.price_kurus):'Ücretsiz'}</span></label>)}</fieldset>})}
- {warning&&<div className="notice error" role="alert">{warning==='restaurant'?'Sepetinde farklı restorandan ürünler var. Devam edersen eski sepetin temizlenecek.':'Zorunlu seçenekleri tamamla.'}</div>}<div className="dialog-actions"><div className="stepper"><button onClick={()=>setQuantity(Math.max(1,quantity-1))} aria-label="Azalt"><Minus size={18}/></button><b>{quantity}</b><button onClick={()=>setQuantity(Math.min(25,quantity+1))} aria-label="Artır"><Plus size={18}/></button></div><button className="btn primary" onClick={()=>onAdd(permitsCartReplacement(warning))}>Sepete ekle · {money(total)}</button></div></div></div></div>}</>}
+ {addError&&<p role="alert" className="notice error">{addError}</p>}{warning&&<div className="notice error" role="alert">{warning==='restaurant'?'Sepetinde farklı restorandan ürünler var. Devam edersen eski sepetin temizlenecek.':'Zorunlu seçenekleri tamamla.'}</div>}<div className="dialog-actions"><div className="stepper"><button disabled={quantity<=1} onClick={()=>setQuantity(Math.max(1,quantity-1))} aria-label="Azalt"><Minus size={18}/></button><b>{quantity}</b><button disabled={quantity>=25} onClick={()=>setQuantity(Math.min(25,quantity+1))} aria-label="Artır"><Plus size={18}/></button></div><button className="btn primary" onClick={()=>onAdd(permitsCartReplacement(warning))}>Sepete ekle · {money(total)}</button></div></div></div></dialog>}</>}
