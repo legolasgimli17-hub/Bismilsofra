@@ -1,0 +1,26 @@
+# Combine with staging.compose.yml and staging.rehearsal.compose.yml.
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${STAGING_CORS_ORIGIN:?Set the private HTTPS origin}
+        NEXT_PUBLIC_AUTH0_DOMAIN: ${NEXT_PUBLIC_AUTH0_DOMAIN:?Set the public Auth0 domain}
+        NEXT_PUBLIC_AUTH0_CLIENT_ID: ${NEXT_PUBLIC_AUTH0_CLIENT_ID:?Set the public SPA client ID}
+        NEXT_PUBLIC_AUTH0_AUDIENCE: ${STAGING_OIDC_AUDIENCE:?Set the API audience}
+        NEXT_PUBLIC_IMAGE_CDN_HOST: ${NEXT_PUBLIC_IMAGE_CDN_HOST:-}
+    networks: [staging_internal]
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  private-web:
+    image: caddy:2.10.2-alpine
+    ports: ["127.0.0.1:4172:8080"]
+    volumes: ["./private-web.Caddyfile:/etc/caddy/Caddyfile:ro"]
+    networks: [staging_internal]
+    depends_on: [web, api]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp, /config, /data]
+    security_opt: [no-new-privileges:true]
