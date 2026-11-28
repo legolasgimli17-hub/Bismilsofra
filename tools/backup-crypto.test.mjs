@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,readFile,writeFile,stat,access,readdir,rm} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomBytes} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
-const tool=new URL('./backup-crypto.mjs',import.meta.url).pathname;
+const tool=fileURLToPath(new URL('./backup-crypto.mjs',import.meta.url));
 const key=randomBytes(32).toString('base64');
 function call(mode,...args){
  return spawnSync(process.execPath,[tool,mode,...args],{
@@ -58,4 +59,21 @@ test('bad key or truncated backup fails closed',async t=>{
  assert.notEqual(badKey.status,0);
  assert.notEqual(call('open',tiny,out).status,0);
  await assert.rejects(access(out));
+});
+
+test('a failed dump never publishes an encrypted partial backup',async t=>{
+ const dir=await mkdtemp(join(tmpdir(),'sofra-incomplete-'));
+ t.after(()=>rm(dir,{recursive:true,force:true}));
+ const output=join(dir,'archive.sofraenc');
+ const failure=call('seal-command',output,process.execPath,'-e',"process.stdout.write('partial dump');process.exitCode=9");
+ assert.notEqual(failure.status,0);
+ assert.deepEqual(await readdir(dir),[]);
+ const missing=call('seal-command',output,join(dir,'missing-executable'));
+ assert.notEqual(missing.status,0);
+ assert.deepEqual(await readdir(dir),[]);
+ const success=call('seal-command',output,process.execPath,'-e',"if(process.env.SOFRA_BACKUP_KEY_B64)process.exit(2);process.stdout.write('complete dump')");
+ assert.equal(success.status,0,success.stderr);
+ const restored=join(dir,'restored');
+ assert.equal(call('open',output,restored).status,0);
+ assert.equal(await readFile(restored,'utf8'),'complete dump');
 });
